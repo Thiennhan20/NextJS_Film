@@ -22,6 +22,7 @@ interface RecentlyWatchedItem {
   isTVShow?: boolean
   season?: number
   episode?: number
+  watchUrl?: string
 }
 
 interface RecentlyWatchedProps {
@@ -107,7 +108,7 @@ const ContentCard = memo(({ item, index, onContinue, onRemove }: {
       <div className="aspect-[16/9] bg-gradient-to-br from-gray-800 to-gray-900 relative overflow-hidden">
         {item.poster && (
           <Image
-            src={`/api/cache-image?id=${item.id}&url=${encodeURIComponent(item.poster)}`}
+            src={item.poster}
             alt={item.title || `Content ${item.id}`}
             fill
             className="object-cover transition-transform duration-300"
@@ -259,6 +260,7 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
           isTVShow: !!it.isTVShow,
           season: it.season ?? undefined,
           episode: it.episode ?? undefined,
+          watchUrl: it.watchUrl ?? undefined,
         }))
         setRecentItems(srvItems)
         // Populate shared Zustand store for /recently-watched page
@@ -313,7 +315,8 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
             title: progressData.title,
             poster: progressData.poster,
             lastWatched: progressData.lastWatched || new Date().toISOString(),
-            isTVShow: false
+            isTVShow: false,
+            watchUrl: progressData.watchUrl || undefined,
           })
           processedCount++
         } else if (isTVShow) {
@@ -333,7 +336,8 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
             lastWatched: progressData.lastWatched || new Date().toISOString(),
             isTVShow: true,
             season: parseInt(season),
-            episode: parseInt(episode)
+            episode: parseInt(episode),
+            watchUrl: progressData.watchUrl || undefined,
           })
           processedCount++
         }

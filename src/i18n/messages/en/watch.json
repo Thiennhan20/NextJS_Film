@@ -39,6 +39,11 @@
     "settings": "Settings",
     "speed": "Speed",
     "quality": "Quality",
-    "normal": "Normal"
+    "normal": "Normal",
+    "oldSourceExpired": "The old playback source has expired. Fetching a new one...",
+    "updatePlaybackSource": "Update Playback Source",
+    "updatePlaybackSourceDesc": "The system has detected a new, higher quality or bug-fixed playback source for this title. Would you like to reload with the new source now?",
+    "updateNewSource": "Update to New Source",
+    "continueOldSource": "Continue with Old Source"
   }
 }

@@ -1,18 +1,26 @@
 import { NextResponse } from 'next/server';
 import { telegramImageCacheDB } from '@/lib/telegramImageCache';
+import { getSupabaseCacheStats } from '@/lib/supabaseImageCache';
 
 export async function GET() {
   try {
+    const [supabaseStats] = await Promise.all([
+      getSupabaseCacheStats(),
+    ]);
+
     const stats = {
-      size: telegramImageCacheDB.getSize(),
-      keys: telegramImageCacheDB.getKeys(),
+      supabase: supabaseStats,
+      telegram: {
+        size: telegramImageCacheDB.getSize(),
+        keys: telegramImageCacheDB.getKeys(),
+        botConfigured: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
+      },
       timestamp: new Date().toISOString(),
-      botConfigured: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID)
     };
 
     return NextResponse.json(stats);
   } catch (error) {
-    console.error('Error getting Telegram cache stats:', error);
+    console.error('Error getting cache stats:', error);
     return NextResponse.json({ error: 'Failed to get cache stats' }, { status: 500 });
   }
 }

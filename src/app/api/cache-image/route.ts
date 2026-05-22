@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCachedImage, cacheImage } from '@/lib/supabaseImageCache';
 import { getCachedImageFromTelegram, cacheImageToTelegram, telegramImageCacheDB } from '@/lib/telegramImageCache';
 
 export async function GET(req: NextRequest) {
@@ -14,46 +15,73 @@ export async function GET(req: NextRequest) {
 
   console.log('Cache image request:', { id, url, type, bust });
 
+  // ===== STRATEGY 1: Supabase (Primary) =====
   try {
-    // Kiểm tra cache trước
+    // Check Supabase cache first
+    const supabaseUrl = await getCachedImage(id, url, type);
+    if (supabaseUrl) {
+      console.log('[Supabase] Cache HIT → redirect:', supabaseUrl);
+      // Redirect to Supabase CDN URL (no proxy needed, saves bandwidth)
+      return NextResponse.redirect(supabaseUrl, {
+        status: 302,
+        headers: {
+          'Cache-Control': 'public, max-age=86400',
+          'X-Source': 'supabase-cache',
+        },
+      });
+    }
+
+    // Cache miss → fetch from TMDB, upload to Supabase
+    console.log('[Supabase] Cache MISS → uploading...');
+    const newPublicUrl = await cacheImage(id, url, type);
+    console.log('[Supabase] Uploaded → redirect:', newPublicUrl);
+    return NextResponse.redirect(newPublicUrl, {
+      status: 302,
+      headers: {
+        'Cache-Control': 'public, max-age=86400',
+        'X-Source': 'supabase-new',
+      },
+    });
+  } catch (supabaseError) {
+    console.error('[Supabase] Failed, falling back to Telegram:', supabaseError);
+  }
+
+  // ===== STRATEGY 2: Telegram (Fallback — giữ nguyên code cũ) =====
+  try {
+    // Kiểm tra Telegram cache
     const cached = await getCachedImageFromTelegram(id, url);
     if (cached) {
-      console.log('Found cached image:', cached);
-      // Proxy ảnh từ Telegram
+      console.log('[Telegram] Found cached image:', cached);
       const response = await fetch(cached);
       if (!response.ok) {
-        console.log('Telegram fetch failed, removing from cache and retrying');
-        // Remove from cache if Telegram fetch fails
+        console.log('[Telegram] Fetch failed, removing from cache and retrying');
         await telegramImageCacheDB.delete(id, url);
         throw new Error('Telegram fetch failed');
       }
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      console.log('Cached image buffer size:', buffer.length);
       
       return new NextResponse(buffer, {
         headers: {
           'Content-Type': 'image/jpeg',
           'Cache-Control': 'public, max-age=86400',
           'X-Source': 'telegram-cache',
-          'ETag': `"${id}-${Date.now()}"`, // Dynamic ETag to prevent browser cache issues
+          'ETag': `"${id}-${Date.now()}"`,
         },
       });
     }
 
-    console.log('No cache found, uploading to Telegram...');
-    // Cache image mới lên Telegram
+    // Cache miss → upload to Telegram
+    console.log('[Telegram] No cache found, uploading...');
     const telegramUrl = await cacheImageToTelegram(id, url, type);
-    console.log('Uploaded to Telegram:', telegramUrl);
+    console.log('[Telegram] Uploaded:', telegramUrl);
 
-    // Proxy ảnh từ Telegram
     const response = await fetch(telegramUrl);
     if (!response.ok) {
       throw new Error('New Telegram fetch failed');
     }
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    console.log('New image buffer size:', buffer.length);
     
     return new NextResponse(buffer, {
       headers: {
@@ -63,35 +91,35 @@ export async function GET(req: NextRequest) {
         'ETag': `"${id}-${Date.now()}"`,
       },
     });
-  } catch (error) {
-    console.error('Error caching image:', error);
-    // Fallback: proxy từ URL gốc
-    try {
-      console.log('Falling back to original URL:', url);
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error('Original URL fetch failed');
-      }
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      console.log('Fallback image buffer size:', buffer.length);
-      
-      return new NextResponse(buffer, {
-        headers: {
-          'Content-Type': 'image/jpeg',
-          'Cache-Control': 'public, max-age=3600',
-          'X-Source': 'fallback',
-          'ETag': `"${id}-fallback-${Date.now()}"`,
-        },
-      });
-    } catch (fallbackError) {
-      console.error('Fallback error:', fallbackError);
-      return new NextResponse('Error fetching image', { 
-        status: 500,
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate', // Don't cache errors
-        }
-      });
+  } catch (telegramError) {
+    console.error('[Telegram] Failed, falling back to original URL:', telegramError);
+  }
+
+  // ===== STRATEGY 3: Direct proxy from original URL (Last resort) =====
+  try {
+    console.log('[Fallback] Proxying from original URL:', url);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error('Original URL fetch failed');
     }
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    
+    return new NextResponse(buffer, {
+      headers: {
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'public, max-age=3600',
+        'X-Source': 'fallback',
+        'ETag': `"${id}-fallback-${Date.now()}"`,
+      },
+    });
+  } catch (fallbackError) {
+    console.error('[Fallback] All strategies failed:', fallbackError);
+    return new NextResponse('Error fetching image', { 
+      status: 500,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      }
+    });
   }
 }

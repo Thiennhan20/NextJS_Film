@@ -35,8 +35,7 @@ export const CACHE_TTL = {
   DETAILS: 8 * 60 * 60,
   /** Coming soon - cache 8h */
   COMING_SOON: 8 * 60 * 60,
-  /** Search results - cache 8h */
-  SEARCH: 8 * 60 * 60,
+  // Search results are NOT cached — high cardinality, low HIT rate
 } as const
 
 /**
@@ -61,7 +60,7 @@ export function getTTLForEndpoint(endpoint: string): number {
   if (/\/trending\//.test(endpoint)) return CACHE_TTL.TRENDING
   if (/\/discover\//.test(endpoint)) return CACHE_TTL.DISCOVER
   if (/\/(movie|tv)\/\d+$/.test(endpoint)) return CACHE_TTL.DETAILS
-  if (/\/search\//.test(endpoint)) return CACHE_TTL.SEARCH
+  // Search endpoints are NOT cached (high cardinality, low HIT rate)
   // Default for unknown endpoints
   return CACHE_TTL.TRENDING
 }

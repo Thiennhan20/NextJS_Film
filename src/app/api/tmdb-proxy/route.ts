@@ -75,12 +75,13 @@ export async function GET(request: NextRequest) {
     });
 
     // --- LAYER 1: Check Redis Cache ---
-    // Skip Redis for discover pages > 1 (only page 1 is cached)
+    // Skip Redis for search (high cardinality, low HIT rate) and discover pages > 1
     const redis = getRedisClient();
     const cacheKey = buildCacheKey(endpoint, params);
+    const isSearch = /\/search\//.test(endpoint);
     const isDiscover = /\/discover\//.test(endpoint);
     const reqPage = Number(params['page'] || '1');
-    const useRedisCache = !isDiscover || reqPage <= 1;
+    const useRedisCache = !isSearch && (!isDiscover || reqPage <= 1);
 
     if (redis && useRedisCache) {
       try {

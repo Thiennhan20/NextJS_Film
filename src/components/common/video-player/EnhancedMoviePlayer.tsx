@@ -42,6 +42,14 @@ export interface EnhancedMoviePlayerProps {
   onVideoEnded?: () => void;
   /** Custom overlay rendered inside the player container (visible in fullscreen) */
   endOverlay?: React.ReactNode;
+  /** Original m3u8 URL (pre-proxy) from Server 1. Used to detect link changes and reset progress. */
+  watchUrl?: string;
+  latestWatchUrl?: string;
+  savedTime?: number;
+  savedWatchUrl?: string;
+  onUpdateSource?: (newUrl: string) => void;
+  onSkipUpdateSource?: (newUrl: string) => void;
+  hasLoadedSavedProgress?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -104,11 +112,16 @@ function parseQualities(levels: Level[]): Array<{ index: number; label: string }
 
 // ─── Component ────────────────────────────────────────────────────
 const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProps>(
-  ({ src, poster, autoPlay = false, onError, movieId, server, audio, title, season, episode, isTVShow = false, userId, viewerMode = false, onToggleChat, isStreamingRoom = false, fullscreenTarget, hostHasPlayed = false, chatUnreadCount = 0, waitingForHost = false, onVideoEnded, endOverlay }, ref) => {
+  ({ src, poster, autoPlay = false, onError, movieId, server, audio, title, season, episode, isTVShow = false, userId, viewerMode = false, onToggleChat, isStreamingRoom = false, fullscreenTarget, hostHasPlayed = false, chatUnreadCount = 0, waitingForHost = false, onVideoEnded, endOverlay, watchUrl, latestWatchUrl, savedTime, savedWatchUrl, onUpdateSource, onSkipUpdateSource, hasLoadedSavedProgress }, ref) => {
     const innerRef = useRef<HTMLVideoElement>(null);
     const hlsRef = useRef<Hls | null>(null);
     const innerContainerRef = useRef<HTMLDivElement>(null);
     const t = useTranslations('Watch');
+
+    // Source change and update refs
+    const shouldPlayOnLoadRef = useRef(false);
+    const isConfirmUpdateRef = useRef(false);
+    const isFirstLoadRef = useRef(true);
 
     // ─── State ──────────────────────────────────────────────
     const [isPlaying, setIsPlaying] = useState(false);
@@ -143,6 +156,133 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     const [showResumeSkip, setShowResumeSkip] = useState(false);
     const resumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const resumeSkipTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Update source popup states & ref
+    const [showUpdatePopup, setShowUpdatePopup] = useState(false);
+    const [popupNewStreamUrl, setPopupNewStreamUrl] = useState('');
+    const saveUrlRef = useRef(watchUrl || '');
+
+    useEffect(() => {
+      if (watchUrl) {
+        saveUrlRef.current = watchUrl;
+      }
+    }, [watchUrl]);
+
+    useEffect(() => {
+      if (latestWatchUrl && watchUrl && latestWatchUrl !== watchUrl) {
+        const video = getVideo(ref, innerRef);
+        if (video) {
+          video.pause();
+          setIsPlaying(false);
+        }
+        setPopupNewStreamUrl(latestWatchUrl);
+        setShowUpdatePopup(true);
+      }
+    }, [latestWatchUrl, watchUrl, ref]);
+
+    const handleConfirmUpdate = useCallback(() => {
+      setShowUpdatePopup(false);
+      
+      // Set update refs to force immediate play from 0 when HLS loads the new source
+      shouldPlayOnLoadRef.current = true;
+      isConfirmUpdateRef.current = true;
+      
+      // Dismiss the resume time popup entirely
+      setResumePopup({ show: false, savedTime: 0 });
+      setControlsReady(true);
+
+      if (popupNewStreamUrl) {
+        saveUrlRef.current = popupNewStreamUrl;
+        
+        // Save progress immediately to DB or localStorage with currentTime = 0
+        if (userId) {
+          useRecentlyWatchedStore.getState().upsertItem({
+            id: String(movieId), server: server || '', audio: audio || '',
+            currentTime: 0, duration: 0,
+            title: title || '', poster: poster || '',
+            isTVShow: !!isTVShow, season, episode,
+          });
+          api.post('/recently-watched', {
+            contentId: String(movieId), isTVShow: !!isTVShow,
+            season: isTVShow ? season : null, episode: isTVShow ? episode : null,
+            server, audio, currentTime: 0, duration: 0,
+            title: title || '', poster: poster || '',
+            watchUrl: popupNewStreamUrl
+          }).catch(() => {});
+        } else {
+          const key = isTVShow && season && episode
+            ? `tvshow-progress-${movieId}-${season}-${episode}`
+            : `movie-progress-${movieId}`;
+          localStorage.setItem(key, JSON.stringify({
+            currentTime: 0, duration: 0, title: title || '', poster: poster || '',
+            server: server || '', audio: audio || '',
+            watchUrl: popupNewStreamUrl,
+            lastWatched: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            ...(isTVShow && season && episode ? { season, episode } : {})
+          }));
+        }
+      }
+
+      if (onUpdateSource && popupNewStreamUrl) {
+        onUpdateSource(popupNewStreamUrl);
+      }
+
+      const video = getVideo(ref, innerRef);
+      if (video) {
+        timeOffsetRef.current = 0;
+        pendingSeekRef.current = 0;
+        video.currentTime = 0;
+        setCurrentTime(0);
+        video.play().catch(() => {});
+      }
+    }, [onUpdateSource, popupNewStreamUrl, ref, movieId, server, audio, title, poster, season, episode, isTVShow, userId]);
+
+    const handleCancelUpdate = useCallback(() => {
+      setShowUpdatePopup(false);
+      const video = getVideo(ref, innerRef);
+      if (video) {
+        video.play().catch(() => {});
+      }
+      if (popupNewStreamUrl) {
+        saveUrlRef.current = popupNewStreamUrl;
+        const corrected = (video?.currentTime || 0) - timeOffsetRef.current;
+        const dur = video?.duration || 0;
+        if (corrected > 0 && dur > 0) {
+          const clampedCt = Math.min(corrected, dur);
+          if (userId) {
+            useRecentlyWatchedStore.getState().upsertItem({
+              id: String(movieId), server: server || '', audio: audio || '',
+              currentTime: clampedCt, duration: dur,
+              title: title || '', poster: poster || '',
+              isTVShow: !!isTVShow, season, episode,
+            });
+            api.post('/recently-watched', {
+              contentId: String(movieId), isTVShow: !!isTVShow,
+              season: isTVShow ? season : null, episode: isTVShow ? episode : null,
+              server, audio, currentTime: clampedCt, duration: dur,
+              title: title || '', poster: poster || '',
+              watchUrl: popupNewStreamUrl
+            }).catch(() => {});
+          } else {
+            const key = isTVShow && season && episode
+              ? `tvshow-progress-${movieId}-${season}-${episode}`
+              : `movie-progress-${movieId}`;
+            localStorage.setItem(key, JSON.stringify({
+              currentTime: clampedCt, duration: dur, title: title || '', poster: poster || '',
+              server: server || '', audio: audio || '',
+              watchUrl: popupNewStreamUrl,
+              lastWatched: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+              ...(isTVShow && season && episode ? { season, episode } : {})
+            }));
+          }
+        }
+      }
+      if (onSkipUpdateSource && popupNewStreamUrl) {
+        onSkipUpdateSource(popupNewStreamUrl);
+      }
+    }, [onSkipUpdateSource, popupNewStreamUrl, ref, movieId, server, audio, title, poster, season, episode, isTVShow, userId]);
 
     // Cleanup resume timeouts on unmount
     useEffect(() => {
@@ -256,6 +396,24 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       const video = getVideo(ref, innerRef);
       if (!video) return;
 
+      // Determine target time to resume playback at (e.g. for audio switches)
+      let targetResumeTime = 0;
+      if (isFirstLoadRef.current) {
+        isFirstLoadRef.current = false;
+      } else if (isConfirmUpdateRef.current) {
+        isConfirmUpdateRef.current = false;
+        targetResumeTime = 0;
+      } else {
+        // This is a manual audio switch! Resume from current time
+        targetResumeTime = videoProgressRef.current.currentTime;
+      }
+
+      // Reset seek positions and offsets on stream source change
+      timeOffsetRef.current = 0;
+      pendingSeekRef.current = null;
+      setCurrentTime(targetResumeTime);
+      setDuration(0);
+
       // Load saved volume
       const savedVol = parseFloat(localStorage.getItem('player-volume') || '1');
       video.volume = savedVol;
@@ -269,7 +427,15 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         hls.on(Hls.Events.MANIFEST_PARSED, (_, data: { levels: Level[] }) => {
           setQualities(parseQualities(data.levels));
           setCurrentQuality(-1);
-          if (autoPlay) video.play().catch(() => { });
+          if (targetResumeTime > 0) {
+            pendingSeekRef.current = targetResumeTime;
+            video.currentTime = targetResumeTime;
+            setCurrentTime(targetResumeTime);
+            video.play().catch(() => {});
+          } else if (autoPlay || shouldPlayOnLoadRef.current) {
+            video.play().catch(() => { });
+            shouldPlayOnLoadRef.current = false;
+          }
         });
         hls.on(Hls.Events.ERROR, (_event, data) => {
           if (data.fatal) {
@@ -283,7 +449,19 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         hlsRef.current = hls;
       } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
         video.src = src;
-        if (autoPlay) video.play().catch(() => { });
+        if (targetResumeTime > 0) {
+          const onLoadedMetadataForResume = () => {
+            video.removeEventListener('loadedmetadata', onLoadedMetadataForResume);
+            pendingSeekRef.current = targetResumeTime;
+            video.currentTime = targetResumeTime;
+            setCurrentTime(targetResumeTime);
+            video.play().catch(() => {});
+          };
+          video.addEventListener('loadedmetadata', onLoadedMetadataForResume);
+        } else if (autoPlay || shouldPlayOnLoadRef.current) {
+          video.play().catch(() => { });
+          shouldPlayOnLoadRef.current = false;
+        }
       }
 
       const onLoadedMetadata = () => {
@@ -342,59 +520,38 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [src, autoPlay, ref]);
 
-    // ─── Resume: fetch saved time → show popup ──────────────
+    // ─── Resume: check saved props → show popup ──────────────
     useEffect(() => {
-      if (!movieId || !server || !audio) return;
+      // If Recently Watched progress hasn't loaded yet, keep controls hidden and don't check resume
+      if (hasLoadedSavedProgress === false) {
+        setControlsReady(false);
+        return;
+      }
 
-      // If video is already playing (e.g. userId changed mid-watch due to login/logout),
-      // skip resume check — don't interrupt the current session with a popup
+      // If video is already playing, skip resume check
       const video = getVideo(ref, innerRef);
       if (video && !video.paused) {
         setControlsReady(true);
         return;
       }
 
-      let cancelled = false;
+      let activeSavedTime = savedTime || 0;
 
-      const load = async () => {
-        let savedTime = 0;
-
-        if (userId) {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const params: any = { contentId: String(movieId), isTVShow: String(!!isTVShow) };
-            if (isTVShow && season && episode) { params.season = String(season); params.episode = String(episode); }
-            const resp = await api.get('/recently-watched', { params });
-            if (cancelled) return;
-            savedTime = resp.data?.item?.currentTime || 0;
-          } catch { /* ignore */ }
-        } else {
-          const key = isTVShow && season && episode
-            ? `tvshow-progress-${movieId}-${season}-${episode}`
-            : `movie-progress-${movieId}`;
-          const saved = localStorage.getItem(key);
-          if (saved) {
-            try {
-              const pd = JSON.parse(saved);
-              savedTime = pd.currentTime || 0;
-              if (pd.expiresAt && new Date() > new Date(pd.expiresAt)) { localStorage.removeItem(key); savedTime = 0; }
-            } catch { savedTime = parseFloat(saved) || 0; }
-          }
+      // Check if watch URL has changed (link phim bị đổi)
+      if (savedWatchUrl && watchUrl) {
+        const urlChanged = savedWatchUrl.length !== watchUrl.length || savedWatchUrl !== watchUrl;
+        if (urlChanged) {
+          activeSavedTime = 0; // Reset progress — link phim đã thay đổi
         }
+      }
 
-        if (cancelled) return;
-
-        if (savedTime > 10) {
-          setControlsReady(false);
-          setResumePopup({ show: true, savedTime });
-        } else {
-          setControlsReady(true);
-        }
-      };
-
-      load();
-      return () => { cancelled = true; };
-    }, [movieId, server, audio, season, episode, isTVShow, userId, ref]);
+      if (activeSavedTime > 10) {
+        setControlsReady(false);
+        setResumePopup({ show: true, savedTime: activeSavedTime });
+      } else {
+        setControlsReady(true);
+      }
+    }, [savedTime, savedWatchUrl, watchUrl, ref, hasLoadedSavedProgress]);
 
     // ─── Resume handlers ────────────────────────────────────
     const handleResumeContinue = useCallback(() => {
@@ -541,7 +698,8 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         contentId: String(movieId), isTVShow: !!isTVShow,
         season: isTVShow ? season : null, episode: isTVShow ? episode : null,
         server, audio, currentTime: ct, duration: dur,
-        title: title || '', poster: poster || ''
+        title: title || '', poster: poster || '',
+        watchUrl: saveUrlRef.current || ''
       });
 
       const saveToLocalStorage = (ct: number, dur: number) => {
@@ -551,6 +709,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         localStorage.setItem(key, JSON.stringify({
           currentTime: ct, duration: dur, title: title || '', poster: poster || '',
           server: server || '', audio: audio || '',
+          watchUrl: saveUrlRef.current || '',
           lastWatched: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
           ...(isTVShow && season && episode ? { season, episode } : {})
@@ -645,7 +804,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         video.removeEventListener('seeked', onSeekedSave);
         window.removeEventListener('beforeunload', onBeforeUnload);
       };
-    }, [movieId, server, audio, ref, title, poster, season, episode, isTVShow, userId]);
+    }, [movieId, server, audio, ref, title, poster, season, episode, isTVShow, userId, watchUrl]);
 
     // ─── Handlers ───────────────────────────────────────────
     const togglePlay = useCallback(() => {
@@ -735,7 +894,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     useEffect(() => {
       const handler = (e: KeyboardEvent) => {
         if (!innerContainerRef.current) return;
-        if (!controlsReady || resumeSeekPending) return; // Block keyboard when resume popup or seek pending
+        if (!controlsReady || resumeSeekPending || showUpdatePopup) return; // Block keyboard when resume popup, seek pending, or update popup is showing
         const target = e.target as HTMLElement;
         if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable) return;
         // When end overlay is showing, only allow fullscreen toggle and escape
@@ -761,7 +920,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       };
       window.addEventListener("keydown", handler);
       return () => window.removeEventListener("keydown", handler);
-    }, [togglePlay, toggleFullscreen, toggleMute, ref, viewerMode, controlsReady, resumeSeekPending, duration, hasEndOverlay]);
+    }, [togglePlay, toggleFullscreen, toggleMute, ref, viewerMode, controlsReady, resumeSeekPending, duration, hasEndOverlay, showUpdatePopup]);
 
     // ─── Seek helper (guard duration) ───────────────────────
     const seekTo = useCallback((pct: number) => {
@@ -870,6 +1029,37 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
                   {t('skipWatchFromBeginning')}
                 </button>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Update Source Glassmorphic Popup */}
+        {showUpdatePopup && (
+          <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/75 backdrop-blur-sm transition-all duration-300 animate-fade-in" data-no-toggle>
+            <div className="bg-gray-950/90 border border-white/10 rounded-xl px-4 py-4 sm:px-6 sm:py-5 flex flex-col items-center gap-3.5 shadow-2xl max-w-[280px] sm:max-w-sm mx-4 backdrop-blur-xl transition-all animate-scale-up">
+              <h3 className="text-white text-sm sm:text-base font-extrabold tracking-wide text-center flex items-center gap-1.5">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {t('updatePlaybackSource')}
+              </h3>
+              <p className="text-gray-300 text-[10px] sm:text-xs text-center leading-relaxed font-medium">
+                {t('updatePlaybackSourceDesc')}
+              </p>
+              <div className="flex flex-row gap-2.5 w-full mt-1">
+                <button
+                  onClick={handleConfirmUpdate}
+                  className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-[10px] sm:text-xs transition-all duration-200 shadow-md hover:shadow-blue-500/20 active:scale-[0.97]"
+                >
+                  {t('updateNewSource')}
+                </button>
+                <button
+                  onClick={handleCancelUpdate}
+                  className="flex-1 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white border border-white/10 font-semibold text-[10px] sm:text-xs transition-all duration-200 active:scale-[0.97]"
+                >
+                  {t('continueOldSource')}
+                </button>
+              </div>
             </div>
           </div>
         )}

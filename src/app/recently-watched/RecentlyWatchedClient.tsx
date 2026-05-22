@@ -24,6 +24,7 @@ interface RecentlyWatchedItem {
   isTVShow?: boolean
   season?: number
   episode?: number
+  watchUrl?: string
 }
 
 const ITEMS_PER_PAGE = 20
@@ -79,6 +80,7 @@ export default function RecentlyWatchedClient() {
       isTVShow: !!it.isTVShow,
       season: it.season ?? undefined,
       episode: it.episode ?? undefined,
+      watchUrl: it.watchUrl ?? undefined,
     }))
 
     return { items: srvItems, hasMore: !!resp.data?.hasMore }
@@ -118,7 +120,8 @@ export default function RecentlyWatchedClient() {
           title: progressData.title,
           poster: progressData.poster,
           lastWatched: progressData.lastWatched || new Date().toISOString(),
-          isTVShow: false
+          isTVShow: false,
+          watchUrl: progressData.watchUrl || undefined,
         })
       } else if (isTVShow) {
         const keyParts = key.replace('tvshow-progress-', '').split('-')
@@ -135,7 +138,8 @@ export default function RecentlyWatchedClient() {
           lastWatched: progressData.lastWatched || new Date().toISOString(),
           isTVShow: true,
           season: parseInt(season),
-          episode: parseInt(episode)
+          episode: parseInt(episode),
+          watchUrl: progressData.watchUrl || undefined,
         })
       }
     }
@@ -380,7 +384,7 @@ export default function RecentlyWatchedClient() {
                       <div className="aspect-[2/3] bg-gradient-to-br from-gray-800 to-gray-900 relative overflow-hidden">
                         {item.poster ? (
                           <Image
-                            src={`/api/cache-image?id=${item.id}&url=${encodeURIComponent(item.poster)}`}
+                            src={item.poster}
                             alt={item.title || `Content ${item.id}`}
                             fill
                             className="object-cover transition-transform duration-300 group-hover:scale-105"

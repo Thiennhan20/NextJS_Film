@@ -39,6 +39,11 @@
     "settings": "Cài đặt",
     "speed": "Tốc độ",
     "quality": "Chất lượng",
-    "normal": "Chuẩn"
+    "normal": "Chuẩn",
+    "oldSourceExpired": "Nguồn phát cũ đã hết hạn. Đang lấy nguồn mới...",
+    "updatePlaybackSource": "Cập nhật nguồn phát",
+    "updatePlaybackSourceDesc": "Hệ thống phát hiện nguồn phát mới chất lượng hơn hoặc đã được sửa lỗi cho phim này. Bạn có muốn tải lại nguồn mới ngay không?",
+    "updateNewSource": "Cập nhật nguồn mới",
+    "continueOldSource": "Tiếp tục xem nguồn cũ"
   }
 }

@@ -90,6 +90,123 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
   const [apiSearchCompleted, setApiSearchCompleted] = useState(false);
   const [selectedAudio, setSelectedAudio] = useState<'vietsub' | 'dubbed' | null>(null);
 
+  // Instant Playback States
+  const [savedProgress, setSavedProgress] = useState<{ currentTime: number; watchUrl: string; audio?: string } | null>(null);
+  const [hasLoadedSavedProgress, setHasLoadedSavedProgress] = useState(false);
+  const [activeWatchUrl, setActiveWatchUrl] = useState<string>('');
+  const [isSavedLinkFatalError, setIsSavedLinkFatalError] = useState(false);
+
+  // Load Saved Progress on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function loadProgress() {
+      let savedTime = 0;
+      let savedWatchUrl = '';
+      let savedAudio = '';
+
+      if (userId) {
+        try {
+          const params = { contentId: String(movie.id), isTVShow: 'false' };
+          const resp = await api.get('/recently-watched', { params });
+          if (cancelled) return;
+          savedTime = resp.data?.item?.currentTime || 0;
+          savedWatchUrl = resp.data?.item?.watchUrl || '';
+          savedAudio = resp.data?.item?.audio || '';
+        } catch { /* ignore */ }
+      } else {
+        const key = `movie-progress-${movie.id}`;
+        const saved = localStorage.getItem(key);
+        if (saved) {
+          try {
+            const pd = JSON.parse(saved);
+            savedTime = pd.currentTime || 0;
+            savedWatchUrl = pd.watchUrl || '';
+            savedAudio = pd.audio || '';
+            if (pd.expiresAt && new Date() > new Date(pd.expiresAt)) {
+              localStorage.removeItem(key);
+              savedTime = 0;
+              savedWatchUrl = '';
+              savedAudio = '';
+            }
+          } catch {
+            savedTime = parseFloat(saved) || 0;
+          }
+        }
+      }
+
+      if (cancelled) return;
+      if (savedWatchUrl) {
+        setSavedProgress({ currentTime: savedTime, watchUrl: savedWatchUrl, audio: savedAudio || undefined });
+        setActiveWatchUrl(savedWatchUrl);
+        if (savedAudio === 'vietsub' || savedAudio === 'dubbed') {
+          setSelectedAudio(savedAudio as 'vietsub' | 'dubbed');
+        }
+      }
+      setHasLoadedSavedProgress(true);
+    }
+
+    loadProgress();
+    return () => {
+      cancelled = true;
+    };
+  }, [movie.id, userId]);
+
+  // Auto-swap on fatal error when background search completes
+  useEffect(() => {
+    let videoSrc = '';
+    if (selectedAudio === 'vietsub' && movieLinks.vietsub) {
+      videoSrc = movieLinks.vietsub;
+    } else if (selectedAudio === 'dubbed' && movieLinks.dubbed) {
+      videoSrc = movieLinks.dubbed;
+    } else if (movieLinks.vietsub) {
+      videoSrc = movieLinks.vietsub;
+    } else if (movieLinks.dubbed) {
+      videoSrc = movieLinks.dubbed;
+    } else {
+      videoSrc = movieLinks.m3u8;
+    }
+
+    if (apiSearchCompleted && isSavedLinkFatalError && videoSrc) {
+      setActiveWatchUrl(videoSrc);
+      setIsSavedLinkFatalError(false);
+      
+      // Update savedProgress to new working source at 0
+      setSavedProgress(prev => prev ? { ...prev, watchUrl: videoSrc, currentTime: 0 } : { watchUrl: videoSrc, currentTime: 0 });
+      
+      // Save it immediately in database or localStorage
+      if (userId) {
+        api.post('/recently-watched', {
+          contentId: String(movie.id), isTVShow: false,
+          season: null, episode: null,
+          server: selectedServer, audio: selectedAudio || '',
+          currentTime: 0, duration: 0,
+          title: movie.title, poster: movie.poster,
+          watchUrl: videoSrc
+        }).catch(() => {});
+      } else {
+        const key = `movie-progress-${movie.id}`;
+        localStorage.setItem(key, JSON.stringify({
+          currentTime: 0, duration: 0, title: movie.title, poster: movie.poster,
+          server: selectedServer, audio: selectedAudio || '',
+          watchUrl: videoSrc,
+          lastWatched: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        }));
+      }
+    }
+  }, [apiSearchCompleted, isSavedLinkFatalError, movieLinks, selectedAudio, userId, movie.id, movie.title, movie.poster, selectedServer]);
+
+  // Reset activeWatchUrl when user manually changes audio
+  useEffect(() => {
+    if (hasLoadedSavedProgress && savedProgress) {
+      const savedAudio = savedProgress.audio || 'vietsub';
+      const currentAudio = selectedAudio || 'vietsub';
+      if (currentAudio !== savedAudio) {
+        setActiveWatchUrl('');
+      }
+    }
+  }, [selectedAudio, savedProgress, hasLoadedSavedProgress]);
+
   // Server 3 states
   const [server3Links, setServer3Links] = useState({ vietsub: '', dubbed: '', m3u8: '' });
   const [server3Loading, setServer3Loading] = useState(false);
@@ -454,36 +571,6 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
       <div className="relative w-full rounded-lg overflow-hidden bg-black/50 aspect-video">
         {selectedServer === 'server1' && (
           (() => {
-            if (!apiSearchCompleted || movieLinksLoading) {
-              return (
-                <div className="flex items-center justify-center h-full text-white">
-                  <div className="flex flex-col items-center gap-4">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
-                      className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full"
-                    />
-                    <p className="text-sm text-gray-400">{t('pleaseWait')}</p>
-                  </div>
-                </div>
-              );
-            }
-
-            const hasVideoSource = movieLinks.vietsub || movieLinks.dubbed || movieLinks.m3u8;
-            if (!hasVideoSource) {
-              return (
-                <div className="flex items-center justify-center h-full text-white">
-                  <div className="flex flex-col items-center gap-4">
-                    <svg className="w-12 h-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p className="text-lg font-semibold">{t('noVideoSource')}</p>
-                    <p className="text-sm text-gray-400">{t('tryAnotherServer')}</p>
-                  </div>
-                </div>
-              );
-            }
-
             let videoSrc = '';
             let effectiveAudio: 'vietsub' | 'dubbed' | null = null;
             if (selectedAudio === 'vietsub' && movieLinks.vietsub) {
@@ -503,11 +590,59 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
               effectiveAudio = null;
             }
 
-            return videoSrc ? (
+            const canPlaySaved = activeWatchUrl && !isSavedLinkFatalError;
+
+            if (!canPlaySaved && (!apiSearchCompleted || movieLinksLoading)) {
+              if (isSavedLinkFatalError) {
+                return (
+                  <div className="flex items-center justify-center h-full text-white">
+                    <div className="flex flex-col items-center gap-4">
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
+                        className="w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full"
+                      />
+                      <p className="text-sm text-gray-400">{t('oldSourceExpired')}</p>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div className="flex items-center justify-center h-full text-white">
+                  <div className="flex flex-col items-center gap-4">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
+                      className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full"
+                    />
+                    <p className="text-sm text-gray-400">{t('pleaseWait')}</p>
+                  </div>
+                </div>
+              );
+            }
+
+            const playUrl = activeWatchUrl || videoSrc;
+            const hasVideoSource = playUrl || movieLinks.vietsub || movieLinks.dubbed || movieLinks.m3u8;
+
+            if (!hasVideoSource) {
+              return (
+                <div className="flex items-center justify-center h-full text-white">
+                  <div className="flex flex-col items-center gap-4">
+                    <svg className="w-12 h-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-lg font-semibold">{t('noVideoSource')}</p>
+                    <p className="text-sm text-gray-400">{t('tryAnotherServer')}</p>
+                  </div>
+                </div>
+              );
+            }
+
+            return playUrl ? (
               <EnhancedMoviePlayer
-                key={videoSrc}
+                key={movie.id}
                 ref={videoRef}
-                src={proxyHlsUrl(videoSrc)}
+                src={proxyHlsUrl(playUrl)}
                 poster={movie.poster}
                 autoPlay={false}
                 movieId={movie.id}
@@ -515,6 +650,20 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
                 audio={effectiveAudio || undefined}
                 title={movie.title}
                 userId={typeof userId === 'string' ? userId : undefined}
+                watchUrl={playUrl}
+                latestWatchUrl={apiSearchCompleted ? videoSrc : undefined}
+                savedTime={savedProgress?.currentTime}
+                savedWatchUrl={savedProgress?.watchUrl}
+                hasLoadedSavedProgress={hasLoadedSavedProgress}
+                onUpdateSource={(newUrl) => {
+                  setActiveWatchUrl(newUrl);
+                  setSavedProgress(prev => prev ? { ...prev, watchUrl: newUrl, currentTime: 0 } : { watchUrl: newUrl, currentTime: 0 });
+                }}
+                onError={() => {
+                  if (activeWatchUrl && !apiSearchCompleted) {
+                    setIsSavedLinkFatalError(true);
+                  }
+                }}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-white text-lg font-semibold">
