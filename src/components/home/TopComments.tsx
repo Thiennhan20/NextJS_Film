@@ -30,6 +30,12 @@ interface RankingItem {
 
 // Mock data arrays removed – state versions are used instead
 
+const NEW_COMMENTS_VISIBLE_COUNT = 5
+const NEW_COMMENT_ROW_HEIGHT = 90
+const NEW_COMMENT_ROW_GAP = 10
+const NEW_COMMENT_SCROLL_INTERVAL = 3600
+const NEW_COMMENT_SCROLL_DURATION = 1.35
+
 // Custom avatar generator function
 const generateAvatar = (name: string) => {
   const colors = [
@@ -55,13 +61,18 @@ export default function TopComments() {
   const [isMobile, setIsMobile] = useState(false)
   const [isTablet, setIsTablet] = useState(false)
   const carouselRef = useRef<HTMLDivElement>(null)
+  const newCommentsRef = useRef<HTMLDivElement>(null)
   const [trendingMovies, setTrendingMovies] = useState<RankingItem[]>([])
   const [mostLikedMovies, setMostLikedMovies] = useState<RankingItem[]>([])
+  const [newCommentStartIndex, setNewCommentStartIndex] = useState(0)
+  const [newCommentsTransitionEnabled, setNewCommentsTransitionEnabled] = useState(true)
+  const [newCommentsInView, setNewCommentsInView] = useState(false)
 
   // Use optimized hooks with SWR caching and batch fetching
   const { comments: topComments, isLoading: loading, isError: error } = useTopComments(9)
-  const { comments: newComments, isLoading: newCommentsLoading } = useRecentComments(5)
+  const { comments: newComments, isLoading: newCommentsLoading } = useRecentComments(10)
   const t = useTranslations('Comments')
+  const firstNewCommentId = newComments[0]?.id
 
   // Fetch trending and top rated movies from TMDB
   useEffect(() => {
@@ -120,6 +131,62 @@ export default function TopComments() {
     return () => window.removeEventListener('resize', checkScreenSize)
   }, [])
 
+  useEffect(() => {
+    const target = newCommentsRef.current
+    if (!target) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const visible = entry.isIntersecting
+        setNewCommentsInView(visible)
+
+        if (!visible) {
+          setNewCommentsTransitionEnabled(false)
+          setNewCommentStartIndex(0)
+          window.setTimeout(() => setNewCommentsTransitionEnabled(true), 50)
+        }
+      },
+      { threshold: 0.35 }
+    )
+
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [newCommentsLoading, newComments.length])
+
+  useEffect(() => {
+    setNewCommentsTransitionEnabled(false)
+    setNewCommentStartIndex(0)
+    const timer = window.setTimeout(() => setNewCommentsTransitionEnabled(true), 50)
+    return () => window.clearTimeout(timer)
+  }, [newComments.length, firstNewCommentId])
+
+  const shouldCycleNewComments = newComments.length > NEW_COMMENTS_VISIBLE_COUNT
+
+  useEffect(() => {
+    if (!shouldCycleNewComments || !newCommentsInView) return
+
+    const interval = window.setInterval(() => {
+      setNewCommentsTransitionEnabled(true)
+      setNewCommentStartIndex((prev) => prev + 1)
+    }, NEW_COMMENT_SCROLL_INTERVAL)
+
+    return () => window.clearInterval(interval)
+  }, [shouldCycleNewComments, newCommentsInView])
+
+  useEffect(() => {
+    if (!shouldCycleNewComments || newCommentStartIndex !== newComments.length) return
+
+    const resetTimer = window.setTimeout(() => {
+      setNewCommentsTransitionEnabled(false)
+      setNewCommentStartIndex(0)
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => setNewCommentsTransitionEnabled(true))
+      })
+    }, NEW_COMMENT_SCROLL_DURATION * 1000)
+
+    return () => window.clearTimeout(resetTimer)
+  }, [shouldCycleNewComments, newCommentStartIndex, newComments.length])
+
   const getItemsPerSlide = () => {
     if (isMobile) return 1
     if (isTablet) return 2
@@ -141,6 +208,10 @@ export default function TopComments() {
     const start = currentSlide * itemsPerSlide
     return topComments.slice(start, start + itemsPerSlide)
   }
+
+  const newCommentsTrack = shouldCycleNewComments
+    ? [...newComments, ...newComments.slice(0, NEW_COMMENTS_VISIBLE_COUNT)]
+    : newComments.slice(0, NEW_COMMENTS_VISIBLE_COUNT)
 
   const getTrendIcon = (trend: 'up' | 'down' | 'same') => {
     switch (trend) {
@@ -534,17 +605,66 @@ export default function TopComments() {
                     <p className="text-gray-500 text-sm">{t('noRecentComments')}</p>
                   </div>
                 ) : (
-                  newComments.map((comment) => (
+                  <motion.div
+                    ref={newCommentsRef}
+                    className="relative rounded-xl border border-cyan-400/10 bg-cyan-400/[0.025] p-2 shadow-inner shadow-cyan-500/5 overflow-hidden"
+                    animate={shouldCycleNewComments ? {
+                      borderColor: ['rgba(34, 211, 238, 0.10)', 'rgba(34, 211, 238, 0.22)', 'rgba(34, 211, 238, 0.10)'],
+                      boxShadow: [
+                        'inset 0 1px 8px rgba(6, 182, 212, 0.05), 0 0 0 rgba(34, 211, 238, 0)',
+                        'inset 0 1px 12px rgba(6, 182, 212, 0.09), 0 0 18px rgba(34, 211, 238, 0.10)',
+                        'inset 0 1px 8px rgba(6, 182, 212, 0.05), 0 0 0 rgba(34, 211, 238, 0)'
+                      ]
+                    } : undefined}
+                    transition={{ duration: NEW_COMMENT_SCROLL_INTERVAL / 1000, repeat: Infinity, ease: 'easeInOut' }}
+                  >
+                    {shouldCycleNewComments && (
+                      <div className="pointer-events-none absolute left-1 top-2 bottom-2 z-30 w-px bg-cyan-300/15">
+                        <motion.div
+                          className="absolute -left-1 h-6 w-2 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(34,211,238,0.85)]"
+                          animate={{
+                            y: (newCommentStartIndex % NEW_COMMENTS_VISIBLE_COUNT) * (NEW_COMMENT_ROW_HEIGHT + NEW_COMMENT_ROW_GAP)
+                          }}
+                          transition={{ duration: NEW_COMMENT_SCROLL_DURATION, ease: [0.22, 1, 0.36, 1] }}
+                        />
+                      </div>
+                    )}
+                    <div
+                      className="overflow-hidden"
+                      style={{
+                        height: shouldCycleNewComments
+                          ? NEW_COMMENTS_VISIBLE_COUNT * NEW_COMMENT_ROW_HEIGHT + (NEW_COMMENTS_VISIBLE_COUNT - 1) * NEW_COMMENT_ROW_GAP
+                          : undefined
+                      }}
+                    >
+                    <motion.div
+                      className="relative z-10 flex flex-col gap-2.5"
+                      animate={{
+                        y: shouldCycleNewComments
+                          ? -newCommentStartIndex * (NEW_COMMENT_ROW_HEIGHT + NEW_COMMENT_ROW_GAP)
+                          : 0
+                      }}
+                      transition={newCommentsTransitionEnabled
+                        ? { duration: NEW_COMMENT_SCROLL_DURATION, ease: [0.22, 1, 0.36, 1] }
+                        : { duration: 0 }
+                      }
+                    >
+                      {newCommentsTrack.map((comment, index) => (
                     <Link
-                      key={comment.id}
+                      key={`${comment.id}-${index}`}
                       href={getCommentUrl(comment.movieId, comment.type, comment.id)}
-                      className="block"
+                      className="block shrink-0"
+                      style={{ height: NEW_COMMENT_ROW_HEIGHT }}
                     >
                       <motion.div
                         whileHover={{ scale: 1.01 }}
-                        className="p-1.5 sm:p-2 rounded-lg hover:bg-gray-700/30 transition-all border border-transparent hover:border-gray-600/30 group/comment cursor-pointer"
+                        className={`h-full p-1.5 sm:p-2 rounded-lg transition-all border group/comment cursor-pointer ${
+                          index % 2 === 0
+                            ? 'bg-white/[0.035] border-white/10 hover:bg-cyan-400/[0.08] hover:border-cyan-300/25'
+                            : 'bg-blue-950/20 border-blue-300/10 hover:bg-blue-500/[0.08] hover:border-blue-300/25'
+                        }`}
                       >
-                        <div className="flex items-start gap-2">
+                        <div className="flex items-start gap-2 h-full">
                           <div className="relative flex-shrink-0">
                             {comment.user.avatar ? (
                               <Image
@@ -577,7 +697,10 @@ export default function TopComments() {
                         </div>
                       </motion.div>
                     </Link>
-                  ))
+                      ))}
+                    </motion.div>
+                    </div>
+                  </motion.div>
                 )}
               </div>
             </div>

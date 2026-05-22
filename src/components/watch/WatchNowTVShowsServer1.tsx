@@ -9,6 +9,19 @@ interface TVShow {
   year: number | '';
 }
 
+interface EpisodeStream {
+  name?: string;
+  link_m3u8?: string;
+  link_embed?: string;
+}
+
+interface EpisodeServer {
+  server_name?: string;
+  server_data?: EpisodeStream[];
+  episode_number?: number;
+  name?: string;
+}
+
 interface WatchNowTVShowsServer1Props {
   tvShow: TVShow;
   selectedSeason: number;
@@ -18,6 +31,62 @@ interface WatchNowTVShowsServer1Props {
   onSearchComplete: (completed: boolean) => void;
   onDataReadyChange: (ready: boolean) => void;
 }
+
+const normalizeForCompare = (value?: string) => {
+  return (value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\u0111/g, 'd')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const getEpisodeNumberFromName = (name?: string): number | null => {
+  const normalized = normalizeForCompare(name);
+  if (!normalized) return null;
+
+  const prefixed = normalized.match(/\b(?:tap|episode|ep|e)\s*[:#._-]?\s*0*(\d{1,4})(?=\D|$)/i);
+  if (prefixed) return Number(prefixed[1]);
+
+  const leadingNumber = normalized.match(/^0*(\d{1,4})(?=\D|$)/);
+  if (leadingNumber) return Number(leadingNumber[1]);
+
+  return null;
+};
+
+const isEpisodeNameMatch = (name: string | undefined, episodeNumber: number) => {
+  return getEpisodeNumberFromName(name) === episodeNumber;
+};
+
+const findEpisodeStream = (server: EpisodeServer, episodeNumber: number) => {
+  return server.server_data?.find(ep => isEpisodeNameMatch(ep.name, episodeNumber));
+};
+
+const episodesContainSelectedEpisode = (episodes: EpisodeServer[] | undefined, episodeNumber: number) => {
+  if (!episodes || episodeNumber <= 0) return false;
+
+  return episodes.some(ep => {
+    if (typeof ep.episode_number === 'number' && ep.episode_number === episodeNumber) return true;
+    if (isEpisodeNameMatch(ep.name, episodeNumber)) return true;
+    return !!findEpisodeStream(ep, episodeNumber);
+  });
+};
+
+const getEpisodeUrl = (episode?: EpisodeStream) => {
+  return episode?.link_m3u8 || episode?.link_embed?.split('?url=')[1] || '';
+};
+
+const isVietsubServer = (serverName?: string) => {
+  return normalizeForCompare(serverName).includes('vietsub');
+};
+
+const isDubbedServer = (serverName?: string) => {
+  const normalized = normalizeForCompare(serverName);
+  return normalized.includes('thuyet minh') ||
+    normalized.includes('long tieng') ||
+    normalized.includes('dubbed');
+};
 
 export default function WatchNowTVShowsServer1({
   tvShow,
@@ -30,14 +99,7 @@ export default function WatchNowTVShowsServer1({
 }: WatchNowTVShowsServer1Props) {
   const { id } = useParams();
 
-  const [episodesData, setEpisodesData] = useState<Array<{
-    server_name?: string;
-    server_data?: Array<{
-      name?: string;
-      link_m3u8?: string;
-      link_embed?: string;
-    }>;
-  }> | null>(null);
+  const [episodesData, setEpisodesData] = useState<EpisodeServer[] | null>(null);
 
   const [tvShowLinks, setTVShowLinks] = useState({
     embed: '',
@@ -63,63 +125,69 @@ export default function WatchNowTVShowsServer1({
   // Xử lý khi season thay đổi để trigger tìm kiếm lại
   useEffect(() => {
     // Chỉ đánh dấu khi season thay đổi, không phải episode
-    if (tvShowLinks.m3u8 && tvShowLinks.currentSeason !== selectedSeason) {
+    if ((tvShowLinks.m3u8 || tvShowLinks.vietsub || tvShowLinks.dubbed) &&
+      tvShowLinks.currentSeason !== selectedSeason) {
       setTVShowLinks(links => ({ ...links, seasonChanged: true }));
     }
-  }, [selectedSeason, tvShowLinks.m3u8, tvShowLinks.currentSeason]);
+  }, [selectedSeason, tvShowLinks.m3u8, tvShowLinks.vietsub, tvShowLinks.dubbed, tvShowLinks.currentSeason]);
 
   // Main useEffect - giống như code gốc, chỉ có 1 useEffect duy nhất
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     async function fetchPhimApiEmbed() {
+      // Let parent episode-reset effects run before a cached result marks data ready.
+      await Promise.resolve();
+      if (cancelled) return;
 
       // Nếu đã có audio links cho season hiện tại thì không cần tìm kiếm lại
+      const hasEpisodeInCache = episodesContainSelectedEpisode(episodesData || undefined, selectedEpisode);
+
       if (tvShowLinks.currentSeason === selectedSeason && !tvShowLinks.seasonChanged &&
-        (tvShowLinks.vietsub || tvShowLinks.dubbed)) {
-        onDataReadyChange(true);
+        (tvShowLinks.vietsub || tvShowLinks.dubbed || tvShowLinks.m3u8) && hasEpisodeInCache) {
+        let vietsubLink = '';
+        let dubbedLink = '';
+        let m3u8Link = '';
 
         // Xử lý khi episode thay đổi - cập nhật audio links từ episodesData có sẵn
         if (episodesData && selectedEpisode > 0) {
-          let vietsubLink = '';
-          let dubbedLink = '';
-
           for (const episode of episodesData) {
-            const targetEpisode = episode.server_data?.find((ep: { name?: string; link_m3u8?: string; link_embed?: string }) => {
-              const epName = ep.name?.toLowerCase() || '';
-              return epName.includes(`tập ${selectedEpisode}`) ||
-                epName.includes(`episode ${selectedEpisode}`) ||
-                epName.includes(`tập 0${selectedEpisode}`) ||
-                epName.includes(`episode 0${selectedEpisode}`) ||
-                epName.includes(`tập ${selectedEpisode.toString().padStart(2, '0')}`) ||
-                epName.includes(`episode ${selectedEpisode.toString().padStart(2, '0')}`)
-            });
+            const targetEpisode = findEpisodeStream(episode, selectedEpisode);
+            const episodeUrl = getEpisodeUrl(targetEpisode);
 
-            if (targetEpisode) {
-              if (episode.server_name?.toLowerCase().includes('vietsub')) {
-                vietsubLink = targetEpisode.link_m3u8 || targetEpisode.link_embed?.split('?url=')[1] || '';
-              } else if (episode.server_name?.toLowerCase().includes('thuyết minh') ||
-                episode.server_name?.toLowerCase().includes('lồng tiếng') ||
-                episode.server_name?.toLowerCase().includes('dubbed')) {
-                dubbedLink = targetEpisode.link_m3u8 || targetEpisode.link_embed?.split('?url=')[1] || '';
-              } else {
+            if (targetEpisode && episodeUrl) {
+              if (isVietsubServer(episode.server_name)) {
+                vietsubLink = episodeUrl;
+              } else if (isDubbedServer(episode.server_name)) {
+                dubbedLink = episodeUrl;
+              } else if (!m3u8Link) {
+                m3u8Link = episodeUrl;
               }
             }
           }
 
-          setTVShowLinks(links => ({
-            ...links,
-            vietsub: vietsubLink,
-            dubbed: dubbedLink
-          }));
-
-          onLinksChange({
-            embed: '',
-            m3u8: tvShowLinks.m3u8,
-            vietsub: vietsubLink,
-            dubbed: dubbedLink
-          });
         }
 
+        if (cancelled) return;
+        const cachedLinks = {
+          embed: '',
+          m3u8: m3u8Link,
+          vietsub: vietsubLink,
+          dubbed: dubbedLink,
+          seasonChanged: false,
+          currentSeason: selectedSeason
+        };
+
+        setTVShowLinks(cachedLinks);
+        onLinksChange({
+          embed: '',
+          m3u8: m3u8Link,
+          vietsub: vietsubLink,
+          dubbed: dubbedLink
+        });
+        onLoadingChange(false);
+        onSearchComplete(true);
+        onDataReadyChange(true);
         return;
       }
 
@@ -130,8 +198,10 @@ export default function WatchNowTVShowsServer1({
           m3u8: '',
           vietsub: '',
           dubbed: '',
-          seasonChanged: false
+          seasonChanged: false,
+          currentSeason: 0
         }));
+        setEpisodesData(null);
         onDataReadyChange(false);
         return;
       }
@@ -435,13 +505,7 @@ export default function WatchNowTVShowsServer1({
             hasSeasonEpisodes = false;
           } else {
             // Season matches or no season detected — check for episode
-            const targetEpisode = detailData.episodes.find((ep: { episode_number: number; name?: string }) =>
-              ep.episode_number === selectedEpisode ||
-              ep.name?.toLowerCase().includes(`tập ${selectedEpisode}`) ||
-              ep.name?.toLowerCase().includes(`episode ${selectedEpisode}`)
-            );
-
-            hasSeasonEpisodes = !!targetEpisode;
+            hasSeasonEpisodes = episodesContainSelectedEpisode(detailData.episodes, selectedEpisode);
           }
         }
 
@@ -502,13 +566,7 @@ export default function WatchNowTVShowsServer1({
                       continue; // Skip this wrong-season result
                     }
 
-                    const altTargetEpisode = altDetailData.episodes.find((ep: { episode_number: number; name?: string }) =>
-                      ep.episode_number === selectedEpisode ||
-                      ep.name?.toLowerCase().includes(`tập ${selectedEpisode}`) ||
-                      ep.name?.toLowerCase().includes(`episode ${selectedEpisode}`)
-                    );
-
-                    if (altTargetEpisode) {
+                    if (episodesContainSelectedEpisode(altDetailData.episodes, selectedEpisode)) {
                       slug = bestAltItem.slug;
                       finalDetailData = altDetailData;
                       hasSeasonEpisodes = true;
@@ -531,53 +589,42 @@ export default function WatchNowTVShowsServer1({
 
           for (const episode of finalDetailData.episodes) {
             // Tìm episode có số thứ tự tương ứng
-            const targetEpisode = episode.server_data?.find((ep: { name?: string; link_m3u8?: string; link_embed?: string }) => {
-              const epName = ep.name?.toLowerCase() || '';
-              const epNumber = selectedEpisode;
+            const targetEpisode = findEpisodeStream(episode, selectedEpisode);
+            const episodeUrl = getEpisodeUrl(targetEpisode);
 
-              // Kiểm tra các pattern: "Tập 02", "Episode 2", "2", etc.
-              return epName.includes(`tập ${epNumber}`) ||
-                epName.includes(`episode ${epNumber}`) ||
-                epName.includes(`tập 0${epNumber}`) ||
-                epName.includes(`episode 0${epNumber}`) ||
-                epName.includes(`tập ${epNumber.toString().padStart(2, '0')}`) ||
-                epName.includes(`episode ${epNumber.toString().padStart(2, '0')}`)
-            });
-
-            if (targetEpisode) {
+            if (targetEpisode && episodeUrl) {
 
               // Phân loại theo server_name
-              const sName = episode.server_name?.toLowerCase() || '';
-              if (sName.includes('vietsub')) {
-                vietsubLink = targetEpisode.link_m3u8 || targetEpisode.link_embed?.split('?url=')[1] || '';
-              } else if (sName.includes('thuyết minh') ||
-                sName.includes('lồng tiếng') ||
-                sName.includes('dubbed')) {
-                dubbedLink = targetEpisode.link_m3u8 || targetEpisode.link_embed?.split('?url=')[1] || '';
+              if (isVietsubServer(episode.server_name)) {
+                vietsubLink = episodeUrl;
+              } else if (isDubbedServer(episode.server_name)) {
+                dubbedLink = episodeUrl;
               } else {
+                defaultEmbed = defaultEmbed || episodeUrl;
               }
             } else {
             }
           }
 
           // Fallback: lấy episode đầu tiên nếu không tìm thấy episode cụ thể
-          if (!vietsubLink && !dubbedLink) {
+          if (!vietsubLink && !dubbedLink && !defaultEmbed && selectedEpisode === 1) {
             const firstEpisode = finalDetailData.episodes[0]?.server_data?.[0];
             if (firstEpisode) {
-              defaultEmbed = firstEpisode.link_m3u8 || firstEpisode.link_embed?.split('?url=')[1] || '';
+              defaultEmbed = getEpisodeUrl(firstEpisode);
             }
           }
         }
 
         // Fallback: sử dụng link_embed gốc nếu có
-        if (!vietsubLink && !dubbedLink && !defaultEmbed && finalDetailData.link_embed) {
+        if (!vietsubLink && !dubbedLink && !defaultEmbed && selectedEpisode === 1 && finalDetailData.link_embed) {
           defaultEmbed = finalDetailData.link_embed.includes('?url=')
             ? finalDetailData.link_embed.split('?url=')[1]
             : finalDetailData.link_embed;
         }
 
         // Lưu episodes data để tái sử dụng khi đổi episode
-        setEpisodesData(finalDetailData.episodes);
+        if (cancelled) return;
+        setEpisodesData(Array.isArray(finalDetailData.episodes) ? finalDetailData.episodes : null);
 
         // Cập nhật tvShowLinks với tất cả audio options
 
@@ -606,13 +653,19 @@ export default function WatchNowTVShowsServer1({
 
       } catch {
       } finally {
-        clearTimeout(timeoutId);
-        onLoadingChange(false);
-        onSearchComplete(true);
-        onDataReadyChange(true);
+        if (timeoutId) clearTimeout(timeoutId);
+        if (!cancelled) {
+          onLoadingChange(false);
+          onSearchComplete(true);
+          onDataReadyChange(true);
+        }
       }
     }
     fetchPhimApiEmbed();
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, tvShow?.name, selectedSeason, selectedEpisode]);
 

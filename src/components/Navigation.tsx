@@ -36,7 +36,7 @@ import NotificationBell from '@/components/notifications/NotificationBell';
 // Lazy load heavy search component
 const AutocompleteSearch = dynamic(() => import('@/components/common/AutocompleteSearch'), {
   loading: () => (
-    <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+    <div className="h-10 w-48 rounded-full bg-gray-200 animate-pulse" aria-hidden="true"></div>
   )
 });
 
@@ -53,6 +53,20 @@ const moreNavItems = [
   { key: 'contact', href: '/contact', icon: EnvelopeIcon },
   { key: 'streaming', href: '/streaming-lobby', icon: PlayCircleIcon },
 ]
+
+const desktopOverflowNavItems = mainNavItems.filter((item) => item.key !== 'home')
+
+function getDesktopMainNavVisibilityClass(key: string) {
+  if (key === 'movies') return 'max-[899px]:hidden'
+  if (key === 'tvShows') return 'max-[1199px]:hidden'
+  return ''
+}
+
+function getDesktopMoreNavVisibilityClass(key: string) {
+  if (key === 'movies') return 'flex min-[900px]:hidden'
+  if (key === 'tvShows') return 'flex min-[1200px]:hidden'
+  return 'flex'
+}
 
 const HEADER_DROPDOWN_OPEN_EVENT = 'header-dropdown-open'
 
@@ -106,12 +120,6 @@ export default function Navigation() {
   const [isMobileUserDropdownOpen, setIsMobileUserDropdownOpen] = useState(false);
   const [isMobileMoreDropdownOpen, setIsMobileMoreDropdownOpen] = useState(false);
   
-  // Adaptive navigation state - simplified
-  const [adaptiveStep, setAdaptiveStep] = useState(0);
-  const [visibleNavItems, setVisibleNavItems] = useState(mainNavItems);
-  const [hiddenNavItems, setHiddenNavItems] = useState<typeof mainNavItems>([]);
-  const [showSearchBar, setShowSearchBar] = useState(true);
-
   useEffect(() => {
     setNavDropdownOpen(isOpen || isMoreDropdownActive || isProfileDropdownActive);
   }, [isOpen, isMoreDropdownActive, isProfileDropdownActive, setNavDropdownOpen]);
@@ -130,65 +138,6 @@ export default function Navigation() {
     return () => window.removeEventListener(HEADER_DROPDOWN_OPEN_EVENT, onHeaderDropdownOpen as EventListener)
   }, [])
 
-  // Simplified adaptive navigation logic (debounced)
-  useEffect(() => {
-    let resizeTimer: NodeJS.Timeout;
-    const handleResize = () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        const width = window.innerWidth;
-
-        // Adaptive steps based on width
-        let step = 0;
-        const visible = [...mainNavItems];
-        const hidden: typeof mainNavItems = [];
-        let searchBar = true;
-
-        if (width < 1200) {
-          // Step 1: Hide TV Shows
-          step = 1;
-          const tvIndex = visible.findIndex(item => item.key === 'tvShows');
-          if (tvIndex !== -1) {
-            hidden.push(visible[tvIndex]);
-            visible.splice(tvIndex, 1);
-          }
-        }
-
-        if (width < 1050) {
-          // Step 2: Search bar → icon
-          step = 2;
-          searchBar = false;
-        }
-
-        if (width < 900) {
-          // Step 3: Hide Movies
-          step = 3;
-          const moviesIndex = visible.findIndex(item => item.key === 'movies');
-          if (moviesIndex !== -1) {
-            hidden.push(visible[moviesIndex]);
-            visible.splice(moviesIndex, 1);
-          }
-        }
-
-        if (width < 700) {
-          // Step 4: Mobile menu
-          step = 4;
-        }
-
-        setAdaptiveStep(step);
-        setVisibleNavItems(visible);
-        setHiddenNavItems(hidden);
-        setShowSearchBar(searchBar);
-      }, 150);
-    };
-
-    handleResize(); // Initial call (no debounce needed)
-    window.addEventListener('resize', handleResize);
-    return () => {
-      clearTimeout(resizeTimer);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -216,15 +165,15 @@ export default function Navigation() {
           {/* Enhanced Logo */}
           <Logo isScrolled={isScrolled} variant="header" />
 
-          {/* Desktop Navigation - Adaptive (shows when step < 4) */}
-          <div className={`${adaptiveStep < 4 ? 'flex' : 'hidden'} max-[700px]:!hidden items-center gap-2.5`}>
-            {visibleNavItems.map((item) => {
+          {/* Desktop Navigation */}
+          <div className="hidden min-[700px]:flex items-center gap-2.5">
+            {mainNavItems.map((item) => {
               const isActive = pathname === item.href
               return (
                 <Link
                   key={item.key}
                   href={item.href}
-                  className={`relative px-4 py-2 rounded-lg transition-colors ${
+                  className={`${getDesktopMainNavVisibilityClass(item.key)} relative flex h-10 shrink-0 items-center whitespace-nowrap px-4 py-2 rounded-lg transition-colors ${
                     isActive 
                       ? 'text-red-500' 
                       : isScrolled 
@@ -233,7 +182,7 @@ export default function Navigation() {
                   }`}
                 >
                   <motion.div
-                    className="flex items-center space-x-2"
+                    className="flex items-center space-x-2 whitespace-nowrap"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -260,17 +209,18 @@ export default function Navigation() {
               <div>
                 <Menu.Button
                   onClick={() => notifyHeaderDropdownOpen('more')}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                  className={`flex h-10 shrink-0 items-center space-x-2 whitespace-nowrap px-4 py-2 rounded-lg transition-colors ${
                     isScrolled ? 'text-white hover:text-red-500' : 'text-gray-700 hover:text-red-500'
                   }`}
                 >
                   <QueueListIcon className="h-5 w-5" />
                   <span>{t('more')}</span>
-                  {hiddenNavItems.length > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
-                      {hiddenNavItems.length}
-                    </span>
-                  )}
+                  <span className="ml-1 hidden h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs text-white min-[900px]:inline-flex min-[1200px]:hidden">
+                    1
+                  </span>
+                  <span className="ml-1 hidden h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs text-white max-[899px]:inline-flex">
+                    2
+                  </span>
                 </Menu.Button>
               </div>
               <Transition
@@ -286,14 +236,13 @@ export default function Navigation() {
               >
                 <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right bg-gray-900 backdrop-blur-md divide-y divide-gray-700 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-60">
                   {/* Hidden nav items first */}
-                  {hiddenNavItems.length > 0 && (
-                    <div className="px-1 py-1">
-                      {hiddenNavItems.map((item) => (
+                  <div className="hidden px-1 py-1 max-[1199px]:block">
+                      {desktopOverflowNavItems.map((item) => (
                         <Menu.Item key={item.key}>
                           {({ active }) => (
                             <Link
                               href={item.href}
-                              className={`flex items-center space-x-2 px-4 py-2 rounded-md ${
+                              className={`${getDesktopMoreNavVisibilityClass(item.key)} items-center space-x-2 px-4 py-2 rounded-md ${
                                 active ? 'bg-red-500 text-white' : 'text-gray-300'
                               }`}
                             >
@@ -304,7 +253,6 @@ export default function Navigation() {
                         </Menu.Item>
                       ))}
                     </div>
-                  )}
                   {/* Original more items */}
                   <div className="px-1 py-1">
                     {moreNavItems.map((item) => (
@@ -330,52 +278,54 @@ export default function Navigation() {
             </Menu>
           </div>
 
-          {/* Search and Auth - Adaptive (shows when step < 4) */}
-          <div className={`${adaptiveStep < 4 ? 'flex' : 'hidden'} max-[700px]:!hidden items-center gap-2.5`}>
+          {/* Search and Auth */}
+          <div className="hidden min-[700px]:flex items-center gap-2.5">
             {/* Search - Full bar or Icon */}
-            {showSearchBar ? (
-              <div className="relative">
-                <AutocompleteSearch />
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowMobileSearch(true)}
-                className={`p-2 rounded-full transition-colors ${
-                  isScrolled ? 'text-white hover:text-red-500' : 'text-gray-700 hover:text-red-500'
-                }`}
-                aria-label="Open search"
-              >
-                <MagnifyingGlassIcon className="h-5 w-5" />
-              </button>
-            )}
+            <div className="relative hidden min-[1050px]:block">
+              <AutocompleteSearch />
+            </div>
+            <button
+              onClick={() => setShowMobileSearch(true)}
+              className={`p-2 rounded-full transition-colors min-[1050px]:hidden ${
+                isScrolled ? 'text-white hover:text-red-500' : 'text-gray-700 hover:text-red-500'
+              }`}
+              aria-label="Open search"
+            >
+              <MagnifyingGlassIcon className="h-5 w-5" />
+            </button>
             
             <NotificationBell isScrolled={isScrolled} />
 
-            {!hydrated || isLoading ? (
-              <div className="flex items-center space-x-2 px-4 py-2">
-                <div className="w-6 h-6 rounded-full bg-gray-300 animate-pulse" />
-                <div className="w-20 h-4 bg-gray-300 rounded animate-pulse" />
-              </div>
-            ) : isAuthenticated ? (
-              <div className="flex items-center">
-                <Menu as="div" className="relative inline-block text-left">
+            <div className="flex w-[168px] shrink-0 justify-end min-[900px]:w-[204px] xl:w-[248px]">
+              {!hydrated || isLoading ? (
+                <div className="flex h-10 w-full items-center gap-2 rounded-lg px-2.5 py-1.5">
+                  <div className="h-8 w-8 shrink-0 rounded-full bg-gray-300 animate-pulse" />
+                  <div className="h-4 min-w-0 flex-1 rounded bg-gray-300 animate-pulse" />
+                </div>
+              ) : isAuthenticated ? (
+                <div className="flex w-full min-w-0 items-center">
+                  <Menu as="div" className="relative inline-block w-full text-left">
                   {({ close }) => (
                   <>
                   <HeaderDropdownAutoClose source="user" close={close} />
-                  <div>
+                  <div className="w-full">
                     <Menu.Button
                       onClick={() => notifyHeaderDropdownOpen('user')}
-                      className={`flex h-10 items-center gap-2 rounded-lg px-2.5 py-1.5 transition-colors ${
+                      className={`flex h-10 w-full min-w-0 items-center gap-2 rounded-lg px-2.5 py-1.5 transition-colors ${
                         isScrolled ? 'text-white hover:text-red-500' : 'text-gray-700 hover:text-red-500'
                       }`}
                     >
-                      <UserAvatar 
-                        name={user?.name || 'User'} 
-                        avatar={user?.avatar}
-                        size="sm"
-                        priority={true}
-                      />
-                      <span className="whitespace-nowrap">{user?.name || 'User'}</span>
+                      <div className="shrink-0">
+                        <UserAvatar 
+                          name={user?.name || 'User'} 
+                          avatar={user?.avatar}
+                          size="sm"
+                          priority={true}
+                        />
+                      </div>
+                      <span className="min-w-0 flex-1 truncate text-left" title={user?.name || 'User'}>
+                        {user?.name || 'User'}
+                      </span>
                     </Menu.Button>
                   </div>
                   <Transition
@@ -516,10 +466,11 @@ export default function Navigation() {
                 )}
               </Menu>
             )}
+            </div>
           </div>
 
           {/* Mobile search icon and menu button combined (shows when step >= 4) */}
-          <div className={`${adaptiveStep >= 4 ? 'flex' : 'hidden'} max-[700px]:!flex min-[701px]:!hidden items-center space-x-2`}>
+          <div className="flex items-center space-x-2 min-[700px]:hidden">
             <button
               onClick={() => {
                 setShowMobileSearch(true);
@@ -579,7 +530,7 @@ export default function Navigation() {
 
       {/* Mobile menu, show/hide based on menu state. */}
       <motion.div
-        className={`${adaptiveStep >= 4 ? 'block' : 'hidden'} overflow-hidden bg-white shadow-lg`}
+        className="overflow-hidden bg-white shadow-lg min-[700px]:hidden"
         initial={false}
         animate={{
           height: isOpen ? 'auto' : 0,
@@ -666,14 +617,16 @@ export default function Navigation() {
             </motion.div>
             {/* Mobile Watchlist, User/Login, Logout */}
             {!hydrated || isLoading ? (
-              <div className="block w-full px-4 py-2 mt-4">
-                <div className="w-6 h-6 rounded-full bg-gray-300 animate-pulse mb-2" />
-                <div className="w-24 h-4 bg-gray-300 rounded animate-pulse" />
+              <div className="w-full px-3 mt-4">
+                <div className="flex w-full items-center gap-2 rounded-md bg-gray-100 px-3 py-2">
+                  <div className="h-8 w-8 shrink-0 rounded-full bg-gray-300 animate-pulse" />
+                  <div className="h-4 min-w-0 flex-1 rounded bg-gray-300 animate-pulse" />
+                </div>
               </div>
             ) : isAuthenticated ? (
               <div className="px-3 mt-4 space-y-2">
                 <button
-                  className="block w-full px-3 py-2 rounded-md text-base font-medium text-gray-700 mb-1 bg-gray-100 flex items-center space-x-2 focus:outline-none"
+                  className="flex w-full min-w-0 items-center gap-2 rounded-md bg-gray-100 px-3 py-2 text-base font-medium text-gray-700 mb-1 focus:outline-none"
                   onClick={() => {
                     setIsMobileUserDropdownOpen((prev) => {
                       if (!prev) {
@@ -685,13 +638,15 @@ export default function Navigation() {
                   }}
                   aria-expanded={isMobileUserDropdownOpen}
                 >
-                  <UserAvatar 
-                    name={user?.name || 'User'} 
-                    avatar={user?.avatar}
-                    size="sm"
-                    priority={true}
-                  />
-                  <span className="truncate">{user?.name || 'User'}</span>
+                  <div className="shrink-0">
+                    <UserAvatar 
+                      name={user?.name || 'User'} 
+                      avatar={user?.avatar}
+                      size="sm"
+                      priority={true}
+                    />
+                  </div>
+                  <span className="min-w-0 flex-1 truncate text-left">{user?.name || 'User'}</span>
                   <svg className={`ml-auto h-4 w-4 transition-transform ${isMobileUserDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                 </button>
                 <motion.div

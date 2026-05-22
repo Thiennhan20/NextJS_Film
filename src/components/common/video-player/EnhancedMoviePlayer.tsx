@@ -96,6 +96,58 @@ function getVideo(ref: React.ForwardedRef<HTMLVideoElement>, innerRef: React.Ref
     : innerRef.current) as HTMLVideoElement | null;
 }
 
+function safeDecodeUrl(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function normalizePlaybackUrl(value?: string): string {
+  let current = (value || '').trim().replace(/&amp;/g, '&');
+  if (!current) return '';
+
+  for (let i = 0; i < 2; i += 1) {
+    const decoded = safeDecodeUrl(current).trim().replace(/&amp;/g, '&');
+    if (/^https?:\/\//i.test(decoded)) {
+      current = decoded;
+    }
+
+    try {
+      const url = new URL(current);
+      const wrappedUrl = url.searchParams.get('url');
+      if (wrappedUrl && /^https?:\/\//i.test(safeDecodeUrl(wrappedUrl))) {
+        current = safeDecodeUrl(wrappedUrl).trim().replace(/&amp;/g, '&');
+        continue;
+      }
+
+      url.hash = '';
+      const sortedParams = Array.from(url.searchParams.entries())
+        .sort(([keyA, valueA], [keyB, valueB]) => keyA === keyB
+          ? valueA.localeCompare(valueB)
+          : keyA.localeCompare(keyB));
+
+      url.search = '';
+      for (const [key, paramValue] of sortedParams) {
+        url.searchParams.append(key, paramValue);
+      }
+
+      return url.toString();
+    } catch {
+      return current;
+    }
+  }
+
+  return current;
+}
+
+function arePlaybackUrlsEqual(left?: string, right?: string): boolean {
+  const normalizedLeft = normalizePlaybackUrl(left);
+  const normalizedRight = normalizePlaybackUrl(right);
+  return !!normalizedLeft && !!normalizedRight && normalizedLeft === normalizedRight;
+}
+
 /** Parse quality levels from HLS manifest */
 function parseQualities(levels: Level[]): Array<{ index: number; label: string }> {
   const q = levels
@@ -160,6 +212,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     // Update source popup states & ref
     const [showUpdatePopup, setShowUpdatePopup] = useState(false);
     const [popupNewStreamUrl, setPopupNewStreamUrl] = useState('');
+    const dismissedUpdateUrlRef = useRef('');
     const saveUrlRef = useRef(watchUrl || '');
 
     useEffect(() => {
@@ -169,16 +222,29 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     }, [watchUrl]);
 
     useEffect(() => {
-      if (latestWatchUrl && watchUrl && latestWatchUrl !== watchUrl) {
+      const normalizedLatestUrl = normalizePlaybackUrl(latestWatchUrl);
+      const normalizedCurrentUrl = normalizePlaybackUrl(watchUrl);
+      const normalizedPopupUrl = normalizePlaybackUrl(popupNewStreamUrl);
+      const shouldPromptUpdate = hasLoadedSavedProgress &&
+        normalizedLatestUrl &&
+        normalizedCurrentUrl &&
+        normalizedLatestUrl !== normalizedCurrentUrl &&
+        normalizedLatestUrl !== dismissedUpdateUrlRef.current &&
+        normalizedLatestUrl !== normalizedPopupUrl;
+
+      if (shouldPromptUpdate) {
         const video = getVideo(ref, innerRef);
         if (video) {
           video.pause();
           setIsPlaying(false);
         }
-        setPopupNewStreamUrl(latestWatchUrl);
+        setPopupNewStreamUrl(latestWatchUrl || '');
         setShowUpdatePopup(true);
+      } else if (showUpdatePopup && normalizedPopupUrl && normalizedPopupUrl === normalizedCurrentUrl) {
+        setShowUpdatePopup(false);
+        setPopupNewStreamUrl('');
       }
-    }, [latestWatchUrl, watchUrl, ref]);
+    }, [latestWatchUrl, watchUrl, popupNewStreamUrl, showUpdatePopup, hasLoadedSavedProgress, ref]);
 
     const handleConfirmUpdate = useCallback(() => {
       setShowUpdatePopup(false);
@@ -239,50 +305,17 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     }, [onUpdateSource, popupNewStreamUrl, ref, movieId, server, audio, title, poster, season, episode, isTVShow, userId]);
 
     const handleCancelUpdate = useCallback(() => {
+      dismissedUpdateUrlRef.current = normalizePlaybackUrl(popupNewStreamUrl);
       setShowUpdatePopup(false);
+      setPopupNewStreamUrl('');
       const video = getVideo(ref, innerRef);
       if (video) {
         video.play().catch(() => {});
       }
-      if (popupNewStreamUrl) {
-        saveUrlRef.current = popupNewStreamUrl;
-        const corrected = (video?.currentTime || 0) - timeOffsetRef.current;
-        const dur = video?.duration || 0;
-        if (corrected > 0 && dur > 0) {
-          const clampedCt = Math.min(corrected, dur);
-          if (userId) {
-            useRecentlyWatchedStore.getState().upsertItem({
-              id: String(movieId), server: server || '', audio: audio || '',
-              currentTime: clampedCt, duration: dur,
-              title: title || '', poster: poster || '',
-              isTVShow: !!isTVShow, season, episode,
-            });
-            api.post('/recently-watched', {
-              contentId: String(movieId), isTVShow: !!isTVShow,
-              season: isTVShow ? season : null, episode: isTVShow ? episode : null,
-              server, audio, currentTime: clampedCt, duration: dur,
-              title: title || '', poster: poster || '',
-              watchUrl: popupNewStreamUrl
-            }).catch(() => {});
-          } else {
-            const key = isTVShow && season && episode
-              ? `tvshow-progress-${movieId}-${season}-${episode}`
-              : `movie-progress-${movieId}`;
-            localStorage.setItem(key, JSON.stringify({
-              currentTime: clampedCt, duration: dur, title: title || '', poster: poster || '',
-              server: server || '', audio: audio || '',
-              watchUrl: popupNewStreamUrl,
-              lastWatched: new Date().toISOString(),
-              expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-              ...(isTVShow && season && episode ? { season, episode } : {})
-            }));
-          }
-        }
-      }
       if (onSkipUpdateSource && popupNewStreamUrl) {
         onSkipUpdateSource(popupNewStreamUrl);
       }
-    }, [onSkipUpdateSource, popupNewStreamUrl, ref, movieId, server, audio, title, poster, season, episode, isTVShow, userId]);
+    }, [onSkipUpdateSource, popupNewStreamUrl, ref]);
 
     // Cleanup resume timeouts on unmount
     useEffect(() => {
@@ -539,8 +572,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
 
       // Check if watch URL has changed (link phim bị đổi)
       if (savedWatchUrl && watchUrl) {
-        const urlChanged = savedWatchUrl.length !== watchUrl.length || savedWatchUrl !== watchUrl;
-        if (urlChanged) {
+        if (!arePlaybackUrlsEqual(savedWatchUrl, watchUrl)) {
           activeSavedTime = 0; // Reset progress — link phim đã thay đổi
         }
       }

@@ -109,6 +109,8 @@ export default function WatchNowTVShows({
       setActiveWatchUrl('');
       setIsSavedLinkFatalError(false);
       setHasLoadedSavedProgress(false);
+      setApiSearchCompleted(false); // Trigger loading state immediately
+      setDataReady(false);          // Trigger loading state immediately
 
       let savedTime = 0;
       let savedWatchUrl = '';
@@ -150,9 +152,11 @@ export default function WatchNowTVShows({
       }
 
       if (cancelled) return;
-      if (savedWatchUrl) {
+      if (savedTime > 0 || savedWatchUrl) {
         setSavedProgress({ currentTime: savedTime, watchUrl: savedWatchUrl, audio: savedAudio || undefined });
-        setActiveWatchUrl(savedWatchUrl);
+        if (savedWatchUrl) {
+          setActiveWatchUrl(savedWatchUrl);
+        }
         if (savedAudio === 'vietsub' || savedAudio === 'dubbed') {
           setSelectedAudio(savedAudio as 'vietsub' | 'dubbed');
         }
@@ -730,7 +734,7 @@ export default function WatchNowTVShows({
 
             const canPlaySaved = activeWatchUrl && !isSavedLinkFatalError;
 
-            if (!canPlaySaved && (!apiSearchCompleted || tvShowLinksLoading || !dataReady)) {
+            if (!hasLoadedSavedProgress || (!canPlaySaved && (!apiSearchCompleted || tvShowLinksLoading || !dataReady))) {
               if (isSavedLinkFatalError) {
                 return (
                   <div className="flex items-center justify-center h-full text-white">

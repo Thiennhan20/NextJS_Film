@@ -100,6 +100,13 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
   useEffect(() => {
     let cancelled = false;
     async function loadProgress() {
+      // Clear old progress state first to prevent bleed and race conditions
+      setSavedProgress(null);
+      setActiveWatchUrl('');
+      setIsSavedLinkFatalError(false);
+      setHasLoadedSavedProgress(false);
+      setApiSearchCompleted(false); // Trigger loading state immediately
+
       let savedTime = 0;
       let savedWatchUrl = '';
       let savedAudio = '';
@@ -135,9 +142,11 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
       }
 
       if (cancelled) return;
-      if (savedWatchUrl) {
+      if (savedTime > 0 || savedWatchUrl) {
         setSavedProgress({ currentTime: savedTime, watchUrl: savedWatchUrl, audio: savedAudio || undefined });
-        setActiveWatchUrl(savedWatchUrl);
+        if (savedWatchUrl) {
+          setActiveWatchUrl(savedWatchUrl);
+        }
         if (savedAudio === 'vietsub' || savedAudio === 'dubbed') {
           setSelectedAudio(savedAudio as 'vietsub' | 'dubbed');
         }
@@ -592,7 +601,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
 
             const canPlaySaved = activeWatchUrl && !isSavedLinkFatalError;
 
-            if (!canPlaySaved && (!apiSearchCompleted || movieLinksLoading)) {
+            if (!hasLoadedSavedProgress || (!canPlaySaved && (!apiSearchCompleted || movieLinksLoading))) {
               if (isSavedLinkFatalError) {
                 return (
                   <div className="flex items-center justify-center h-full text-white">

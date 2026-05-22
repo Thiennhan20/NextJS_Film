@@ -724,6 +724,12 @@ select {
 /* Notification dropdown scrollbar - compact and low-contrast */
 .notification-scrollbar {
   scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s ease;
+}
+
+.notification-scrollbar:hover,
+.notification-scrollbar:focus-within {
   scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
 }
 
@@ -736,8 +742,14 @@ select {
 }
 
 .notification-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.45);
+  background: transparent;
   border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+
+.notification-scrollbar:hover::-webkit-scrollbar-thumb,
+.notification-scrollbar:focus-within::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
 }
 
 .notification-scrollbar::-webkit-scrollbar-thumb:hover {

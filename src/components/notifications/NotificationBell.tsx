@@ -92,6 +92,31 @@ interface NotificationBellProps {
 
 type DisplayNotification = ApiNotification | VersionNotification
 
+function sortNotificationsByNewest(items: ApiNotification[]) {
+  return [...items].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+}
+
+function mergeNotifications(current: ApiNotification[], incoming: ApiNotification[]) {
+  const merged = new Map<string, ApiNotification>()
+
+  current.forEach((item) => merged.set(item._id, item))
+  incoming.forEach((item) => {
+    const existing = merged.get(item._id)
+    merged.set(item._id, existing ? {
+      ...existing,
+      ...item,
+      read: existing.read || item.read,
+      readAt: existing.readAt || item.readAt,
+      metadata: {
+        ...(existing.metadata || {}),
+        ...(item.metadata || {})
+      }
+    } : item)
+  })
+
+  return sortNotificationsByNewest(Array.from(merged.values())).slice(0, 20)
+}
+
 function notifyHeaderDropdownOpen() {
   if (typeof window === 'undefined') return
 
@@ -163,9 +188,15 @@ export default function NotificationBell({ isScrolled = false, compact = false }
 
   const rootRef = useRef<HTMLDivElement>(null)
   const socketRef = useRef<Socket | null>(null)
+  const notificationsRef = useRef<ApiNotification[]>([])
+  const fetchRequestIdRef = useRef(0)
 
   const versionUnread = versionNotification && !versionNotification.read ? 1 : 0
   const totalUnread = unreadCount + versionUnread
+
+  useEffect(() => {
+    notificationsRef.current = notifications
+  }, [notifications])
 
   const fetchUnreadCount = useCallback(async () => {
     if (!isAuthenticated) return
@@ -181,17 +212,28 @@ export default function NotificationBell({ isScrolled = false, compact = false }
   const fetchNotifications = useCallback(async () => {
     if (!isAuthenticated) return
 
+    const requestId = ++fetchRequestIdRef.current
     setIsLoading(true)
     setError(null)
 
     try {
       const response = await api.get<NotificationsResponse>('/notifications?page=1&limit=20')
-      setNotifications(response.data.data || [])
+      if (requestId !== fetchRequestIdRef.current) return
+
+      setNotifications((prev) => {
+        const next = mergeNotifications(prev, response.data.data || [])
+        notificationsRef.current = next
+        return next
+      })
       setUnreadCount(response.data.unreadCount || 0)
     } catch {
-      setError(t('failedLoad'))
+      if (requestId === fetchRequestIdRef.current) {
+        setError(t('failedLoad'))
+      }
     } finally {
-      setIsLoading(false)
+      if (requestId === fetchRequestIdRef.current) {
+        setIsLoading(false)
+      }
     }
   }, [isAuthenticated, t])
 
@@ -263,12 +305,14 @@ export default function NotificationBell({ isScrolled = false, compact = false }
     socketRef.current = socket
 
     socket.on('notification:new', (notification: ApiNotification) => {
+      const alreadyExists = notificationsRef.current.some((item) => item._id === notification._id)
       setNotifications((prev) => {
-        if (prev.some((item) => item._id === notification._id)) return prev
-        return [notification, ...prev].slice(0, 20)
+        const next = mergeNotifications(prev, [notification])
+        notificationsRef.current = next
+        return next
       })
 
-      if (!notification.read) {
+      if (!alreadyExists && !notification.read) {
         setUnreadCount((prev) => prev + 1)
       }
     })
@@ -580,11 +624,13 @@ export default function NotificationBell({ isScrolled = false, compact = false }
       ? {
           initial: { opacity: 0 },
           animate: { opacity: 1 },
+          exit: { opacity: 0 },
           transition: { duration: 0.12 }
         }
       : {
           initial: { opacity: 0, y: 5 },
           animate: { opacity: 1, y: 0 },
+          exit: { opacity: 0, y: -4 },
           transition: {
             duration: 0.18,
             delay: Math.min(index * 0.025, 0.14),
@@ -596,6 +642,10 @@ export default function NotificationBell({ isScrolled = false, compact = false }
   const showInitialLoading = isLoading && allNotifications.length === 0
   const showErrorState = !!error && allNotifications.length === 0
   const showEmptyState = !isLoading && !error && allNotifications.length === 0
+  const showRefreshing = isLoading && allNotifications.length > 0
+  const notificationBodyClassName = allNotifications.length > 0
+    ? 'notification-scrollbar max-h-[min(58vh,28rem)] overflow-y-auto overscroll-contain'
+    : 'overflow-hidden'
 
   return (
     <div ref={rootRef} className="relative">
@@ -626,9 +676,12 @@ export default function NotificationBell({ isScrolled = false, compact = false }
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-800 px-3 py-2.5 sm:items-center sm:px-4 sm:py-3">
             <div className="min-w-0">
               <h3 className="truncate text-sm font-semibold text-white sm:text-base">{t('label')}</h3>
-              <p className="text-xs text-gray-400">
-                {isAuthenticated ? t('unreadCount', { count: totalUnread }) : t('systemUpdates')}
-              </p>
+              <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                <p>{isAuthenticated ? t('unreadCount', { count: totalUnread }) : t('systemUpdates')}</p>
+                {showRefreshing && (
+                  <ArrowPathIcon className="h-3 w-3 animate-spin text-gray-500" aria-hidden="true" />
+                )}
+              </div>
             </div>
             <button
               type="button"
@@ -640,22 +693,36 @@ export default function NotificationBell({ isScrolled = false, compact = false }
             </button>
           </div>
 
-          <div className="notification-scrollbar flex-1 overflow-y-auto overscroll-contain">
+          <div className={notificationBodyClassName}>
+            <AnimatePresence initial={false} mode="wait">
             {showInitialLoading && (
               <motion.div
+                key="loading"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 transition={{ duration: 0.14 }}
-                className="px-4 py-6 text-center text-sm text-gray-400"
+                className="space-y-2 px-3 py-3 sm:px-4"
               >
-                {t('loading')}
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="flex gap-2.5 rounded-lg border border-gray-800/70 bg-gray-800/30 px-3 py-3 sm:gap-3">
+                    <div className="h-8 w-8 shrink-0 rounded-full bg-gray-700/80 animate-pulse sm:h-9 sm:w-9" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="h-3.5 w-2/3 rounded bg-gray-700/80 animate-pulse" />
+                      <div className="h-3 w-full rounded bg-gray-800 animate-pulse" />
+                      <div className="h-2.5 w-20 rounded bg-gray-800 animate-pulse" />
+                    </div>
+                  </div>
+                ))}
               </motion.div>
             )}
 
             {showErrorState && (
               <motion.div
+                key="error"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 transition={{ duration: 0.14 }}
                 className="px-4 py-6 text-center text-sm text-red-300"
               >
@@ -665,8 +732,10 @@ export default function NotificationBell({ isScrolled = false, compact = false }
 
             {showEmptyState && (
               <motion.div
+                key="empty"
                 initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
                 transition={{ duration: 0.16 }}
                 className="px-4 py-8 text-center"
               >
@@ -675,35 +744,43 @@ export default function NotificationBell({ isScrolled = false, compact = false }
               </motion.div>
             )}
 
-            {allNotifications.length > 0 && allNotifications.map((notification, index) => (
-              <motion.button
-                key={isApiNotification(notification) ? notification._id : notification.id}
-                type="button"
-                onClick={() => handleNotificationClick(notification)}
-                {...getItemMotion(index)}
-                className={`flex w-full gap-2.5 border-b border-gray-800 px-3 py-3 text-left transition last:border-b-0 sm:gap-3 sm:px-4 ${
-                  notification.read ? 'bg-gray-900 hover:bg-gray-800/70' : 'bg-red-500/5 hover:bg-red-500/10'
-                }`}
-              >
-                <div className="relative shrink-0">
-                  {renderAvatar(notification)}
-                  {notification.type !== 'version_updated' && (
-                    <div className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900 ring-1 ring-gray-700 sm:h-5 sm:w-5">
-                      {renderIcon(notification.type)}
-                    </div>
-                  )}
-                </div>
+            {allNotifications.length > 0 && (
+              <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}>
+                <AnimatePresence initial={false}>
+                  {allNotifications.map((notification, index) => (
+                    <motion.button
+                      key={isApiNotification(notification) ? notification._id : notification.id}
+                      type="button"
+                      onClick={() => handleNotificationClick(notification)}
+                      layout="position"
+                      {...getItemMotion(index)}
+                      className={`flex min-h-[5.25rem] w-full gap-2.5 border-b border-gray-800 px-3 py-3 text-left transition-colors duration-200 last:border-b-0 sm:min-h-[5.5rem] sm:gap-3 sm:px-4 ${
+                        notification.read ? 'bg-gray-900 hover:bg-gray-800/70' : 'bg-red-500/5 hover:bg-red-500/10'
+                      }`}
+                    >
+                      <div className="relative shrink-0">
+                        {renderAvatar(notification)}
+                        {notification.type !== 'version_updated' && (
+                          <div className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900 ring-1 ring-gray-700 sm:h-5 sm:w-5">
+                            {renderIcon(notification.type)}
+                          </div>
+                        )}
+                      </div>
 
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="min-w-0 break-words text-[13px] font-semibold leading-snug text-white sm:text-sm">{getTitle(notification)}</p>
-                    {!notification.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-red-500" />}
-                  </div>
-                  <p className="mt-1 line-clamp-2 break-words text-[12px] leading-relaxed text-gray-400 sm:text-xs">{getPreview(notification)}</p>
-                  <p className="mt-1 text-[11px] text-gray-500">{formatNotificationTime(notification)}</p>
-                </div>
-              </motion.button>
-            ))}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="min-w-0 break-words text-[13px] font-semibold leading-snug text-white sm:text-sm">{getTitle(notification)}</p>
+                          {!notification.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-red-500" />}
+                        </div>
+                        <p className="mt-1 line-clamp-2 break-words text-[12px] leading-relaxed text-gray-400 sm:text-xs">{getPreview(notification)}</p>
+                        <p className="mt-1 text-[11px] text-gray-500">{formatNotificationTime(notification)}</p>
+                      </div>
+                    </motion.button>
+                  ))}
+                </AnimatePresence>
+              </motion.div>
+            )}
+            </AnimatePresence>
           </div>
         </motion.div>
         )}
