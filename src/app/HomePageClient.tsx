@@ -2,7 +2,7 @@
 
 
 
-import { useEffect, useState, lazy, Suspense } from 'react'
+import { useCallback, useEffect, useState, lazy, Suspense } from 'react'
 import { 
   SparklesIcon,
   StarIcon,
@@ -29,9 +29,17 @@ const AnimeFrame = lazy(() => import('@/components/home').then(m => ({ default: 
 const TopComments = lazy(() => import('@/components/home').then(m => ({ default: m.TopComments })))
 const ActionFrame = lazy(() => import('@/components/home/frames/ActionFrame'))
 const HorrorFrame = lazy(() => import('@/components/home/frames/HorrorFrame'))
+const RomanceFrame = lazy(() => import('@/components/home/frames/RomanceFrame'))
+const ActorsFrame = lazy(() => import('@/components/home/frames/ActorsFrame'))
+
+const ROMANCE_SECTION_RESERVE = 'clamp(490px, 55vw, 650px)'
+const ACTORS_SECTION_RESERVE = 'clamp(360px, 39vw, 470px)'
 
 // Minimal placeholder - no skeleton animation, sections appear when ready
 const SectionSkeleton = () => <div />
+const ReservedSectionSpace = ({ minHeight }: { minHeight: string }) => (
+  <div aria-hidden="true" style={{ minHeight }} />
+)
 
 interface Particle {
   x: number;
@@ -44,6 +52,15 @@ export default function Home() {
   const [particles, setParticles] = useState<Particle[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const t = useTranslations('HomePage');
+
+  const preloadFeatureFrames = useCallback(() => {
+    void import('@/components/home/frames/RomanceFrame')
+      .then((module) => module.preloadRomanceFrameData())
+      .catch(() => undefined)
+      .then(() => import('@/components/home/frames/ActorsFrame'))
+      .then((module) => module.preloadActorsFrameData())
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     // Detect mobile device with debounce
@@ -177,7 +194,7 @@ export default function Home() {
       </LazySection>
 
       {/* Anime Frame Section */}
-      <LazySection rootMargin="150px" minHeight="500px">
+      <LazySection rootMargin="150px" minHeight="500px" onIntersect={preloadFeatureFrames}>
         <Suspense fallback={<SectionSkeleton />}>
           <div className="max-w-7xl mx-auto pb-12">
             <AnimeFrame />
@@ -199,6 +216,24 @@ export default function Home() {
         <Suspense fallback={<SectionSkeleton />}>
           <div className="max-w-7xl mx-auto py-4 sm:py-6">
             <HorrorFrame />
+          </div>
+        </Suspense>
+      </LazySection>
+
+      {/* Romance Frame - 3D Image Ring */}
+      <LazySection rootMargin="150px" minHeight={ROMANCE_SECTION_RESERVE}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={ROMANCE_SECTION_RESERVE} />}>
+          <div className="max-w-7xl mx-auto py-4 sm:py-6">
+            <RomanceFrame />
+          </div>
+        </Suspense>
+      </LazySection>
+
+      {/* Featured Actors Frame */}
+      <LazySection rootMargin="150px" minHeight={ACTORS_SECTION_RESERVE}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={ACTORS_SECTION_RESERVE} />}>
+          <div className="max-w-7xl mx-auto py-4 sm:py-6">
+            <ActorsFrame />
           </div>
         </Suspense>
       </LazySection>

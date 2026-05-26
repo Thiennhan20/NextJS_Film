@@ -98,6 +98,7 @@ interface AutocompleteSearchProps {
   showClose?: boolean;
   onClose?: () => void;
   onFocusChange?: (isFocused: boolean) => void;
+  isScrolled?: boolean;
 }
 
 interface CacheEntry {
@@ -111,7 +112,8 @@ export default function AutocompleteSearch({
   inputClassName, 
   showClose, 
   onClose, 
-  onFocusChange 
+  onFocusChange,
+  isScrolled = false
 }: AutocompleteSearchProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -608,19 +610,23 @@ export default function AutocompleteSearch({
   }, [getTitle]);
 
   const inputClassNames = useMemo(() => 
-    `px-4 py-2 rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-red-500 ${
+    `px-5 py-2.5 rounded-full border transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-red-500 font-medium ${
       menu
-        ? 'w-full bg-gray-800 text-white border-2 border-red-400 placeholder-gray-300 focus:bg-gray-900 pr-24'
-        : 'w-full sm:w-48 sm:focus:w-64 bg-gray-200 text-gray-900 placeholder-gray-600 focus:bg-gray-900/50 focus:text-white focus:placeholder-gray-400 backdrop-blur-sm pr-24'
+        ? 'w-full bg-gray-800 text-white border-red-400 placeholder-gray-200 focus:bg-gray-900 pr-24'
+        : isScrolled
+          ? 'w-full sm:w-48 sm:focus:w-64 bg-white/10 text-white border-white/15 placeholder-white/80 focus:bg-gray-950/70 focus:border-red-500/50 backdrop-blur-sm pr-24'
+          : 'w-full sm:w-48 sm:focus:w-64 bg-gray-100 text-gray-900 border-gray-300/85 placeholder-gray-700 focus:bg-white focus:border-red-500/50 backdrop-blur-sm pr-24'
     } ${inputClassName || ''}`
-  , [menu, inputClassName]);
+  , [menu, isScrolled, inputClassName]);
 
   const searchIconColor = useMemo(() => {
     if (query.trim()) {
       return menu ? 'text-red-400 drop-shadow-lg' : 'text-red-500 drop-shadow-lg';
     }
-    return menu ? 'text-gray-400' : isFocused ? 'text-gray-400' : 'text-gray-500';
-  }, [query, menu, isFocused]);
+    if (menu) return 'text-gray-400';
+    if (isFocused) return isScrolled ? 'text-gray-300' : 'text-gray-400';
+    return isScrolled ? 'text-white/80' : 'text-gray-700';
+  }, [query, menu, isFocused, isScrolled]);
 
   return (
     <div className={`relative w-full ${menu ? 'max-w-full' : ''}`}>
@@ -669,7 +675,9 @@ export default function AutocompleteSearch({
                       ? 'text-gray-400 hover:text-red-400' 
                       : isFocused 
                         ? 'text-red-500 hover:text-red-600' 
-                        : 'text-gray-500 hover:text-red-500'
+                        : isScrolled
+                          ? 'text-white/80 hover:text-red-400'
+                          : 'text-gray-700 hover:text-red-500'
                 }`}
               />
             </motion.div>
@@ -687,7 +695,7 @@ export default function AutocompleteSearch({
           <motion.div
             animate={{
               scale: query.trim() ? 1.1 : 1,
-              opacity: query.trim() ? 1 : 0.4,
+              opacity: 1,
             }}
             transition={{ duration: 0.2 }}
           >

@@ -39,6 +39,10 @@ const AutocompleteSearch = dynamic(() => import('@/components/common/Autocomplet
     <div className="h-10 w-48 rounded-full bg-gray-200 animate-pulse" aria-hidden="true"></div>
   )
 });
+const AppDownloadModal = dynamic(() => import('@/components/AppDownloadModal'), {
+  ssr: false,
+  loading: () => null
+});
 
 const mainNavItems = [
   { key: 'home', href: '/', icon: HomeIcon, priority: 1 },
@@ -108,7 +112,7 @@ export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
   const { user, isAuthenticated, logout, isLoading } = useAuthStore()
-  const { setNavDropdownOpen } = useUIStore();
+  const { setNavDropdownOpen, setAppModalOpen, isAppModalOpen } = useUIStore();
   const { watchlist } = useWatchlistStore();
   const hydrated = useAuthHydrated();
   const t = useTranslations('Navigation');
@@ -282,7 +286,7 @@ export default function Navigation() {
           <div className="hidden min-[700px]:flex items-center gap-2.5">
             {/* Search - Full bar or Icon */}
             <div className="relative hidden min-[1050px]:block">
-              <AutocompleteSearch />
+              <AutocompleteSearch isScrolled={isScrolled} />
             </div>
             <button
               onClick={() => setShowMobileSearch(true)}
@@ -296,36 +300,46 @@ export default function Navigation() {
             
             <NotificationBell isScrolled={isScrolled} />
 
-            <div className="flex w-[168px] shrink-0 justify-end min-[900px]:w-[204px] xl:w-[248px]">
+            {/* Download App Button */}
+            <button
+              onClick={() => setAppModalOpen(true, 'ios')}
+              className={`flex h-10 shrink-0 items-center space-x-1.5 whitespace-nowrap px-4 py-2 rounded-lg border transition-all duration-300 font-semibold text-sm cursor-pointer shadow-sm hover:shadow-md ${
+                isScrolled
+                  ? 'bg-white/10 border-white/15 text-white hover:border-blue-500/50 hover:bg-white/15'
+                  : 'bg-blue-50/70 border-blue-200/80 text-blue-600 hover:border-blue-400 hover:bg-blue-100/70'
+              }`}
+            >
+              <svg className={`h-4.5 w-4.5 transition-colors duration-300 ${isScrolled ? 'text-blue-400' : 'text-blue-650'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              <span className="hidden lg:inline">{t('downloadApp')}</span>
+              <span className="inline lg:hidden">{t('downloadAppShort')}</span>
+            </button>
+            <div className="flex shrink-0 items-center justify-end">
               {!hydrated || isLoading ? (
-                <div className="flex h-10 w-full items-center gap-2 rounded-lg px-2.5 py-1.5">
-                  <div className="h-8 w-8 shrink-0 rounded-full bg-gray-300 animate-pulse" />
-                  <div className="h-4 min-w-0 flex-1 rounded bg-gray-300 animate-pulse" />
-                </div>
+                <div className="h-9 w-9 rounded-full bg-gray-300 animate-pulse shrink-0" />
               ) : isAuthenticated ? (
-                <div className="flex w-full min-w-0 items-center">
-                  <Menu as="div" className="relative inline-block w-full text-left">
+                <div className="flex items-center">
+                  <Menu as="div" className="relative inline-block text-left">
                   {({ close }) => (
                   <>
                   <HeaderDropdownAutoClose source="user" close={close} />
-                  <div className="w-full">
+                  <div>
                     <Menu.Button
                       onClick={() => notifyHeaderDropdownOpen('user')}
-                      className={`flex h-10 w-full min-w-0 items-center gap-2 rounded-lg px-2.5 py-1.5 transition-colors ${
-                        isScrolled ? 'text-white hover:text-red-500' : 'text-gray-700 hover:text-red-500'
+                      className={`inline-flex items-center justify-center p-0.5 rounded-full border transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer overflow-hidden shadow-sm hover:shadow-md ${
+                        isScrolled
+                          ? 'bg-white/10 border-white/15 hover:border-emerald-500/50 hover:bg-white/15'
+                          : 'bg-emerald-50/70 border-emerald-200/80 hover:border-emerald-400 hover:bg-emerald-100/70'
                       }`}
+                      aria-label="User menu"
                     >
-                      <div className="shrink-0">
-                        <UserAvatar 
-                          name={user?.name || 'User'} 
-                          avatar={user?.avatar}
-                          size="sm"
-                          priority={true}
-                        />
-                      </div>
-                      <span className="min-w-0 flex-1 truncate text-left" title={user?.name || 'User'}>
-                        {user?.name || 'User'}
-                      </span>
+                      <UserAvatar
+                        name={user?.name || 'User'}
+                        avatar={user?.avatar}
+                        size="sm"
+                        priority={true}
+                      />
                     </Menu.Button>
                   </div>
                   <Transition
@@ -339,7 +353,7 @@ export default function Navigation() {
                     beforeEnter={() => setIsProfileDropdownActive(true)}
                     afterLeave={() => setIsProfileDropdownActive(false)}
                   >
-                    <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right bg-gray-900 backdrop-blur-md divide-y divide-gray-700 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-60">
+                    <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right bg-gray-900 backdrop-blur-md divide-y divide-gray-700 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-60 border border-gray-700">
                       <div className="px-1 py-1 ">
                         <Menu.Item>
                           {({ active }) => (
@@ -404,68 +418,70 @@ export default function Navigation() {
                   </Transition>
                   </>
                   )}
+                  </Menu>
+                </div>
+              ) : (
+                <Menu as="div" className="relative inline-block text-left">
+                  {({ close }) => (
+                  <>
+                  <HeaderDropdownAutoClose source="user" close={close} />
+                  <Menu.Button
+                    onClick={() => notifyHeaderDropdownOpen('user')}
+                    className={`inline-flex items-center justify-center p-2 rounded-full border transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-sm hover:shadow-md ${
+                      isScrolled
+                        ? 'bg-white/10 border-white/15 text-emerald-400 hover:text-emerald-300 hover:bg-white/15'
+                        : 'bg-emerald-50/70 border-emerald-200/80 text-emerald-600 hover:border-emerald-400 hover:bg-emerald-100/70'
+                    }`}
+                    aria-label={t('login')}
+                  >
+                    <UserIcon className="h-5 w-5" />
+                  </Menu.Button>
+                  <Transition
+                    as={Fragment}
+                    enter="transition ease-out duration-100"
+                    enterFrom="transform opacity-0 scale-95"
+                    enterTo="transform opacity-100 scale-100"
+                    leave="transition ease-in duration-75"
+                    leaveFrom="transform opacity-100 scale-100"
+                    leaveTo="transform opacity-0 scale-95"
+                    beforeEnter={() => setIsProfileDropdownActive(true)}
+                    afterLeave={() => setIsProfileDropdownActive(false)}
+                  >
+                    <Menu.Items className="absolute right-0 mt-2 w-44 origin-top-right rounded-md bg-gray-900 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-60 border border-gray-700">
+                      <div className="px-1 py-1">
+                        <Menu.Item>
+                          {({ active }) => (
+                            <Link
+                              href="/login"
+                              className={`flex items-center space-x-2 rounded-md px-3 py-2 text-sm ${
+                                active ? 'bg-red-500 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                              }`}
+                            >
+                              <UserIcon className="h-5 w-5" />
+                              <span className="whitespace-nowrap">{t('login')}</span>
+                            </Link>
+                          )}
+                        </Menu.Item>
+                        <Menu.Item>
+                          {({ active }) => (
+                            <Link
+                              href="/settings"
+                              className={`flex items-center space-x-2 rounded-md px-3 py-2 text-sm ${
+                                active ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                              }`}
+                            >
+                              <Settings className="h-5 w-5" />
+                              <span className="whitespace-nowrap">{t('settings')}</span>
+                            </Link>
+                          )}
+                        </Menu.Item>
+                      </div>
+                    </Menu.Items>
+                  </Transition>
+                  </>
+                  )}
                 </Menu>
-              </div>
-            ) : (
-              <Menu as="div" className="relative inline-block text-left">
-                {({ close }) => (
-                <>
-                <HeaderDropdownAutoClose source="user" close={close} />
-                <Menu.Button
-                  onClick={() => notifyHeaderDropdownOpen('user')}
-                  className={`inline-flex items-center justify-center p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                    isScrolled ? 'text-white hover:text-red-500 hover:bg-white/10' : 'text-gray-700 hover:text-red-500 hover:bg-gray-100'
-                  }`}
-                  aria-label={t('login')}
-                >
-                  <UserIcon className="h-5 w-5" />
-                </Menu.Button>
-                <Transition
-                  as={Fragment}
-                  enter="transition ease-out duration-100"
-                  enterFrom="transform opacity-0 scale-95"
-                  enterTo="transform opacity-100 scale-100"
-                  leave="transition ease-in duration-75"
-                  leaveFrom="transform opacity-100 scale-100"
-                  leaveTo="transform opacity-0 scale-95"
-                  beforeEnter={() => setIsProfileDropdownActive(true)}
-                  afterLeave={() => setIsProfileDropdownActive(false)}
-                >
-                  <Menu.Items className="absolute right-0 mt-2 w-44 origin-top-right rounded-md bg-gray-900 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-60 border border-gray-700">
-                    <div className="px-1 py-1">
-                      <Menu.Item>
-                        {({ active }) => (
-                          <Link
-                            href="/login"
-                            className={`flex items-center space-x-2 rounded-md px-3 py-2 text-sm ${
-                              active ? 'bg-red-500 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                            }`}
-                          >
-                            <UserIcon className="h-5 w-5" />
-                            <span className="whitespace-nowrap">{t('login')}</span>
-                          </Link>
-                        )}
-                      </Menu.Item>
-                      <Menu.Item>
-                        {({ active }) => (
-                          <Link
-                            href="/settings"
-                            className={`flex items-center space-x-2 rounded-md px-3 py-2 text-sm ${
-                              active ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                            }`}
-                          >
-                            <Settings className="h-5 w-5" />
-                            <span className="whitespace-nowrap">{t('settings')}</span>
-                          </Link>
-                        )}
-                      </Menu.Item>
-                    </div>
-                  </Menu.Items>
-                </Transition>
-                </>
-                )}
-              </Menu>
-            )}
+              )}
             </div>
           </div>
 
@@ -486,11 +502,11 @@ export default function Navigation() {
             
             <button
               onClick={() => {
-                setIsOpen((prev) => {
-                  const nextOpen = !prev
-                  if (nextOpen) notifyHeaderDropdownOpen('more')
-                  return nextOpen
-                })
+                const nextOpen = !isOpen
+                setIsOpen(nextOpen)
+                if (nextOpen) {
+                  notifyHeaderDropdownOpen('more')
+                }
               }}
               className={`inline-flex items-center justify-center p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-inset focus:ring-red-500 transition-colors duration-200 ${
                 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
@@ -568,13 +584,12 @@ export default function Navigation() {
             <button
               className="flex items-center w-full px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-200 hover:text-gray-900 focus:outline-none"
               onClick={() => {
-                setIsMobileMoreDropdownOpen((prev) => {
-                  if (!prev) {
-                    notifyHeaderDropdownOpen('more');
-                    setIsMobileUserDropdownOpen(false);
-                  }
-                  return !prev;
-                });
+                const nextOpen = !isMobileMoreDropdownOpen
+                setIsMobileMoreDropdownOpen(nextOpen)
+                if (nextOpen) {
+                  notifyHeaderDropdownOpen('more')
+                  setIsMobileUserDropdownOpen(false)
+                }
               }}
               aria-expanded={isMobileMoreDropdownOpen}
             >
@@ -623,18 +638,17 @@ export default function Navigation() {
                   <div className="h-4 min-w-0 flex-1 rounded bg-gray-300 animate-pulse" />
                 </div>
               </div>
-            ) : isAuthenticated ? (
+             ) : isAuthenticated ? (
               <div className="px-3 mt-4 space-y-2">
                 <button
-                  className="flex w-full min-w-0 items-center gap-2 rounded-md bg-gray-100 px-3 py-2 text-base font-medium text-gray-700 mb-1 focus:outline-none"
+                  className="flex w-full min-w-0 items-center gap-2 rounded-xl bg-emerald-50/70 border border-emerald-200/80 px-3 py-2.5 text-base font-semibold text-emerald-700 mb-1 focus:outline-none hover:bg-emerald-100/70 transition-colors duration-300"
                   onClick={() => {
-                    setIsMobileUserDropdownOpen((prev) => {
-                      if (!prev) {
-                        notifyHeaderDropdownOpen('user');
-                        setIsMobileMoreDropdownOpen(false);
-                      }
-                      return !prev;
-                    });
+                    const nextOpen = !isMobileUserDropdownOpen
+                    setIsMobileUserDropdownOpen(nextOpen)
+                    if (nextOpen) {
+                      notifyHeaderDropdownOpen('user')
+                      setIsMobileMoreDropdownOpen(false)
+                    }
                   }}
                   aria-expanded={isMobileUserDropdownOpen}
                 >
@@ -708,7 +722,7 @@ export default function Navigation() {
                 <Link
                   href="/login"
                   onClick={() => setIsOpen(false)} // Close menu on click
-                  className="flex items-center justify-center space-x-2 w-full px-4 py-2 rounded-md text-base font-medium bg-red-700 text-white hover:bg-red-800"
+                  className="flex items-center justify-center space-x-2 w-full px-4 py-2.5 rounded-xl text-base font-semibold bg-emerald-50 border border-emerald-200/80 text-emerald-600 hover:bg-emerald-100 transition-colors shadow-sm"
                 >
                   <UserIcon className="h-5 w-5" />
                   <span>{t('login')}</span>
@@ -723,10 +737,28 @@ export default function Navigation() {
                 </Link>
               </div>
             )}
+
+            {/* Mobile App Downloads */}
+            <div className="px-3 py-3 border-t border-gray-200 mt-4 space-y-2.5">
+              <p className="text-xs text-gray-400 font-medium tracking-wide uppercase">{t('mobileAppDownload')}</p>
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  setAppModalOpen(true);
+                }}
+                className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-blue-50 border border-blue-200/80 text-blue-600 hover:bg-blue-100/70 transition-colors shadow-sm cursor-pointer"
+              >
+                <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <span>{t('viewInstructions')}</span>
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>
       </nav>
+      {isAppModalOpen && <AppDownloadModal />}
     </>
   )
 }

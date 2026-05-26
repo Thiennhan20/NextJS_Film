@@ -20,6 +20,10 @@ interface WatchlistState {
 interface UIState {
   isNavDropdownOpen: boolean;
   setNavDropdownOpen: (isOpen: boolean) => void;
+  isAppModalOpen: boolean;
+  setAppModalOpen: (isOpen: boolean, defaultTab?: 'ios' | 'android' | 'update') => void;
+  appModalActiveTab: 'ios' | 'android' | 'update';
+  setAppModalActiveTab: (tab: 'ios' | 'android' | 'update') => void;
 }
 
 
@@ -65,4 +69,11 @@ export const useWatchlistStore = create<WatchlistState & {
 export const useUIStore = create<UIState>()((set) => ({
   isNavDropdownOpen: false,
   setNavDropdownOpen: (isOpen) => set({ isNavDropdownOpen: isOpen }),
+  isAppModalOpen: false,
+  setAppModalOpen: (isOpen, defaultTab) => set((state) => ({ 
+    isAppModalOpen: isOpen,
+    appModalActiveTab: defaultTab || state.appModalActiveTab
+  })),
+  appModalActiveTab: 'ios',
+  setAppModalActiveTab: (tab) => set({ appModalActiveTab: tab }),
 }));

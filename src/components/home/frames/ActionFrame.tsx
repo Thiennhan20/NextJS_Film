@@ -1,12 +1,13 @@
 'use client'
 
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import Image from 'next/image'
 import axios from 'axios'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import { GiPistolGun } from 'react-icons/gi'
 import { useApiCache } from '@/hooks/useApiCache'
 import CardWithHover, { batchPrefetchDetails } from '@/components/common/CardWithHover'
 import { useTranslations } from 'next-intl'
@@ -35,6 +36,7 @@ const CATEGORY = {
 export default function ActionFrame() {
   const router = useRouter();
   const t = useTranslations('Frames');
+  const prefersReducedMotion = useReducedMotion();
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -118,8 +120,15 @@ export default function ActionFrame() {
     <div className="mb-10 sm:mb-12">
       <div className="flex items-center gap-3 mb-4 px-3">
         <div className={`w-1.5 h-6 sm:h-8 rounded-full bg-gradient-to-b ${CATEGORY.color}`} />
-        <h3 className="text-xl sm:text-2xl font-bold text-white tracking-wide">
+        <h3 className="flex items-center gap-2 text-xl sm:text-2xl font-bold text-white tracking-wide">
           {t('actionTitle')}
+          <motion.span
+            aria-hidden="true"
+            animate={prefersReducedMotion ? undefined : { x: [0, -2, 0], rotate: [0, -4, 0] }}
+            transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <GiPistolGun className="h-5 w-5 text-orange-400 sm:h-6 sm:w-6" />
+          </motion.span>
         </h3>
       </div>
       

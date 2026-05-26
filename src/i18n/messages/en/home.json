@@ -100,6 +100,9 @@
     "tvShowLabel": "TV Show",
     "animation": "Animation",
     "season1": "Season 1",
-    "updatingOverview": "Content is being updated for this title. Stay tuned!"
+    "updatingOverview": "Content is being updated for this title. Stay tuned!",
+    "romanceTitle": "Romance & Drama",
+    "actorsTitle": "Featured Cast",
+    "actingLabel": "Acting"
   }
 }

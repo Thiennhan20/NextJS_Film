@@ -8,6 +8,10 @@
     "logout": "Logout",
     "loggedOut": "Logged out!",
     "login": "Login",
+    "downloadApp": "Download App",
+    "downloadAppShort": "Download",
+    "mobileAppDownload": "Mobile App Download",
+    "viewInstructions": "View Download & Update Guide",
     "items": {
       "home": "Home",
       "movies": "Movies",
@@ -53,7 +57,10 @@
     "newsletterDesc": "Stay updated with our latest news and offers.",
     "emailPlaceholder": "Enter your email",
     "subscribe": "Subscribe",
-    "address": "123 Movie Street, Hollywood, CA 90028"
+    "address": "123 Movie Street, Hollywood, CA 90028",
+    "downloadIOS": "Download iOS",
+    "downloadAndroid": "Download Android",
+    "updateApp": "Update App"
   },
   "Watchlist": {
     "loginRequired": "You need to log in to save movies",

@@ -592,11 +592,11 @@ export default function NotificationBell({ isScrolled = false, compact = false }
   }
 
   const buttonClassName = compact
-    ? 'relative p-1.5 rounded-full bg-white shadow border border-red-200 text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-400 transition'
-    : `relative flex h-10 w-10 items-center justify-center rounded-full border shadow-sm backdrop-blur-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 active:scale-95 ${
+    ? 'relative p-1.5 rounded-full bg-amber-50 shadow-sm border border-amber-200/85 text-amber-600 hover:bg-amber-100/70 focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-300'
+    : `relative flex h-10 w-10 items-center justify-center rounded-full border shadow-sm backdrop-blur-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 active:scale-95 ${
         isScrolled
-          ? 'border-white/15 bg-white/10 text-white hover:border-red-400/50 hover:bg-red-500/15 hover:text-red-300'
-          : 'border-gray-200 bg-white/80 text-gray-700 hover:border-red-200 hover:bg-red-50 hover:text-red-600 hover:shadow-md'
+          ? 'bg-white/10 border-white/15 text-amber-400 hover:text-amber-300 hover:bg-white/15'
+          : 'bg-amber-50/70 border-amber-200/80 text-amber-600 hover:border-amber-400 hover:bg-amber-100/70 hover:shadow-md'
       }`
 
   const panelClassName = compact
@@ -652,11 +652,11 @@ export default function NotificationBell({ isScrolled = false, compact = false }
       <button
         type="button"
         onClick={() => {
-          setIsOpen((prev) => {
-            const nextOpen = !prev
-            if (nextOpen) notifyHeaderDropdownOpen()
-            return nextOpen
-          })
+          const nextOpen = !isOpen
+          setIsOpen(nextOpen)
+          if (nextOpen) {
+            notifyHeaderDropdownOpen()
+          }
         }}
         className={buttonClassName}
         aria-label={t('label')}

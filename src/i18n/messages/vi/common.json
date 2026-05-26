@@ -8,6 +8,10 @@
     "logout": "Đăng xuất",
     "loggedOut": "Đã đăng xuất!",
     "login": "Đăng nhập",
+    "downloadApp": "Tải ứng dụng",
+    "downloadAppShort": "Tải app",
+    "mobileAppDownload": "Tải ứng dụng di động",
+    "viewInstructions": "Xem Hướng Dẫn Tải & Cập Nhật",
     "items": {
       "home": "Trang chủ",
       "movies": "Phim Lẻ",
@@ -53,7 +57,10 @@
     "newsletterDesc": "Cập nhật các tin tức và ưu đãi mới nhất từ chúng tôi.",
     "emailPlaceholder": "Nhập email của bạn",
     "subscribe": "Đăng ký",
-    "address": "123 Đường Điện Ảnh, Hollywood, CA 90028"
+    "address": "123 Đường Điện Ảnh, Hollywood, CA 90028",
+    "downloadIOS": "Tải xuống iOS",
+    "downloadAndroid": "Tải xuống Android",
+    "updateApp": "Cập nhật App"
   },
   "Watchlist": {
     "loginRequired": "Bạn cần đăng nhập để lưu phim",

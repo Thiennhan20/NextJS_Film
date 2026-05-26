@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode } from 'react'
+import { ReactNode, useEffect } from 'react'
 import { useIntersectionObserver } from '@/hooks/useIntersectionObserver'
 
 interface LazySectionProps {
@@ -9,6 +9,7 @@ interface LazySectionProps {
   className?: string
   rootMargin?: string
   minHeight?: string
+  onIntersect?: () => void
 }
 
 /**
@@ -21,11 +22,18 @@ export default function LazySection({
   className = '',
   rootMargin = '300px', // Load 300px before entering viewport
   minHeight = '400px',
+  onIntersect,
 }: LazySectionProps) {
   const { targetRef, hasIntersected } = useIntersectionObserver({
     rootMargin,
     triggerOnce: true,
   })
+
+  useEffect(() => {
+    if (hasIntersected) {
+      onIntersect?.()
+    }
+  }, [hasIntersected, onIntersect])
 
   return (
     <div 

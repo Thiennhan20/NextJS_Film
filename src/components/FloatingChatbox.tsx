@@ -5,6 +5,7 @@ import { motion, AnimatePresence, useDragControls, PanInfo } from 'framer-motion
 import { ChatBubbleLeftIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { ChevronUpIcon } from '@heroicons/react/24/solid'
 // marked is dynamically imported when needed to reduce bundle size
+import { useUIStore } from '@/store/store'
 
 export default function FloatingChatbox() {
   const [isOpen, setIsOpen] = useState(false)
@@ -34,6 +35,7 @@ export default function FloatingChatbox() {
   const [isLoadingChat, setIsLoadingChat] = useState(false)
   const dragControls = useDragControls()
   const [showScrollTop, setShowScrollTop] = useState(false)
+  const { isAppModalOpen } = useUIStore()
 
   // Add a check for a global variable to hide the scroll-to-top arrow when watching full movie
   const isWatchingFullMovie = typeof window !== 'undefined' && (window as { isWatchingFullMovie?: boolean }).isWatchingFullMovie;
@@ -219,7 +221,7 @@ export default function FloatingChatbox() {
   return (
     <>
       {/* Scroll to Top Arrow */}
-      {showScrollTop && !isWatchingFullMovie && !isOpen && (
+      {showScrollTop && !isWatchingFullMovie && !isOpen && !isAppModalOpen && (
         <motion.button
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
