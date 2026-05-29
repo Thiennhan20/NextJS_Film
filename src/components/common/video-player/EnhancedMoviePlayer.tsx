@@ -205,6 +205,14 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     const hideVolumeTimer = useRef<NodeJS.Timeout | null>(null);
     const mouseMoveThrottleRef = useRef<NodeJS.Timeout | null>(null);
 
+    // ─── Double-click fullscreen & long-press edge 2x speed ──
+    const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const lastClickTimeRef = useRef(0);
+    const edgeHoldTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const edgeHoldActiveRef = useRef(false);
+    const savedSpeedRef = useRef(1);
+    const [isEdgeHolding, setIsEdgeHolding] = useState<'left' | 'right' | null>(null);
+
     // Resume popup
     const [resumePopup, setResumePopup] = useState<{ show: boolean; savedTime: number }>({ show: false, savedTime: 0 });
     const [controlsReady, setControlsReady] = useState(!movieId || !server || !audio);
@@ -989,6 +997,72 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       setCurrentTime(time);
     }, [duration, ref]);
 
+    // ─── Double-click fullscreen toggle ─────────────────────
+    const handleVideoAreaClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('button') || target.closest('input') || target.closest('[data-no-toggle]') || target.closest('[data-controls-bar]')) return;
+      if (viewerMode) return;
+      if (!controlsReady || resumeSeekPending) return;
+      if (hasEndOverlay) return;
+      // If edge-hold was just active, skip this click
+      if (edgeHoldActiveRef.current) { edgeHoldActiveRef.current = false; return; }
+
+      const now = Date.now();
+      const timeSinceLastClick = now - lastClickTimeRef.current;
+      lastClickTimeRef.current = now;
+
+      if (timeSinceLastClick < 300) {
+        // Double-click detected → toggle fullscreen
+        if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null; }
+        toggleFullscreen();
+      } else {
+        // Single-click → delay to check if double-click follows
+        if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = setTimeout(() => {
+          togglePlay();
+          clickTimerRef.current = null;
+        }, 300);
+      }
+    }, [viewerMode, controlsReady, resumeSeekPending, hasEndOverlay, toggleFullscreen, togglePlay]);
+
+    // ─── Edge hold 2x speed ─────────────────────────────────
+    const handleEdgeHoldStart = useCallback((clientX: number, containerRect: DOMRect) => {
+      if (viewerMode || !controlsReady || resumeSeekPending || hasEndOverlay) return;
+      const relativeX = (clientX - containerRect.left) / containerRect.width;
+      const side: 'left' | 'right' | null = relativeX <= 0.2 ? 'left' : relativeX >= 0.8 ? 'right' : null;
+      if (!side) return;
+
+      if (edgeHoldTimerRef.current) clearTimeout(edgeHoldTimerRef.current);
+      edgeHoldTimerRef.current = setTimeout(() => {
+        const v = getVideo(ref, innerRef);
+        if (!v) return;
+        edgeHoldActiveRef.current = true;
+        savedSpeedRef.current = v.playbackRate;
+        v.playbackRate = 2;
+        setIsEdgeHolding(side);
+        // If paused, play temporarily for the fast-forward/rewind effect
+        if (v.paused) v.play().catch(() => {});
+      }, 500);
+    }, [viewerMode, controlsReady, resumeSeekPending, hasEndOverlay, ref]);
+
+    const handleEdgeHoldEnd = useCallback(() => {
+      if (edgeHoldTimerRef.current) { clearTimeout(edgeHoldTimerRef.current); edgeHoldTimerRef.current = null; }
+      if (!edgeHoldActiveRef.current) return;
+      const v = getVideo(ref, innerRef);
+      if (v) v.playbackRate = savedSpeedRef.current;
+      setIsEdgeHolding(null);
+      // Keep edgeHoldActiveRef.current = true briefly so the upcoming click event is skipped
+      setTimeout(() => { edgeHoldActiveRef.current = false; }, 50);
+    }, [ref]);
+
+    // Cleanup edge hold timer on unmount
+    useEffect(() => {
+      return () => {
+        if (edgeHoldTimerRef.current) clearTimeout(edgeHoldTimerRef.current);
+        if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+      };
+    }, []);
+
     // ─── Render ─────────────────────────────────────────────
     return (
       <div
@@ -996,15 +1070,11 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         className={`relative w-full h-full bg-black overflow-hidden transition-all duration-300 ${showControls ? 'cursor-default' : 'cursor-none'}`}
         onMouseMove={handleUserInteraction}
         onTouchStart={handleUserInteraction}
-        onClick={(e) => {
-          const target = e.target as HTMLElement;
-          if (target.closest('button') || target.closest('input') || target.closest('[data-no-toggle]')) return;
-          if (viewerMode) return;
-          if (!controlsReady || resumeSeekPending) return;
-          if (hasEndOverlay) return; // Block click-to-play when end overlay is showing
-          togglePlay();
+        onClick={handleVideoAreaClick}
+        onMouseLeave={() => {
+          handleMouseLeave();
+          handleEdgeHoldEnd();
         }}
-        onMouseLeave={handleMouseLeave}
       >
         <video
           ref={(node) => {
@@ -1021,9 +1091,62 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
           style={{ WebkitAppearance: 'none', WebkitOverflowScrolling: 'touch', objectFit: 'contain', backgroundColor: '#000' }}
         />
 
-        {/* Chat Button - Only shown in streaming room */}
+        {/* Edge-hold 2x speed zones — invisible, left/right 20% of player */}
+        {!viewerMode && controlsReady && !resumeSeekPending && !hasEndOverlay && (
+          <>
+            {/* Left edge zone */}
+            <div
+              className="absolute top-0 left-0 w-[20%] h-[calc(100%-56px)] z-[5]"
+              onMouseDown={(e) => {
+                if (e.button !== 0) return;
+                const rect = innerContainerRef.current?.getBoundingClientRect();
+                if (rect) handleEdgeHoldStart(e.clientX, rect);
+              }}
+              onMouseUp={handleEdgeHoldEnd}
+              onTouchStart={(e) => {
+                const touch = e.touches[0];
+                const rect = innerContainerRef.current?.getBoundingClientRect();
+                if (rect) handleEdgeHoldStart(touch.clientX, rect);
+              }}
+              onTouchEnd={handleEdgeHoldEnd}
+              onTouchCancel={handleEdgeHoldEnd}
+            />
+            {/* Right edge zone */}
+            <div
+              className="absolute top-0 right-0 w-[20%] h-[calc(100%-56px)] z-[5]"
+              onMouseDown={(e) => {
+                if (e.button !== 0) return;
+                const rect = innerContainerRef.current?.getBoundingClientRect();
+                if (rect) handleEdgeHoldStart(e.clientX, rect);
+              }}
+              onMouseUp={handleEdgeHoldEnd}
+              onTouchStart={(e) => {
+                const touch = e.touches[0];
+                const rect = innerContainerRef.current?.getBoundingClientRect();
+                if (rect) handleEdgeHoldStart(touch.clientX, rect);
+              }}
+              onTouchEnd={handleEdgeHoldEnd}
+              onTouchCancel={handleEdgeHoldEnd}
+            />
+          </>
+        )}
+
+        {/* 2x Speed Indicator */}
+        {isEdgeHolding && (
+          <div className="absolute inset-0 pointer-events-none z-[6] flex items-center justify-center animate-fade-in">
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 shadow-lg transition-all duration-200 ${isEdgeHolding === 'left' ? 'mr-auto ml-8' : 'ml-auto mr-8'}`}>
+              {isEdgeHolding === 'left' && (
+                <svg className="w-4 h-4 text-yellow-400 rotate-180" fill="currentColor" viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+              )}
+              <span className="text-yellow-400 font-bold text-sm tabular-nums">2x</span>
+              {isEdgeHolding === 'right' && (
+                <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+              )}
+            </div>
+          </div>
+        )}
         {src && controlsReady && isStreamingRoom && (
-          <div className={`absolute top-3 right-3 sm:top-4 sm:right-4 transition-all duration-500 ease-in-out ${showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
+          <div className={`absolute top-3 right-3 sm:top-4 sm:right-4 z-[8] transition-all duration-500 ease-in-out ${showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
             <button
               onClick={(e) => { e.stopPropagation(); onToggleChat?.(); }}
               className="relative flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black text-xs sm:text-sm font-semibold transition-all duration-200 shadow-lg hover:shadow-yellow-500/50 hover:scale-105"
@@ -1120,7 +1243,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         )}
 
         {/* Center Play/Pause — hidden during resume popup or end overlay */}
-        <div className={`absolute inset-0 flex items-center justify-center pointer-events-none ${!controlsReady || resumeSeekPending || hasEndOverlay ? 'hidden' : ''}`}>
+        <div className={`absolute inset-0 z-[7] flex items-center justify-center pointer-events-none ${!controlsReady || resumeSeekPending || hasEndOverlay ? 'hidden' : ''}`}>
           {!isPlaying ? (
             <div className="pointer-events-auto flex items-center gap-4">
               {!isEnded && (
@@ -1207,7 +1330,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         </div>
 
         {/* Controls bar */}
-        <div className={`absolute inset-x-0 bottom-0 p-2 sm:p-3 flex flex-col gap-1.5 sm:gap-2 transition-all duration-500 ease-in-out transform ${!controlsReady || hasEndOverlay ? 'translate-y-full opacity-0 pointer-events-none' : showControls ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
+        <div data-controls-bar className={`absolute inset-x-0 bottom-0 z-10 p-2 sm:p-3 flex flex-col gap-1.5 sm:gap-2 transition-all duration-500 ease-in-out transform ${!controlsReady || hasEndOverlay ? 'translate-y-full opacity-0 pointer-events-none' : showControls ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
           {/* Progress bar */}
           <div
             className={`relative w-full h-5 flex items-center group ${viewerMode ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
