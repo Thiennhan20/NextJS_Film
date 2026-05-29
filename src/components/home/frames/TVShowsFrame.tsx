@@ -1,12 +1,13 @@
 'use client'
 
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 import Image from 'next/image'
 import axios from 'axios'
 
 import { useRouter } from 'next/navigation'
 import { useApiCache } from '@/hooks/useApiCache'
+import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 import CardWithHover, { batchPrefetchDetails } from '@/components/common/CardWithHover'
 import { useTranslations } from 'next-intl'
 
@@ -30,6 +31,8 @@ const CATEGORY = {
 export default function TVShowsFrame() {
   const router = useRouter();
   const t = useTranslations('Frames');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { dragScrollProps } = useHorizontalDragScroll(scrollRef);
 
   const fetchData = useCallback(async () => {
     const response = await axios.get(`/api/tmdb-proxy?endpoint=${encodeURIComponent(CATEGORY.endpoint)}`);
@@ -73,7 +76,9 @@ export default function TVShowsFrame() {
       </div>
       
       <div 
-        className="flex md:grid md:grid-cols-5 gap-4 px-3 pt-6 overflow-x-auto md:overflow-visible pb-6 snap-x snap-mandatory" 
+        ref={scrollRef}
+        {...dragScrollProps}
+        className="horizontal-scroll-container flex md:grid md:grid-cols-5 gap-4 px-3 pt-6 overflow-x-auto md:overflow-visible pb-6 snap-x snap-proximity select-none cursor-grab active:cursor-grabbing md:cursor-default"
         style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {items.map((item, index) => (

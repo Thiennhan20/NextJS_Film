@@ -37,10 +37,16 @@ export default function AppDownloadModal() {
     }
   }, [isAppModalOpen])
 
-  if (!isAppModalOpen) return null
+
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-xl p-0 overflow-hidden select-none">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-xl p-0 overflow-hidden select-none"
+    >
       {/* Animated Glowing Ambient Orbs */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-red-500/10 rounded-full mix-blend-screen filter blur-[150px]" />
@@ -315,12 +321,18 @@ export default function AppDownloadModal() {
       {/* Custom Coming Soon Popup overlay */}
       <AnimatePresence>
         {showComingSoon && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4"
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              transition={{ type: "spring", duration: 0.5 }}
+              transition={{ type: "spring", duration: 0.3 }}
               className="w-full max-w-sm bg-gray-900/90 border border-gray-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden backdrop-blur-2xl flex flex-col items-center text-center select-none"
             >
               {/* Glow ambient background */}
@@ -343,14 +355,14 @@ export default function AppDownloadModal() {
               {/* Close popup button */}
               <button
                 onClick={() => setShowComingSoon(false)}
-                className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white rounded-xl font-semibold text-xs tracking-wider uppercase transition-all duration-300 shadow-lg shadow-orange-500/20 cursor-pointer active:scale-98"
+                className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white rounded-xl font-semibold text-xs tracking-wider uppercase transition-colors duration-150 shadow-lg shadow-orange-500/20 cursor-pointer active:scale-[0.98]"
               >
                 {isEn ? 'Got it' : 'Đồng ý'}
               </button>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   )
 }

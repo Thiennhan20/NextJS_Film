@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState, forwardRef } from "react";
+import React, { useCallback, useEffect, useRef, useState, forwardRef, type Dispatch, type SetStateAction } from "react";
 import Hls, { Level } from "hls.js";
 import { PlayIcon, PauseIcon, ArrowsPointingOutIcon } from "@heroicons/react/24/solid";
 import PlayerSettings from "./PlayerSettings";
 import api from '@/lib/axios';
 import { useRecentlyWatchedStore } from '@/store/useRecentlyWatchedStore';
 import { useTranslations } from 'next-intl';
+import type { AudioSettings } from '@/lib/audioUtils';
 
 // ─── Types ────────────────────────────────────────────────────────
 type AvailableSpeed = 0.5 | 0.75 | 1 | 1.25 | 1.5 | 1.75 | 2;
@@ -50,6 +51,10 @@ export interface EnhancedMoviePlayerProps {
   onUpdateSource?: (newUrl: string) => void;
   onSkipUpdateSource?: (newUrl: string) => void;
   hasLoadedSavedProgress?: boolean;
+  /** Audio enhancement settings (passed through to PlayerSettings) */
+  audioSettings?: AudioSettings;
+  /** Callback to update audio enhancement settings */
+  onAudioSettingsChange?: Dispatch<SetStateAction<AudioSettings>>;
 }
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -164,7 +169,7 @@ function parseQualities(levels: Level[]): Array<{ index: number; label: string }
 
 // ─── Component ────────────────────────────────────────────────────
 const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProps>(
-  ({ src, poster, autoPlay = false, onError, movieId, server, audio, title, season, episode, isTVShow = false, userId, viewerMode = false, onToggleChat, isStreamingRoom = false, fullscreenTarget, hostHasPlayed = false, chatUnreadCount = 0, waitingForHost = false, onVideoEnded, endOverlay, watchUrl, latestWatchUrl, savedTime, savedWatchUrl, onUpdateSource, onSkipUpdateSource, hasLoadedSavedProgress }, ref) => {
+  ({ src, poster, autoPlay = false, onError, movieId, server, audio, title, season, episode, isTVShow = false, userId, viewerMode = false, onToggleChat, isStreamingRoom = false, fullscreenTarget, hostHasPlayed = false, chatUnreadCount = 0, waitingForHost = false, onVideoEnded, endOverlay, watchUrl, latestWatchUrl, savedTime, savedWatchUrl, onUpdateSource, onSkipUpdateSource, hasLoadedSavedProgress, audioSettings, onAudioSettingsChange }, ref) => {
     const innerRef = useRef<HTMLVideoElement>(null);
     const hlsRef = useRef<Hls | null>(null);
     const innerContainerRef = useRef<HTMLDivElement>(null);
@@ -184,7 +189,6 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     const [qualities, setQualities] = useState<Array<{ index: number; label: string }>>([]);
     const [currentQuality, setCurrentQuality] = useState(-1);
     const [showSettings, setShowSettings] = useState(false);
-    const [activeTab, setActiveTab] = useState<'speed' | 'quality'>('speed');
     const [isBuffering, setIsBuffering] = useState(false);
     const [isSeeking, setIsSeeking] = useState(false);
     const userSeekingRef = useRef(false);
@@ -220,6 +224,25 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         saveUrlRef.current = watchUrl;
       }
     }, [watchUrl]);
+
+    const [playerWidth, setPlayerWidth] = useState<number>(0);
+
+    // Track player container width for responsive settings collapsing
+    useEffect(() => {
+      const container = innerContainerRef.current;
+      if (!container) return;
+
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          setPlayerWidth(entry.contentRect.width);
+        }
+      });
+
+      observer.observe(container);
+      return () => {
+        observer.disconnect();
+      };
+    }, []);
 
     useEffect(() => {
       const normalizedLatestUrl = normalizePlaybackUrl(latestWatchUrl);
@@ -1286,11 +1309,14 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
 
             <div className="flex items-center gap-1.5 sm:gap-2">
               <PlayerSettings
-                show={showSettings} activeTab={activeTab} speed={speed}
+                show={showSettings} speed={speed}
                 qualities={qualities} currentQuality={currentQuality}
-                onTabChange={setActiveTab} onSpeedChange={changeSpeed}
+                onSpeedChange={(val) => changeSpeed(val as AvailableSpeed)}
                 onQualityChange={changeQuality} onToggle={toggleSettings}
                 disabled={viewerMode}
+                containerWidth={playerWidth}
+                audioSettings={audioSettings}
+                onAudioSettingsChange={onAudioSettingsChange}
               />
 
               {/* PiP */}

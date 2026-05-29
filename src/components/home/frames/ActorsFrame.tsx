@@ -6,6 +6,7 @@ import axios from 'axios'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { useTranslations } from 'next-intl'
 import apiCache, { useApiCache } from '@/hooks/useApiCache'
+import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 
 interface KnownForItem {
   id: number
@@ -62,6 +63,7 @@ function ActorsFrameLoading() {
 export default function ActorsFrame() {
   const t = useTranslations('Frames')
   const scrollRef = useRef<HTMLDivElement>(null)
+  const { dragScrollProps } = useHorizontalDragScroll(scrollRef)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
 
@@ -145,7 +147,8 @@ export default function ActorsFrame() {
 
         <div
           ref={scrollRef}
-          className="flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-4 pt-2 sm:gap-4"
+          {...dragScrollProps}
+          className="horizontal-scroll-container flex snap-x snap-proximity gap-3 overflow-x-auto px-1 pb-4 pt-2 sm:gap-4"
           style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {actors.map((actor) => (

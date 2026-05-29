@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { GiPistolGun } from 'react-icons/gi'
 import { useApiCache } from '@/hooks/useApiCache'
+import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 import CardWithHover, { batchPrefetchDetails } from '@/components/common/CardWithHover'
 import { useTranslations } from 'next-intl'
 
@@ -40,6 +41,7 @@ export default function ActionFrame() {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { dragScrollProps } = useHorizontalDragScroll(scrollRef);
 
   const fetchData = useCallback(async () => {
     const [moviesRes, tvRes] = await Promise.all([
@@ -158,7 +160,8 @@ export default function ActionFrame() {
 
         <div
           ref={scrollRef}
-          className="flex gap-3 sm:gap-4 overflow-x-auto overflow-y-visible pb-4 pt-2 scrollbar-none snap-x snap-mandatory px-3"
+          {...dragScrollProps}
+          className="horizontal-scroll-container flex gap-3 sm:gap-4 overflow-x-auto overflow-y-visible pb-4 pt-2 scrollbar-none snap-x snap-proximity px-3"
           style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {items.map((item) => (

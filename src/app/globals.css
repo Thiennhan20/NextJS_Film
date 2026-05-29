@@ -478,6 +478,52 @@ select {
   cursor: grabbing;
 }
 
+.horizontal-scroll-container.is-horizontal-dragging * {
+  pointer-events: none;
+}
+
+.horizontal-scroll-container.is-horizontal-scrolling * {
+  pointer-events: none;
+}
+
+@keyframes routeProgressIndeterminate {
+  0% {
+    transform: scaleX(0.08);
+    opacity: 0.65;
+  }
+  45% {
+    transform: scaleX(0.48);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scaleX(0.78);
+    opacity: 1;
+  }
+}
+
+.route-transition-progress {
+  transform: scaleX(0.08);
+  animation: routeProgressIndeterminate 1.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.route-transition-progress-complete {
+  animation: none;
+  transform: scaleX(1);
+  transition: transform 180ms ease-out, opacity 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-transition-progress {
+    animation: none;
+    transform: scaleX(0.72);
+  }
+
+  .route-transition-progress-complete {
+    transform: scaleX(1);
+  }
+}
+
 /* Custom shadows and glow effects */
 .chatbox-container-shadow {
   box-shadow: 0 15px 40px rgba(0,0,0,0.6), 0 0 50px rgba(239, 68, 68, 0.3), 0 0 80px rgba(96, 165, 250, 0.2);
@@ -755,3 +801,30 @@ select {
 .notification-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(248, 113, 113, 0.65);
 }
+
+/* Player settings dropdown scrollbar - neat, ultra-thin and elegant */
+.player-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  transition: scrollbar-color 0.2s ease;
+}
+
+.player-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.player-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.player-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+
+.player-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+

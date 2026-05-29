@@ -22,6 +22,31 @@ interface CacheEntry {
 const detailsCache = new Map<string, CacheEntry>()
 const SCROLL_IDLE_DELAY = 150
 const WHEEL_DELTA_THRESHOLD = 1
+let lastScrollAt = 0
+let scrollActivitySubscriberCount = 0
+
+const markScrollActivity = () => {
+  lastScrollAt = Date.now()
+}
+
+const isScrollActive = () => Date.now() - lastScrollAt < SCROLL_IDLE_DELAY
+
+const subscribeScrollActivity = () => {
+  if (scrollActivitySubscriberCount === 0) {
+    window.addEventListener('scroll', markScrollActivity, { passive: true })
+    document.addEventListener('scroll', markScrollActivity, { passive: true, capture: true })
+  }
+
+  scrollActivitySubscriberCount += 1
+
+  return () => {
+    scrollActivitySubscriberCount = Math.max(0, scrollActivitySubscriberCount - 1)
+    if (scrollActivitySubscriberCount > 0) return
+
+    window.removeEventListener('scroll', markScrollActivity)
+    document.removeEventListener('scroll', markScrollActivity, { capture: true })
+  }
+}
 
 function isHorizontalScrollable(element: HTMLElement) {
   const style = window.getComputedStyle(element)
@@ -467,29 +492,18 @@ export default function CardWithHover({
 }: CardWithHoverProps) {
   const [showCard, setShowCard] = useState(false)
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
-  const [isScrolling, setIsScrolling] = useState(false)
   // true = thiết bị có chuột thật (hover: hover), false = touch device
   const [isHoverDevice, setIsHoverDevice] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const dismissForScroll = useCallback(() => {
     setShowCard(false)
-    setIsScrolling(true)
 
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current)
       hoverTimeoutRef.current = null
     }
-
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current)
-    }
-
-    scrollTimeoutRef.current = setTimeout(() => {
-      setIsScrolling(false)
-    }, SCROLL_IDLE_DELAY)
   }, [])
 
   // Detect hover capability sau khi mount (tránh SSR mismatch)
@@ -501,9 +515,16 @@ export default function CardWithHover({
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  // Detect scrolling state với throttle - chỉ cần trên hover device
+  // Track scroll activity with one shared listener instead of one listener per card.
   useEffect(() => {
     if (!isHoverDevice) return
+
+    return subscribeScrollActivity()
+  }, [isHoverDevice])
+
+  // Close the active popup on scroll. This runs only for the visible hover card.
+  useEffect(() => {
+    if (!isHoverDevice || !showCard) return
     let ticking = false
     
     const handleScroll = () => {
@@ -521,11 +542,8 @@ export default function CardWithHover({
     return () => {
       window.removeEventListener('scroll', handleScroll)
       document.removeEventListener('scroll', handleScroll, { capture: true })
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current)
-      }
     }
-  }, [isHoverDevice, dismissForScroll])
+  }, [isHoverDevice, showCard, dismissForScroll])
 
   useEffect(() => {
     if (!isHoverDevice || !showCard) return
@@ -598,15 +616,12 @@ export default function CardWithHover({
       if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current)
       }
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current)
-      }
     }
   }, [])
 
   // Hover handlers - chỉ hoạt động trên desktop (hover device)
   const handleMouseEnter = useCallback(() => {
-    if (!isHoverDevice || isScrolling) return
+    if (!isHoverDevice || isScrollActive()) return
 
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current)
@@ -617,7 +632,7 @@ export default function CardWithHover({
 
     if (hoverDelay > 0) {
       hoverTimeoutRef.current = setTimeout(() => {
-        if (!isScrolling && wrapperRef.current) {
+        if (!isScrollActive() && wrapperRef.current) {
           setAnchorRect(wrapperRef.current.getBoundingClientRect())
           setShowCard(true)
         }
@@ -628,7 +643,7 @@ export default function CardWithHover({
         setShowCard(true)
       }
     }
-  }, [isHoverDevice, isScrolling, hoverDelay, type, id])
+  }, [isHoverDevice, hoverDelay, type, id])
 
   const handleMouseLeave = useCallback(() => {
     if (!isHoverDevice) return

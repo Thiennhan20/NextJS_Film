@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import CardWithHover, { batchPrefetchDetails } from '@/components/common/CardWithHover'
 import { useTranslations } from 'next-intl'
+import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 
 interface Movie {
   id: number;
@@ -52,6 +53,7 @@ export default function ComingSoonFrame() {
   const [canScrollLeftComingSoon, setCanScrollLeftComingSoon] = useState(false);
   const [canScrollRightComingSoon, setCanScrollRightComingSoon] = useState(false);
   const comingSoonScrollRef = useRef<HTMLDivElement>(null);
+  const { dragScrollProps } = useHorizontalDragScroll(comingSoonScrollRef);
   const t = useTranslations('ComingSoonSection');
   
   // Giới hạn số lượng dữ liệu để cải thiện hiệu suất
@@ -312,7 +314,8 @@ export default function ComingSoonFrame() {
 
           <div
             ref={comingSoonScrollRef}
-            className="flex gap-3 sm:gap-4 overflow-x-auto overflow-y-visible pb-4 pt-2 scrollbar-none snap-x snap-mandatory px-3"
+            {...dragScrollProps}
+            className="horizontal-scroll-container flex gap-3 sm:gap-4 overflow-x-auto overflow-y-visible pb-4 pt-2 scrollbar-none snap-x snap-proximity px-3"
             style={{ 
               WebkitOverflowScrolling: 'touch', 
               scrollbarWidth: 'none', 

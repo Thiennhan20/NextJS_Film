@@ -1,10 +1,32 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useToaster, toast } from 'react-hot-toast';
+
+const PAGE_TRANSITION_PULSE_EVENT = 'page-transition:pulse';
 
 export default function CustomToaster() {
   const { toasts, handlers } = useToaster();
   const { startPause, endPause } = handlers;
+  const seenToastIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const visibleToasts = toasts.filter((t) => t.visible);
+
+    for (const toastItem of visibleToasts) {
+      if (seenToastIdsRef.current.has(toastItem.id)) continue;
+
+      seenToastIdsRef.current.add(toastItem.id);
+      window.dispatchEvent(new CustomEvent(PAGE_TRANSITION_PULSE_EVENT, {
+        detail: { type: toastItem.type }
+      }));
+    }
+
+    if (seenToastIdsRef.current.size > 80) {
+      const visibleIds = new Set(visibleToasts.map((t) => t.id));
+      seenToastIdsRef.current = visibleIds;
+    }
+  }, [toasts]);
 
   return (
     <div

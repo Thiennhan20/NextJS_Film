@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { useApiCache } from '@/hooks/useApiCache'
+import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 import CardWithHover, { batchPrefetchDetails } from '@/components/common/CardWithHover'
 import { useTranslations } from 'next-intl'
 
@@ -98,6 +99,7 @@ export default function TrendingMovies() {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { dragScrollProps } = useHorizontalDragScroll(scrollRef);
   const t = useTranslations('Trending');
 
   // Optimized API call with caching
@@ -254,7 +256,8 @@ export default function TrendingMovies() {
           
           <div
             ref={scrollRef}
-            className="flex gap-4 overflow-x-auto overflow-y-visible pb-3 scrollbar-none snap-x snap-mandatory relative horizontal-scroll-container"
+            {...dragScrollProps}
+            className="flex gap-4 overflow-x-auto overflow-y-visible pb-3 scrollbar-none snap-x snap-proximity relative horizontal-scroll-container"
             style={{ 
               WebkitOverflowScrolling: 'touch', 
               scrollbarWidth: 'none', 

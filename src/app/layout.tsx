@@ -14,6 +14,7 @@ import WatchlistSyncer from "@/components/WatchlistSyncer";
 import FloatingChatboxWrapper from "@/components/FloatingChatboxWrapper";
 import ProgressCleanup from '@/components/ProgressCleanup';
 import VersionChecker from '@/components/VersionChecker';
+import PageTransition from '@/components/PageTransition';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 
@@ -76,6 +77,7 @@ export default async function RootLayout({
             <AuthChecker />
             <ProgressCleanup />
             <Navigation />
+            <PageTransition />
             <WatchlistSyncer />
             <ContentWrapper>
               {children}

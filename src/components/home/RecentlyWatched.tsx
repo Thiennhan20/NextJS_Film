@@ -5,10 +5,12 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Play, Clock, Trash2, ChevronDown, AlertCircle } from 'lucide-react'
+import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import useAuthStore from '@/store/useAuthStore'
 import { useRecentlyWatchedStore } from '@/store/useRecentlyWatchedStore'
 import api from '@/lib/axios'
 import { useTranslations } from 'next-intl'
+import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 
 interface RecentlyWatchedItem {
   id: string
@@ -187,6 +189,7 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
   const [canScrollRight, setCanScrollRight] = useState(false)
   const router = useRouter()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const { dragScrollProps } = useHorizontalDragScroll(scrollContainerRef)
   const shouldReduceMotion = useReducedMotion()
   const t = useTranslations('RecentlyWatched')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -472,7 +475,8 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
         >
           <div
             ref={scrollContainerRef}
-            className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide"
+            {...dragScrollProps}
+            className="horizontal-scroll-container flex gap-4 overflow-x-auto pb-4 snap-x snap-proximity scrollbar-hide"
             style={{
               scrollbarWidth: 'none',
               msOverflowStyle: 'none',
@@ -561,30 +565,34 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
           {recentItems.length > 0 && (
             <>
               {canScrollLeft && (
-                <button
+                <motion.button
                   onClick={() => {
                     if (scrollContainerRef.current) {
                       scrollContainerRef.current.scrollBy({ left: -300, behavior: 'smooth' });
                     }
                   }}
-                  className="absolute top-1/2 -translate-y-1/2 left-2 bg-black/70 hover:bg-black/90 text-white p-2 rounded-full flex items-center justify-center z-20 transition-all duration-300 hover:scale-110"
+                  className="absolute left-0 sm:-left-4 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded-full border border-white/10 bg-black/80 p-2 text-white shadow-2xl backdrop-blur-md opacity-0 transition-all duration-300 hover:bg-white hover:text-black group-hover:opacity-100 sm:p-3"
                   aria-label="Scroll left"
+                  whileHover={{ scale: shouldReduceMotion ? 1 : 1.1 }}
+                  whileTap={{ scale: shouldReduceMotion ? 1 : 0.9 }}
                 >
-                  <ChevronDown className="w-5 h-5 text-white rotate-90" />
-                </button>
+                  <ChevronLeftIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+                </motion.button>
               )}
               {canScrollRight && (
-                <button
+                <motion.button
                   onClick={() => {
                     if (scrollContainerRef.current) {
                       scrollContainerRef.current.scrollBy({ left: 300, behavior: 'smooth' });
                     }
                   }}
-                  className="absolute top-1/2 -translate-y-1/2 right-2 bg-black/70 hover:bg-black/90 text-white p-2 rounded-full flex items-center justify-center z-20 transition-all duration-300 hover:scale-110"
+                  className="absolute right-0 sm:-right-4 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded-full border border-white/10 bg-black/80 p-2 text-white shadow-2xl backdrop-blur-md opacity-0 transition-all duration-300 hover:bg-white hover:text-black group-hover:opacity-100 sm:p-3"
                   aria-label="Scroll right"
+                  whileHover={{ scale: shouldReduceMotion ? 1 : 1.1 }}
+                  whileTap={{ scale: shouldReduceMotion ? 1 : 0.9 }}
                 >
-                  <ChevronDown className="w-5 h-5 text-white -rotate-90" />
-                </button>
+                  <ChevronRightIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+                </motion.button>
               )}
             </>
           )}

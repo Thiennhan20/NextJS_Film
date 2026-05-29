@@ -15,6 +15,7 @@ import api from '@/lib/axios'
 import { ChevronDownIcon } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useApiCache } from '@/hooks/useApiCache'
+import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 
 interface Movie {
   id: number;
@@ -168,6 +169,10 @@ export default function HeroMovies() {
   const autoPlayRef = useRef<NodeJS.Timeout | null>(null);
   const [contentScale, setContentScale] = useState(1);
   const contentRef = useRef<HTMLDivElement>(null);
+  const mobileThumbnailsRef = useRef<HTMLDivElement>(null);
+  const desktopThumbnailsRef = useRef<HTMLDivElement>(null);
+  const { dragScrollProps: mobileThumbnailDragScrollProps } = useHorizontalDragScroll(mobileThumbnailsRef);
+  const { dragScrollProps: desktopThumbnailDragScrollProps } = useHorizontalDragScroll(desktopThumbnailsRef);
 
   const { addToWatchlist, removeFromWatchlist, isInWatchlist, fetchWatchlistFromServer } = useWatchlistStore();
   const { isAuthenticated, token } = useAuthStore();
@@ -636,7 +641,11 @@ export default function HeroMovies() {
                 </motion.div>
 
                 {/* Mobile Thumbnails */}
-                <div className="flex items-center justify-center gap-1.5 px-4 pt-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                <div
+                  ref={mobileThumbnailsRef}
+                  {...mobileThumbnailDragScrollProps}
+                  className="horizontal-scroll-container flex items-center justify-center gap-1.5 px-4 pt-1.5 overflow-x-auto pb-1 scrollbar-hide"
+                >
                   {visibleItems.map((item, index) => (
                     <motion.button
                       key={item.id}
@@ -804,7 +813,11 @@ export default function HeroMovies() {
             </AnimatePresence>
 
             {/* Thumbnail Navigation */}
-            <div className="flex items-center gap-3 max-w-full overflow-x-auto pb-2 scrollbar-hide">
+            <div
+              ref={desktopThumbnailsRef}
+              {...desktopThumbnailDragScrollProps}
+              className="horizontal-scroll-container flex items-center gap-3 max-w-full overflow-x-auto pb-2 scrollbar-hide"
+            >
               {visibleItems.map((item, index) => (
                 <motion.button
                   key={item.id}

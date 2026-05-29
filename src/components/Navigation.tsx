@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { 
   MagnifyingGlassIcon, 
   Bars3Icon, 
@@ -758,7 +758,7 @@ export default function Navigation() {
         </div>
       </motion.div>
       </nav>
-      {isAppModalOpen && <AppDownloadModal />}
+      <AnimatePresence>{isAppModalOpen && <AppDownloadModal />}</AnimatePresence>
     </>
   )
 }

@@ -7,6 +7,7 @@ import Link from 'next/link'
 import api from '@/lib/axios'
 import { Radio, Users, Clock, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 
 interface ActiveRoom {
   room_id: string
@@ -54,6 +55,7 @@ export default function ActiveStreamingRooms() {
   const [rooms, setRooms] = useState<ActiveRoom[]>([])
   const [loading, setLoading] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const { dragScrollProps } = useHorizontalDragScroll(scrollRef)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
   const t = useTranslations('StreamingRooms')
@@ -159,7 +161,8 @@ export default function ActiveStreamingRooms() {
 
           <div
             ref={scrollRef}
-            className="flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth px-4 sm:px-6 lg:px-8 pb-1"
+            {...dragScrollProps}
+            className="horizontal-scroll-container flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth px-4 sm:px-6 lg:px-8 pb-1"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {/* Loading skeletons */}

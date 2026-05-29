@@ -5,7 +5,18 @@ import { motion } from 'framer-motion'
 import { useSearchParams, useRouter } from 'next/navigation'
 import EnhancedMoviePlayer from '@/components/common/video-player/EnhancedMoviePlayer'
 import useAuthStore from '@/store/useAuthStore'
+import {
+  applyAudioSettings,
+  cleanupAudioNodes,
+  DEFAULT_AUDIO_SETTINGS,
+  detectBestPresetId,
+  AUDIO_PRESETS,
+  setupAudioNodes,
+  type AudioNodes,
+  type AudioSettings,
+} from '@/lib/audioUtils'
 import { proxyHlsUrl } from '@/lib/hlsProxy'
+
 import WatchNowTVShowsServer1 from './WatchNowTVShowsServer1'
 import WatchNowTVShowsServer2 from './WatchNowTVShowsServer2'
 import WatchNowTVShowsServer3 from './WatchNowTVShowsServer3'
@@ -82,6 +93,39 @@ export default function WatchNowTVShows({
 
   // Video Ref
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [audioVideoElement, setAudioVideoElement] = useState<HTMLVideoElement | null>(null);
+  const [audioSettings, setAudioSettings] = useState<AudioSettings>({ ...DEFAULT_AUDIO_SETTINGS });
+  const audioSettingsRef = useRef(audioSettings);
+  const audioNodesRef = useRef<AudioNodes | null>(null);
+
+  // Auto-detect best audio preset on mount and on audio device changes
+  useEffect(() => {
+    let active = true;
+    async function applyDetectedPreset() {
+      const bestPresetId = await detectBestPresetId();
+      if (!active) return;
+      const matchedPreset = AUDIO_PRESETS.find(p => p.id === bestPresetId);
+      if (matchedPreset) {
+        setAudioSettings(prev => ({ ...prev, ...matchedPreset.settings }));
+      }
+    }
+    applyDetectedPreset();
+    const handleDeviceChange = () => { applyDetectedPreset(); };
+    if (typeof window !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    }
+    return () => {
+      active = false;
+      if (typeof window !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.removeEventListener) {
+        navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      }
+    };
+  }, []);
+
+  const handlePlayerRef = useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node;
+    setAudioVideoElement(node);
+  }, []);
 
   // TV Show Links State
   const [tvShowLinks, setTVShowLinks] = useState({
@@ -253,7 +297,43 @@ export default function WatchNowTVShows({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Cập nhật URL khi thay đổi server
+  useEffect(() => {
+    audioSettingsRef.current = audioSettings;
+    if (audioNodesRef.current) {
+      applyAudioSettings(audioNodesRef.current, audioSettings);
+    }
+  }, [audioSettings]);
+
+  // Khởi tạo AudioContext cho trình phát inline của server 1
+  useEffect(() => {
+    if (selectedServer !== 'server1' || !audioVideoElement) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const nodes = await setupAudioNodes(audioVideoElement, audioSettingsRef.current);
+        if (cancelled) {
+          cleanupAudioNodes(nodes);
+          return;
+        }
+
+        audioNodesRef.current = nodes;
+      } catch (error) {
+        if (!cancelled) {
+          console.warn('Unable to setup server 1 audio controls:', error);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (audioNodesRef.current) {
+        cleanupAudioNodes(audioNodesRef.current);
+        audioNodesRef.current = null;
+      }
+    };
+  }, [audioVideoElement, selectedServer]);
+
   const updateServerInUrl = (server: 'server1' | 'server2' | 'server3') => {
     const params = new URLSearchParams(searchParams.toString());
     const currentServer = searchParams.get('server');
@@ -528,7 +608,8 @@ export default function WatchNowTVShows({
         </div>
 
         {/* Active Server Options Area */}
-        <div className="flex flex-wrap items-center min-h-[32px]">
+        <div className="min-h-[32px]">
+          <div className="flex flex-wrap items-center gap-2">
           {selectedServer === 'server1' && (tvShowLinks.vietsub || tvShowLinks.dubbed) && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-300">{t('audio')}</span>
@@ -598,6 +679,8 @@ export default function WatchNowTVShows({
               )}
             </div>
           )}
+          </div>
+
         </div>
       </div>
 
@@ -700,7 +783,7 @@ export default function WatchNowTVShows({
         </div>
       )}
 
-      <div className="relative w-full rounded-lg overflow-hidden bg-black/50 aspect-video">
+      <div className="relative w-full rounded-lg bg-black/50 aspect-video">
         {selectedEpisode === 0 ? (
           <div className="flex items-center justify-center h-full text-white">
             <div className="flex flex-col items-center gap-4">
@@ -783,7 +866,7 @@ export default function WatchNowTVShows({
             return playUrl ? (
               <EnhancedMoviePlayer
                 key={`${selectedSeason}-${selectedEpisode}`}
-                ref={videoRef}
+                ref={handlePlayerRef}
                 src={proxyHlsUrl(playUrl)}
                 poster={tvShow.poster}
                 autoPlay={false}
@@ -810,6 +893,8 @@ export default function WatchNowTVShows({
                     setIsSavedLinkFatalError(true);
                   }
                 }}
+                audioSettings={selectedServer === 'server1' ? audioSettings : undefined}
+                onAudioSettingsChange={selectedServer === 'server1' ? setAudioSettings : undefined}
                 endOverlay={showNextEpisodePopup && hasNextEpisode ? (
                   <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/80 backdrop-blur-sm">
                     <motion.div

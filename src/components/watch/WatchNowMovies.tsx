@@ -1,12 +1,22 @@
 'use client'
 
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useCallback, useEffect, useState, useRef, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useSearchParams, useRouter } from 'next/navigation'
 import EnhancedMoviePlayer from '@/components/common/video-player/EnhancedMoviePlayer'
 import useAuthStore from '@/store/useAuthStore'
-import { setupAudioNodes, cleanupAudioNodes, AudioNodes } from '@/lib/audioUtils'
+import {
+  applyAudioSettings,
+  cleanupAudioNodes,
+  DEFAULT_AUDIO_SETTINGS,
+  detectBestPresetId,
+  AUDIO_PRESETS,
+  setupAudioNodes,
+  type AudioNodes,
+  type AudioSettings,
+} from '@/lib/audioUtils'
 import { proxyHlsUrl } from '@/lib/hlsProxy'
+
 import WatchNowMoviesServer1 from './WatchNowMoviesServer1'
 import WatchNowMoviesServer2 from './WatchNowMoviesServer2'
 import WatchNowMoviesServer3 from './WatchNowMoviesServer3'
@@ -306,10 +316,41 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
   }, [selectedServer, apiSearchCompleted, movieLinksLoading, selectedAudio, movieLinks.vietsub, movieLinks.dubbed, movieLinks.m3u8]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  // State cho các bộ lọc âm thanh (không hiển thị trong UI)
+  const [audioVideoElement, setAudioVideoElement] = useState<HTMLVideoElement | null>(null);
+  const [audioSettings, setAudioSettings] = useState<AudioSettings>({ ...DEFAULT_AUDIO_SETTINGS });
+  const audioSettingsRef = useRef(audioSettings);
   const audioNodesRef = useRef<AudioNodes | null>(null);
 
+  // Auto-detect best audio preset on mount and on audio device changes
+  useEffect(() => {
+    let active = true;
+    async function applyDetectedPreset() {
+      const bestPresetId = await detectBestPresetId();
+      if (!active) return;
+      const matchedPreset = AUDIO_PRESETS.find(p => p.id === bestPresetId);
+      if (matchedPreset) {
+        setAudioSettings(prev => ({ ...prev, ...matchedPreset.settings }));
+      }
+    }
+    applyDetectedPreset();
+    const handleDeviceChange = () => { applyDetectedPreset(); };
+    if (typeof window !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    }
+    return () => {
+      active = false;
+      if (typeof window !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.removeEventListener) {
+        navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      }
+    };
+  }, []);
+
   const streamBtnRef = useRef<HTMLDivElement>(null);
+
+  const handlePlayerRef = useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node;
+    setAudioVideoElement(node);
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -321,20 +362,34 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    audioSettingsRef.current = audioSettings;
+    if (audioNodesRef.current) {
+      applyAudioSettings(audioNodesRef.current, audioSettings);
+    }
+  }, [audioSettings]);
+
   // Khởi tạo AudioContext cho trình phát inline của server 1
   useEffect(() => {
-    if (selectedServer !== 'server1' || !videoRef.current) return;
+    if (selectedServer !== 'server1' || !audioVideoElement) return;
     let cancelled = false;
-    const videoEl = videoRef.current;
-    if (!videoEl) return;
+
     (async () => {
-      if (!audioNodesRef.current) {
-        const nodes = await setupAudioNodes(videoEl);
+      try {
+        const nodes = await setupAudioNodes(audioVideoElement, audioSettingsRef.current);
+        if (cancelled) {
+          cleanupAudioNodes(nodes);
+          return;
+        }
+
+        audioNodesRef.current = nodes;
+      } catch (error) {
         if (!cancelled) {
-          audioNodesRef.current = nodes;
+          console.warn('Unable to setup server 1 audio controls:', error);
         }
       }
     })();
+
     return () => {
       cancelled = true;
       if (audioNodesRef.current) {
@@ -342,7 +397,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
         audioNodesRef.current = null;
       }
     };
-  }, [selectedServer]);
+  }, [audioVideoElement, selectedServer]);
 
   // Handler cho nút Stream
   const handleStreamClick = async () => {
@@ -433,7 +488,8 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
         </div>
 
         {/* Active Server Options Area */}
-        <div className="flex flex-wrap items-center min-h-[32px]">
+        <div className="min-h-[32px]">
+          <div className="flex flex-wrap items-center gap-2">
           {selectedServer === 'server1' && (movieLinks.vietsub || movieLinks.dubbed) && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-300">{t('audio')}</span>
@@ -503,6 +559,8 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
               )}
             </div>
           )}
+          </div>
+
         </div>
       </div>
 
@@ -577,7 +635,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
         )}
       </div>
 
-      <div className="relative w-full rounded-lg overflow-hidden bg-black/50 aspect-video">
+      <div className="relative w-full rounded-lg bg-black/50 aspect-video">
         {selectedServer === 'server1' && (
           (() => {
             let videoSrc = '';
@@ -650,7 +708,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
             return playUrl ? (
               <EnhancedMoviePlayer
                 key={movie.id}
-                ref={videoRef}
+                ref={handlePlayerRef}
                 src={proxyHlsUrl(playUrl)}
                 poster={movie.poster}
                 autoPlay={false}
@@ -673,6 +731,8 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
                     setIsSavedLinkFatalError(true);
                   }
                 }}
+                audioSettings={selectedServer === 'server1' ? audioSettings : undefined}
+                onAudioSettingsChange={selectedServer === 'server1' ? setAudioSettings : undefined}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-white text-lg font-semibold">
