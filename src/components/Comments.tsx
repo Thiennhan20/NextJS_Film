@@ -37,6 +37,12 @@ interface Comment {
   replies?: Comment[]
   isReply?: boolean
   parentId?: string
+  replyTo?: {
+    _id: string
+    name: string
+    avatar?: string
+  } | string
+  replyToComment?: string | { _id: string }
 }
 
 interface CommentsProps {
@@ -397,13 +403,21 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
       })
       
       if (response.data.success) {
+        const createdReply = response.data.data as Comment
+        const threadParentId = String(createdReply.parentId || parentId)
+
         setComments(prev => 
           prev.map(comment => 
-            comment._id === parentId 
-              ? { ...comment, replies: [...(comment.replies || []), response.data.data] }
+            comment._id === threadParentId
+              ? { ...comment, replies: [...(comment.replies || []), createdReply] }
               : comment
           )
         )
+        setShowReplies(prev => {
+          const next = new Set(prev)
+          next.add(threadParentId)
+          return next
+        })
         
         setReplyText('')
         setReplyingTo(null)
@@ -511,11 +525,32 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
     }
   }
 
+  const getCommentUserId = (comment: Comment) => String(comment.userId?._id || comment.userId || '')
+
+  const getCommentRefId = (value: string | { _id: string } | undefined) => (
+    typeof value === 'string' ? value : String(value?._id || '')
+  )
+
+  const getReplyToName = (reply: Comment) => {
+    if (!reply.replyTo || typeof reply.replyTo === 'string') return ''
+    return reply.replyTo.name || ''
+  }
+
+  const isOwnComment = (comment: Comment) => (
+    Boolean(isAuthenticated && user?.id && user.id === getCommentUserId(comment))
+  )
+
+  const closeReplyEditor = () => {
+    setReplyingTo(null)
+    setReplyText('')
+  }
+
   // Actions: start editing
   const startEditing = (comment: Comment) => {
     setEditingId(comment._id)
     setEditText(comment.content)
-    setActionOpenId(comment._id)
+    setActionOpenId(null)
+    closeReplyEditor()
   }
 
   // Actions: submit edit
@@ -526,7 +561,20 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
       const res = await api.put(`/comments/${editingId}`, { content: editText.trim() })
       if (res.data.success) {
         const updated = res.data.data as Comment
-        setComments(prev => prev.map(c => c._id === editingId ? { ...c, content: updated.content, updatedAt: updated.updatedAt } : c))
+        setComments(prev => prev.map(comment => {
+          if (comment._id === editingId) {
+            return { ...comment, content: updated.content, updatedAt: updated.updatedAt }
+          }
+
+          return {
+            ...comment,
+            replies: comment.replies?.map(reply => (
+              reply._id === editingId
+                ? { ...reply, content: updated.content, updatedAt: updated.updatedAt }
+                : reply
+            ))
+          }
+        }))
         setEditingId(null)
         setEditText('')
         setActionOpenId(null)
@@ -542,11 +590,26 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
 
   // Actions: delete
   const handleDelete = async (id: string) => {
+    let deletedIds = new Set<string>([id])
+
     try {
+      const isTopLevelComment = comments.some(comment => comment._id === id)
       const res = await api.delete(`/comments/${id}`)
       if (res.data.success) {
-        setComments(prev => prev.filter(c => c._id !== id))
-        setTotalComments(prev => Math.max(0, prev - 1))
+        deletedIds = new Set<string>(
+          (res.data.deletedCommentIds || [id]).map((deletedId: string) => String(deletedId))
+        )
+
+        setComments(prev => prev
+          .filter(comment => !deletedIds.has(comment._id))
+          .map(comment => ({
+            ...comment,
+            replies: comment.replies?.filter(reply => !deletedIds.has(reply._id))
+          }))
+        )
+        if (isTopLevelComment) {
+          setTotalComments(prev => Math.max(0, prev - 1))
+        }
         toast.success(t('deleted'))
       }
     } catch (error: unknown) {
@@ -555,8 +618,98 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
     } finally {
       setActionOpenId(null)
       setConfirmDeleteId(null)
+      if (editingId && deletedIds.has(editingId)) {
+        setEditingId(null)
+        setEditText('')
+      }
+      if (replyingTo && deletedIds.has(replyingTo)) {
+        closeReplyEditor()
+      }
     }
   }
+
+  const renderReplyInput = (replyTarget: Comment, className = 'mt-4') => (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      className={className}
+    >
+      <div className="flex gap-2 sm:gap-3">
+        <div className="flex-shrink-0">
+          {isAuthenticated && user?.avatar ? (
+            <Image
+              src={user.avatar}
+              alt={user.name || t('userAvatarAlt')}
+              width={32}
+              height={32}
+              className="w-6 h-6 sm:w-8 sm:h-8 rounded-full object-cover"
+              unoptimized={user.avatar.startsWith('http')}
+            />
+          ) : isAuthenticated && user?.name ? (
+            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-red-500 to-pink-500 flex items-center justify-center">
+              <span className="text-white font-bold text-xs sm:text-sm">
+                {user.name.charAt(0).toUpperCase()}
+              </span>
+            </div>
+          ) : (
+            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-600 flex items-center justify-center">
+              <UserIcon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <textarea
+            ref={replyTextareaRef}
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                if (isAuthenticated && replyText.trim() && !isSubmitting) {
+                  handleSubmitReply(replyTarget._id)
+                }
+              }
+            }}
+            placeholder={isAuthenticated ? t('replyTo', { user: replyTarget.userId?.name || t('unknownUser') }) : t('loginToReply')}
+            disabled={!isAuthenticated}
+            maxLength={500}
+            className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-2 py-1.5 sm:px-3 sm:py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none text-[16px] sm:text-sm scrollbar-hide"
+            rows={2}
+          />
+          <div className="flex justify-between items-center mt-2">
+            <span className={`text-xs ${
+              replyText.length >= 500
+                ? 'text-red-500 font-semibold'
+                : replyText.length >= 450
+                ? 'text-yellow-500'
+                : 'text-gray-400'
+            }`}>
+              {replyText.length}/500
+              {replyText.length >= 500 && t('limitReached')}
+            </span>
+            <div className="flex gap-1 sm:gap-2">
+              <button
+                onClick={closeReplyEditor}
+                className="px-2 py-1 sm:px-3 sm:py-1 text-gray-400 hover:text-white transition-colors text-xs sm:text-sm"
+              >
+                {t('cancel')}
+              </button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => handleSubmitReply(replyTarget._id)}
+                disabled={!isAuthenticated || !replyText.trim() || isSubmitting}
+                className="px-3 py-1 sm:px-4 sm:py-1 bg-red-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+              >
+                {isSubmitting ? t('posting') : t('reply')}
+              </motion.button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )
 
   // Actions: report (placeholder)
   const handleReport = () => {
@@ -590,7 +743,7 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
               {isAuthenticated && user?.avatar ? (
                 <Image
                   src={user.avatar}
-                  alt={user.name || 'User'}
+                  alt={user.name || t('userAvatarAlt')}
                   width={40}
                   height={40}
                   className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover"
@@ -765,12 +918,12 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                       </span>
                     </div>
                     <div className="flex-shrink-0">
-                      {isAuthenticated && user?.id && (user.id === (comment.userId?._id || comment.userId)) ? (
+                      {isOwnComment(comment) ? (
                         <div className="relative group" data-comment-action>
                           <button
                             className="p-1.5 rounded-md hover:bg-gray-700/60 transition-colors"
                             onClick={() => setActionOpenId(actionOpenId === comment._id ? null : comment._id)}
-                            aria-label="Actions"
+                            aria-label={t('actions')}
                           >
                             <EllipsisHorizontalIcon className="h-5 w-5 text-gray-300" />
                           </button>
@@ -848,7 +1001,11 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => setReplyingTo(replyingTo === comment._id ? null : comment._id)}
+                      onClick={() => {
+                        setReplyingTo(replyingTo === comment._id ? null : comment._id)
+                        setReplyText('')
+                        setEditingId(null)
+                      }}
                       className="flex items-center gap-1 sm:gap-2 text-gray-400 hover:text-blue-500 transition-colors"
                     >
                       <ChatBubbleLeftRightIcon className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -869,91 +1026,7 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
 
                   {/* Reply Input */}
                   <AnimatePresence>
-                    {replyingTo === comment._id && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="mt-4"
-                      >
-                        <div className="flex gap-2 sm:gap-3">
-                          <div className="flex-shrink-0">
-                            {isAuthenticated && user?.avatar ? (
-                              <Image
-                                src={user.avatar}
-                                alt={user.name || 'User'}
-                                width={32}
-                                height={32}
-                                className="w-6 h-6 sm:w-8 sm:h-8 rounded-full object-cover"
-                                unoptimized={user.avatar.startsWith('http')}
-                              />
-                            ) : isAuthenticated && user?.name ? (
-                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-red-500 to-pink-500 flex items-center justify-center">
-                                <span className="text-white font-bold text-xs sm:text-sm">
-                                  {user.name.charAt(0).toUpperCase()}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-600 flex items-center justify-center">
-                                <UserIcon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <textarea
-                              ref={replyTextareaRef}
-                              value={replyText}
-                              onChange={(e) => setReplyText(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                  e.preventDefault()
-                                  if (isAuthenticated && replyText.trim() && !isSubmitting) {
-                                    handleSubmitReply(comment._id)
-                                  }
-                                }
-                              }}
-                              placeholder={isAuthenticated ? t('replyTo', { user: comment.userId?.name || t('unknownUser') }) : t('loginToReply')}
-                              disabled={!isAuthenticated}
-                              maxLength={500}
-                              className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-2 py-1.5 sm:px-3 sm:py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none text-[16px] sm:text-sm scrollbar-hide"
-                              rows={2}
-                            />
-                            <div className="flex justify-between items-center mt-2">
-                              <span className={`text-xs ${
-                                replyText.length >= 500 
-                                  ? 'text-red-500 font-semibold' 
-                                  : replyText.length >= 450 
-                                  ? 'text-yellow-500' 
-                                  : 'text-gray-400'
-                              }`}>
-                                {replyText.length}/500
-                                {replyText.length >= 500 && t('limitReached')}
-                              </span>
-                              <div className="flex gap-1 sm:gap-2">
-                                <button
-                                  onClick={() => {
-                                    setReplyingTo(null)
-                                    setReplyText('')
-                                  }}
-                                  className="px-2 py-1 sm:px-3 sm:py-1 text-gray-400 hover:text-white transition-colors text-xs sm:text-sm"
-                                >
-                                  {t('cancel')}
-                                </button>
-                                <motion.button
-                                  whileHover={{ scale: 1.02 }}
-                                  whileTap={{ scale: 0.98 }}
-                                  onClick={() => handleSubmitReply(comment._id)}
-                                  disabled={!isAuthenticated || !replyText.trim() || isSubmitting}
-                                  className="px-3 py-1 sm:px-4 sm:py-1 bg-red-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  {isSubmitting ? t('posting') : t('reply')}
-                                </motion.button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
+                    {replyingTo === comment._id && renderReplyInput(comment)}
                   </AnimatePresence>
 
                   {/* Replies */}
@@ -965,11 +1038,20 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                         exit={{ opacity: 0, height: 0 }}
                         className="mt-4 space-y-4"
                       >
-                        {comment.replies.map((reply) => (
+                        {comment.replies.map((reply) => {
+                          const replyToCommentId = getCommentRefId(reply.replyToComment)
+                          const isBranchReply = Boolean(replyToCommentId && replyToCommentId !== comment._id)
+                          const replyToName = getReplyToName(reply)
+
+                          return (
                           <div
                             key={reply._id}
                             id={`comment-${reply._id}`}
-                            className={`flex gap-2 sm:gap-3 pl-2 sm:pl-4 border-l-2 border-gray-700 rounded-lg scroll-mt-24 transition-colors duration-500 ${
+                            className={`flex gap-2 sm:gap-3 rounded-lg border-l-2 scroll-mt-24 transition-colors duration-500 ${
+                              isBranchReply
+                                ? 'ml-5 border-sky-500/70 bg-sky-500/[0.03] pl-3 sm:ml-8 sm:pl-4'
+                                : 'border-gray-700 pl-2 sm:pl-4'
+                            } ${
                               highlightedCommentId === reply._id
                                 ? 'bg-red-500/10 ring-1 ring-red-500/60'
                                 : ''
@@ -995,15 +1077,79 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                             </div>
                             
                             <div className="flex-1 min-w-0">
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
-                                <Link href={`/profile/${reply.userId?._id || reply.userId}`} className="block max-w-full"><h5 className="font-medium text-white hover:text-red-400 transition-colors text-xs sm:text-sm truncate">{reply.userId?.name || t('unknownUser')}</h5></Link>
-                                <span className="text-gray-400 text-xs flex items-center gap-1">
-                                  <ClockIcon className="h-3 w-3" />
-                                  {formatTimeAgo(reply.createdAt)}
-                                </span>
+                              <div className="mb-1 flex items-start justify-between gap-2">
+                                <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                                  <Link href={`/profile/${reply.userId?._id || reply.userId}`} className="block max-w-full"><h5 className="font-medium text-white hover:text-red-400 transition-colors text-xs sm:text-sm truncate">{reply.userId?.name || t('unknownUser')}</h5></Link>
+                                  <span className="text-gray-400 text-xs flex items-center gap-1">
+                                    <ClockIcon className="h-3 w-3" />
+                                    {formatTimeAgo(reply.createdAt)}
+                                  </span>
+                                </div>
+
+                                {isOwnComment(reply) && (
+                                  <div className="relative shrink-0" data-comment-action>
+                                    <button
+                                      className="p-1 rounded-md hover:bg-gray-700/60 transition-colors"
+                                      onClick={() => setActionOpenId(actionOpenId === reply._id ? null : reply._id)}
+                                      aria-label={t('actions')}
+                                    >
+                                      <EllipsisHorizontalIcon className="h-4 w-4 text-gray-300" />
+                                    </button>
+                                    {actionOpenId === reply._id && (
+                                      <div className="absolute right-0 mt-2 w-36 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-20" data-comment-action>
+                                        <button
+                                          className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-700 rounded-t-lg"
+                                          onClick={() => startEditing(reply)}
+                                        >
+                                          {t('edit')}
+                                        </button>
+                                        <button
+                                          className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-gray-700 rounded-b-lg"
+                                          onClick={() => setConfirmDeleteId(reply._id)}
+                                        >
+                                          {t('delete')}
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
-                              
-                              <p className="text-gray-300 text-xs sm:text-sm leading-relaxed mb-2 break-words whitespace-pre-wrap">{reply.content}</p>
+
+                              {replyToName && (
+                                <div className={`mb-1 text-[11px] sm:text-xs ${
+                                  isBranchReply ? 'text-sky-300' : 'text-gray-500'
+                                }`}>
+                                  {t('replyingToUser', { user: replyToName })}
+                                </div>
+                              )}
+
+                              {editingId === reply._id ? (
+                                <div className="space-y-2 mb-2">
+                                  <textarea
+                                    value={editText}
+                                    onChange={(e) => setEditText(e.target.value)}
+                                    className="w-full bg-gray-700/50 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none text-[16px] sm:text-sm"
+                                    rows={2}
+                                  />
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={submitEdit}
+                                      disabled={!editText.trim() || isSubmitting}
+                                      className="px-3 py-1.5 bg-red-600 text-white rounded-md text-xs sm:text-sm disabled:bg-gray-600 disabled:cursor-not-allowed"
+                                    >
+                                      {t('save')}
+                                    </button>
+                                    <button
+                                      onClick={() => { setEditingId(null); setEditText(''); setActionOpenId(null); }}
+                                      className="px-3 py-1.5 text-gray-300 hover:text-white text-xs sm:text-sm"
+                                    >
+                                      {t('cancel')}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="text-gray-300 text-xs sm:text-sm leading-relaxed mb-2 break-words whitespace-pre-wrap">{reply.content}</p>
+                              )}
                               
                               <div className="flex items-center gap-2 sm:gap-3">
                                 <motion.button
@@ -1019,10 +1165,29 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                                   )}
                                   <span className="text-xs">{reply.likes}</span>
                                 </motion.button>
+
+                                <motion.button
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => {
+                                    setReplyingTo(replyingTo === reply._id ? null : reply._id)
+                                    setReplyText('')
+                                    setEditingId(null)
+                                  }}
+                                  className="flex items-center gap-1 text-gray-400 hover:text-blue-500 transition-colors"
+                                >
+                                  <ChatBubbleLeftRightIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                                  <span className="text-xs">{t('reply')}</span>
+                                </motion.button>
                               </div>
+
+                              <AnimatePresence>
+                                {replyingTo === reply._id && renderReplyInput(reply, 'mt-3')}
+                              </AnimatePresence>
                             </div>
                           </div>
-                        ))}
+                          )
+                        })}
                       </motion.div>
                     )}
                   </AnimatePresence>

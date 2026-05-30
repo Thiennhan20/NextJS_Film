@@ -5,7 +5,6 @@ import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
-import { io, Socket } from 'socket.io-client'
 import { AnimatePresence, type Easing, motion, useReducedMotion } from 'framer-motion'
 import {
   ArrowPathIcon,
@@ -21,6 +20,7 @@ import useAuthStore from '@/store/useAuthStore'
 
 const CURRENT_HASH = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'dev'
 const HEADER_DROPDOWN_OPEN_EVENT = 'header-dropdown-open'
+const NOTIFICATION_COUNT_POLL_MS = 60000
 
 export type NotificationType = 'comment_liked' | 'comment_replied' | 'version_updated' | 'friend_request' | 'friend_accept'
 
@@ -96,27 +96,6 @@ function sortNotificationsByNewest(items: ApiNotification[]) {
   return [...items].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
 
-function mergeNotifications(current: ApiNotification[], incoming: ApiNotification[]) {
-  const merged = new Map<string, ApiNotification>()
-
-  current.forEach((item) => merged.set(item._id, item))
-  incoming.forEach((item) => {
-    const existing = merged.get(item._id)
-    merged.set(item._id, existing ? {
-      ...existing,
-      ...item,
-      read: existing.read || item.read,
-      readAt: existing.readAt || item.readAt,
-      metadata: {
-        ...(existing.metadata || {}),
-        ...(item.metadata || {})
-      }
-    } : item)
-  })
-
-  return sortNotificationsByNewest(Array.from(merged.values())).slice(0, 20)
-}
-
 function notifyHeaderDropdownOpen() {
   if (typeof window === 'undefined') return
 
@@ -154,24 +133,8 @@ function buildCommentTargetPath(target: NotificationMetadata | NotificationTarge
   return `/${basePath}/${target.movieId}${query ? `?${query}` : ''}${hash}`
 }
 
-function getNotificationSocketUrl() {
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname
-    if (host === 'localhost' || host === '127.0.0.1') {
-      return 'http://localhost:3001/notifications'
-    }
-  }
-
-  const wsUrl = process.env.NEXT_PUBLIC_WS_URL
-  if (wsUrl) return `${wsUrl.replace(/\/$/, '')}/notifications`
-
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
-  const serverUrl = apiUrl.replace(/\/api\/?$/, '')
-  return serverUrl ? `${serverUrl}/notifications` : '/notifications'
-}
-
 export default function NotificationBell({ isScrolled = false, compact = false }: NotificationBellProps) {
-  const { isAuthenticated, token } = useAuthStore()
+  const { isAuthenticated } = useAuthStore()
   const router = useRouter()
   const t = useTranslations('Notifications')
   const locale = useLocale()
@@ -187,16 +150,10 @@ export default function NotificationBell({ isScrolled = false, compact = false }
   const [error, setError] = useState<string | null>(null)
 
   const rootRef = useRef<HTMLDivElement>(null)
-  const socketRef = useRef<Socket | null>(null)
-  const notificationsRef = useRef<ApiNotification[]>([])
   const fetchRequestIdRef = useRef(0)
 
   const versionUnread = versionNotification && !versionNotification.read ? 1 : 0
   const totalUnread = unreadCount + versionUnread
-
-  useEffect(() => {
-    notificationsRef.current = notifications
-  }, [notifications])
 
   const fetchUnreadCount = useCallback(async () => {
     if (!isAuthenticated) return
@@ -220,11 +177,7 @@ export default function NotificationBell({ isScrolled = false, compact = false }
       const response = await api.get<NotificationsResponse>('/notifications?page=1&limit=20')
       if (requestId !== fetchRequestIdRef.current) return
 
-      setNotifications((prev) => {
-        const next = mergeNotifications(prev, response.data.data || [])
-        notificationsRef.current = next
-        return next
-      })
+      setNotifications(sortNotificationsByNewest(response.data.data || []))
       setUnreadCount(response.data.unreadCount || 0)
     } catch {
       if (requestId === fetchRequestIdRef.current) {
@@ -270,18 +223,26 @@ export default function NotificationBell({ isScrolled = false, compact = false }
 
   useEffect(() => {
     if (!isAuthenticated) {
+      fetchRequestIdRef.current += 1
       setNotifications([])
       setUnreadCount(0)
+      setError(null)
     } else {
       fetchUnreadCount()
     }
 
     checkVersionNotification()
+  }, [checkVersionNotification, fetchUnreadCount, isAuthenticated])
 
+  useEffect(() => {
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         if (useAuthStore.getState().isAuthenticated) {
-          fetchUnreadCount()
+          if (isOpen) {
+            fetchNotifications()
+          } else {
+            fetchUnreadCount()
+          }
         }
         checkVersionNotification()
       }
@@ -289,44 +250,16 @@ export default function NotificationBell({ isScrolled = false, compact = false }
 
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => document.removeEventListener('visibilitychange', onVisibilityChange)
-  }, [checkVersionNotification, fetchUnreadCount, isAuthenticated])
+  }, [checkVersionNotification, fetchNotifications, fetchUnreadCount, isOpen])
 
   useEffect(() => {
-    if (!isAuthenticated || !token) return
+    if (!isAuthenticated) return
 
-    const socket = io(getNotificationSocketUrl(), {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
-      reconnection: true,
-      reconnectionAttempts: 10
-    })
-
-    socketRef.current = socket
-
-    socket.on('notification:new', (notification: ApiNotification) => {
-      const alreadyExists = notificationsRef.current.some((item) => item._id === notification._id)
-      setNotifications((prev) => {
-        const next = mergeNotifications(prev, [notification])
-        notificationsRef.current = next
-        return next
-      })
-
-      if (!alreadyExists && !notification.read) {
-        setUnreadCount((prev) => prev + 1)
-      }
-    })
-
-    socket.on('connect_error', () => {
-      // API polling/fetch on open still keeps the bell correct if realtime is unavailable.
-    })
-
+    const intervalId = window.setInterval(fetchUnreadCount, NOTIFICATION_COUNT_POLL_MS)
     return () => {
-      socket.removeAllListeners()
-      socket.disconnect()
-      socketRef.current = null
+      window.clearInterval(intervalId)
     }
-  }, [isAuthenticated, token])
+  }, [fetchUnreadCount, isAuthenticated])
 
   useEffect(() => {
     if (!isOpen) return
@@ -453,6 +386,13 @@ export default function NotificationBell({ isScrolled = false, compact = false }
 
       router.push(targetPath, { scroll: false })
     }
+  }
+
+  const handleRefresh = async () => {
+    if (isAuthenticated) {
+      await fetchNotifications()
+    }
+    await checkVersionNotification()
   }
 
   const handleMarkAllRead = async () => {
@@ -683,14 +623,24 @@ export default function NotificationBell({ isScrolled = false, compact = false }
                 )}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleMarkAllRead}
-              disabled={totalUnread === 0 || isMarkingAll}
-              className="shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-red-300 transition hover:bg-red-500/10 hover:text-red-200 disabled:cursor-not-allowed disabled:text-gray-600 sm:text-xs"
-            >
-              {isMarkingAll ? t('marking') : t('markAllRead')}
-            </button>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isLoading}
+                className="rounded-md px-2 py-1 text-[11px] font-medium text-sky-300 transition hover:bg-sky-500/10 hover:text-sky-200 disabled:cursor-not-allowed disabled:text-gray-600 sm:text-xs"
+              >
+                {t('refresh')}
+              </button>
+              <button
+                type="button"
+                onClick={handleMarkAllRead}
+                disabled={totalUnread === 0 || isMarkingAll}
+                className="rounded-md px-2 py-1 text-[11px] font-medium text-red-300 transition hover:bg-red-500/10 hover:text-red-200 disabled:cursor-not-allowed disabled:text-gray-600 sm:text-xs"
+              >
+                {isMarkingAll ? t('marking') : t('markAllRead')}
+              </button>
+            </div>
           </div>
 
           <div className={notificationBodyClassName}>

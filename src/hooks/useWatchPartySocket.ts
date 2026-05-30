@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { useTranslations } from 'next-intl';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -15,6 +16,12 @@ export interface RoomStatus {
   host_name: string;
   is_host: boolean;
   stream_url: string;
+  members?: {
+    user_id: string;
+    username: string;
+    avatar?: string;
+    is_host: boolean;
+  }[];
 }
 
 export interface ChatMessage {
@@ -23,6 +30,7 @@ export interface ChatMessage {
   message: string;
   sent_at: string;
   type?: 'user' | 'system';
+  systemKind?: 'join' | 'leave' | 'play' | 'pause' | 'sync' | 'react';
 }
 
 export interface EmojiReaction {
@@ -35,6 +43,7 @@ export interface EmojiReaction {
 export interface UserEvent {
   user_id: string;
   username: string;
+  avatar?: string;
   member_count: number;
 }
 
@@ -81,6 +90,7 @@ export function useWatchPartySocket({
   onHostBufferEnd,
   onError,
 }: UseWatchPartySocketOptions) {
+  const t = useTranslations('StreamingRoom');
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
@@ -145,7 +155,7 @@ export function useWatchPartySocket({
     socket.on('connect_error', (err) => {
       console.error('[WP] Connection error:', err.message);
       if (err.message.includes('AUTH_ERROR')) {
-        callbacksRef.current.onError?.({ message: 'Authentication failed. Please sign in again.' });
+        callbacksRef.current.onError?.({ message: t('authFailed') });
       }
     });
 
@@ -228,7 +238,7 @@ export function useWatchPartySocket({
       socketRef.current = null;
       setIsConnected(false);
     };
-  }, [roomId, token]);
+  }, [roomId, token, t]);
 
   // ─── Emit functions ───────────────────────────────────────
 

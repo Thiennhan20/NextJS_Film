@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import {
   Copy, Check, ArrowLeft, Users, Hash, Send, Smile,
   Crown, Lock, Unlock, LogOut, Radio, Clock, AlertTriangle, Share2, ChevronDown
@@ -50,6 +51,8 @@ function StreamingRoomContent() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasNewMessage, setHasNewMessage] = useState(false);
+  const [roomMembers, setRoomMembers] = useState<{ user_id: string; username: string; avatar?: string; is_host: boolean }[]>([]);
+  const [showMembers, setShowMembers] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const syncLockRef = useRef(false); // Prevents feedback loops
@@ -90,6 +93,19 @@ function StreamingRoomContent() {
     setTimeout(() => setNotification(''), 4000);
   }, []);
 
+  const getStatusLabel = (status: RoomStatus['status']) => {
+    switch (status) {
+      case 'PLAYING':
+        return t('statusPlaying');
+      case 'PAUSED':
+        return t('statusPaused');
+      case 'ENDED':
+        return t('statusEnded');
+      default:
+        return t('statusWaiting');
+    }
+  };
+
   // ─── WebSocket ──────────────────────────────────────────
 
   const {
@@ -117,6 +133,15 @@ function StreamingRoomContent() {
 
       if (status.stream_url) {
         setStreamUrl(status.stream_url);
+      }
+
+      // Sync members list
+      if (status.members) {
+        setRoomMembers(status.members);
+      } else {
+        setRoomMembers([
+          { user_id: status.is_host ? userId : 'host', username: status.host_name, is_host: true }
+        ]);
       }
 
       // Apply initial position + auto-play if host is playing
@@ -157,6 +182,13 @@ function StreamingRoomContent() {
       videoRef.current.play().catch(() => {});
       setRoomStatus(prev => prev ? { ...prev, status: 'PLAYING' } : prev);
       setTimeout(() => { syncLockRef.current = false; }, 500);
+
+      // Add system message
+      setChatMessages(prev => [...prev, {
+        user_id: 'system', username: t('systemUser'),
+        message: t('playedVideo', { host: roomStatus?.host_name || t('hostFallback') }),
+        sent_at: new Date().toISOString(), type: 'system', systemKind: 'play',
+      }]);
     },
 
     onPause: ({ position_sec }) => {
@@ -169,6 +201,13 @@ function StreamingRoomContent() {
       setWaitReason(null);
       setRoomStatus(prev => prev ? { ...prev, status: 'PAUSED' } : prev);
       setTimeout(() => { syncLockRef.current = false; }, 500);
+
+      // Add system message
+      setChatMessages(prev => [...prev, {
+        user_id: 'system', username: t('systemUser'),
+        message: t('pausedVideo', { host: roomStatus?.host_name || t('hostFallback') }),
+        sent_at: new Date().toISOString(), type: 'system', systemKind: 'pause',
+      }]);
     },
 
     onSeek: ({ position_sec }) => {
@@ -180,37 +219,52 @@ function StreamingRoomContent() {
 
     onSyncToggle: ({ force_sync }) => {
       setForceSync(force_sync);
-      showNotification(force_sync ? '🔒 Force sync enabled by host' : '🔓 Free seek enabled by host');
+      const toggleMsg = force_sync ? t('forceSyncEnabledNotice') : t('freeSeekEnabledNotice');
+      showNotification(`🔒 ${toggleMsg}`);
+      setChatMessages(prev => [...prev, {
+        user_id: 'system', username: t('systemUser'),
+        message: force_sync
+          ? t('forceSyncEnabledMessage', { host: roomStatus?.host_name || t('hostFallback') })
+          : t('freeSeekEnabledMessage', { host: roomStatus?.host_name || t('hostFallback') }),
+        sent_at: new Date().toISOString(), type: 'system', systemKind: 'sync',
+      }]);
     },
 
     onChange: ({ stream_url, title }) => {
       setStreamUrl(stream_url);
       if (title) setRoomTitle(title);
-      showNotification('🎬 Host changed the stream');
+      showNotification(`🎬 ${t('streamChanged')}`);
     },
 
-    onUserJoined: ({ username, member_count }) => {
+    onUserJoined: ({ username, user_id, avatar, member_count }) => {
       setMemberCount(member_count);
-      showNotification(`👋 ${username} joined the room`);
+      showNotification(`👋 ${t('userJoined', { user: username })}`);
       setChatMessages(prev => [...prev, {
-        user_id: 'system', username: 'System',
-        message: `${username} joined the room`,
-        sent_at: new Date().toISOString(), type: 'system',
+        user_id: 'system', username: t('systemUser'),
+        message: t('userJoined', { user: username }),
+        sent_at: new Date().toISOString(), type: 'system', systemKind: 'join',
       }]);
+      // Update roomMembers
+      setRoomMembers(prev => {
+        if (prev.some(m => m.user_id === user_id)) return prev;
+        return [...prev, { user_id, username, avatar, is_host: false }];
+      });
     },
 
-    onUserLeft: ({ username, member_count }) => {
+    onUserLeft: ({ username, user_id, member_count }) => {
       setMemberCount(member_count);
-      showNotification(`🚪 ${username} left the room`);
+      showNotification(`🚪 ${t('userLeft', { user: username })}`);
       setChatMessages(prev => [...prev, {
-        user_id: 'system', username: 'System',
-        message: `${username} left the room`,
-        sent_at: new Date().toISOString(), type: 'system',
+        user_id: 'system', username: t('systemUser'),
+        message: t('userLeft', { user: username }),
+        sent_at: new Date().toISOString(), type: 'system', systemKind: 'leave',
       }]);
+      // Update roomMembers
+      setRoomMembers(prev => prev.filter(m => m.user_id !== user_id));
     },
 
     onKick: () => {
-      showNotification('You have been removed from the room.');
+      showNotification(t('removedFromRoom'));
       setTimeout(() => router.push('/streaming-lobby'), 3000);
     },
 
@@ -298,9 +352,9 @@ function StreamingRoomContent() {
         setFloatingEmojis(prev => prev.filter(e => e.id !== id));
       }, 2000);
       setChatMessages(prev => [...prev, {
-        user_id: 'system', username: 'System',
-        message: `${emojiUser} reacted ${emoji}`,
-        sent_at: new Date().toISOString(), type: 'system',
+        user_id: 'system', username: t('systemUser'),
+        message: t('reactedWithEmoji', { user: emojiUser, emoji }),
+        sent_at: new Date().toISOString(), type: 'system', systemKind: 'react',
       }]);
     },
 
@@ -533,9 +587,9 @@ function StreamingRoomContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex flex-col">
-      {/* ─── Top Bar ─────────────────────────────────────── */}
-      <div className="bg-black/60 backdrop-blur-sm border-b border-gray-800 z-40">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5">
+      {/* ─── Top HUD Bar (Floating in non-fullscreen) ─── */}
+      <div className={`z-40 w-full ${isPlayerFullscreen ? 'bg-black/60 border-b border-gray-800' : 'max-w-7xl mx-auto px-2 sm:px-6 pt-3 shrink-0'}`}>
+        <div className={isPlayerFullscreen ? 'px-3 sm:px-6 py-2.5' : 'bg-black/40 backdrop-blur-xl border border-white/[0.05] rounded-xl px-4 py-2.5 shadow-2xl'}>
           <div className="flex items-center justify-between">
             {/* Left */}
             <div className="flex items-center gap-3 sm:gap-5 min-w-0">
@@ -550,7 +604,7 @@ function StreamingRoomContent() {
                 <button
                   onClick={handleCopyRoomId}
                   className="p-1 text-gray-500 hover:text-yellow-400 transition-colors rounded"
-                  title="Copy Room ID"
+                  title={t('copyRoomId')}
                 >
                   {copiedId ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
                 </button>
@@ -558,9 +612,9 @@ function StreamingRoomContent() {
 
               <div className="hidden sm:flex items-center gap-1.5">
                 {isConnected ? (
-                  <><div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" /><span className="text-xs text-green-400">Connected</span></>
+                  <><div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" /><span className="text-xs text-green-400">{t('connected')}</span></>
                 ) : (
-                  <><div className="w-2 h-2 bg-red-400 rounded-full" /><span className="text-xs text-red-400">Disconnected</span></>
+                  <><div className="w-2 h-2 bg-red-400 rounded-full" /><span className="text-xs text-red-400">{t('disconnected')}</span></>
                 )}
               </div>
             </div>
@@ -569,26 +623,84 @@ function StreamingRoomContent() {
             <div className="flex items-center gap-2 sm:gap-4">
               {isHost && (
                 <span className="flex items-center gap-1 text-yellow-400 text-xs font-semibold bg-yellow-500/10 px-2 py-1 rounded-md">
-                  <Crown className="h-3 w-3" /> Host
+                  <Crown className="h-3 w-3 animate-pulse" /> {t('hostBadge')}
                 </span>
               )}
 
-              <div className="flex items-center gap-1 text-gray-400 text-sm">
-                <Users className="h-3.5 w-3.5" />
-                <span>{memberCount}/{roomStatus?.max_users || 2}</span>
+              {/* Dynamic Member Popover Button */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowMembers(prev => !prev)}
+                  className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors text-xs sm:text-sm px-2 py-1 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-white/[0.08]"
+                  title={t('viewActiveMembers')}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  <span>{memberCount}/{roomStatus?.max_users || 2}</span>
+                  <ChevronDown className={`h-3 w-3 transition-transform ${showMembers ? 'rotate-180' : ''}`} />
+                </button>
+
+                <AnimatePresence>
+                  {showMembers && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 mt-2 w-48 bg-gray-950/95 backdrop-blur-xl border border-white/[0.08] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.7)] p-2 z-[60]"
+                    >
+                      <div className="text-[10px] text-gray-500 px-2 py-1 uppercase tracking-wider font-semibold border-b border-white/[0.05] mb-1">
+                        {t('activeMembersCount', { count: roomMembers.length })}
+                      </div>
+                      <div className="space-y-0.5 max-h-[160px] overflow-y-auto chat-scrollbar">
+                        {roomMembers.length === 0 ? (
+                          <div className="text-center py-2 text-xs text-gray-600">{t('noMembers')}</div>
+                        ) : (
+                          roomMembers.map(member => (
+                            <div key={member.user_id} className="flex items-center justify-between px-2 py-1 rounded hover:bg-white/[0.03] transition-colors">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {member.avatar ? (
+                                  <Image
+                                    src={member.avatar}
+                                    alt={member.username}
+                                    width={22}
+                                    height={22}
+                                    unoptimized
+                                    className="w-5.5 h-5.5 rounded-full object-cover shrink-0 shadow-sm border border-gray-600/50"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                                  />
+                                ) : null}
+                                <div className={`w-5.5 h-5.5 rounded-full bg-gradient-to-br ${getAvatarGradient(member.user_id)} flex items-center justify-center text-white text-[9px] font-bold shrink-0 shadow-sm ${member.avatar ? 'hidden' : ''}`}>
+                                  {member.username?.charAt(0)?.toUpperCase() || '?'}
+                                </div>
+                                <span className="text-xs text-gray-300 truncate max-w-[100px]" title={member.username}>
+                                  {member.username}
+                                </span>
+                              </div>
+                              {member.is_host && (
+                                <span title={t('roomHost')} className="shrink-0">
+                                  <Crown className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500/20" />
+                                </span>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               <button onClick={handleCopyInvite} className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-all text-xs border border-gray-700">
                 {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Share2 className="h-3.5 w-3.5" />}
-                <span className="hidden sm:inline">{copied ? 'Copied!' : 'Share'}</span>
+                <span className="hidden sm:inline">{copied ? t('copied') : t('share')}</span>
               </button>
 
               {isHost && (
-                <button onClick={handleToggleSync} title={forceSync ? 'Force sync ON' : 'Free seek ON'}
+                <button onClick={handleToggleSync} title={forceSync ? t('forceSyncOn') : t('freeSeekOn')}
                   className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs border transition-all ${forceSync ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' : 'bg-gray-800 text-gray-400 border-gray-700'}`}
                 >
                   {forceSync ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
-                  <span className="hidden sm:inline">{forceSync ? 'Sync' : 'Free'}</span>
+                  <span className="hidden sm:inline">{forceSync ? t('syncLabel') : t('freeLabel')}</span>
                 </button>
               )}
             </div>
@@ -624,7 +736,7 @@ function StreamingRoomContent() {
                 roomStatus.status === 'WAITING' ? 'bg-blue-500/20 text-blue-400' :
                 'bg-gray-500/20 text-gray-400'
               }`}>
-                {roomStatus.status}
+                {getStatusLabel(roomStatus.status)}
               </span>
             )}
           </div>
@@ -636,7 +748,7 @@ function StreamingRoomContent() {
           className={`${
             isPlayerFullscreen
               ? 'flex flex-row w-full h-full bg-black'
-              : 'flex flex-col flex-grow gap-2 sm:gap-0 sm:flex-row sm:flex-grow-0 sm:h-[50vh] md:h-[55vh] lg:h-[60vh] xl:h-[65vh] 2xl:h-[68vh]'
+              : 'flex flex-col flex-grow gap-3 sm:gap-4 sm:flex-row sm:flex-grow-0 sm:h-[50vh] md:h-[55vh] lg:h-[60vh] xl:h-[65vh] 2xl:h-[68vh]'
           }`}
         >
           {/* Video Player */}
@@ -644,7 +756,7 @@ function StreamingRoomContent() {
             <div className={`relative overflow-hidden bg-black ${
               isPlayerFullscreen
                 ? 'w-full h-full'
-                : `${showChat ? 'rounded-xl sm:rounded-r-none sm:rounded-l-xl' : 'rounded-xl'} border border-gray-800 ${showChat ? 'sm:border-r-0' : ''} w-full max-h-[30vh] sm:max-h-none sm:h-full`
+                : 'rounded-xl border border-white/[0.08] shadow-2xl w-full max-h-[30vh] sm:max-h-none sm:h-full'
             }`}>
               {streamUrl ? (
                 <EnhancedMoviePlayer
@@ -666,22 +778,32 @@ function StreamingRoomContent() {
                 <div className="flex items-center justify-center h-full min-h-[200px]">
                   <div className="text-center">
                     <Clock className="h-8 w-8 text-gray-600 mx-auto mb-2" />
-                    <p className="text-gray-400 text-sm font-medium">Waiting for stream...</p>
-                    <p className="text-gray-500 text-xs mt-1">The host will start the stream soon</p>
+                    <p className="text-gray-400 text-sm font-medium">{t('waitingForStream')}</p>
+                    <p className="text-gray-500 text-xs mt-1">{t('hostWillStartSoon')}</p>
                   </div>
                 </div>
               )}
 
-              {/* Floating emoji reactions */}
+              {/* Wobble Sinusoidal reactions floating animation */}
               <AnimatePresence>
                 {floatingEmojis.map(({ id, emoji, x }) => (
                   <motion.div
                     key={id}
-                    initial={{ opacity: 1, y: 0, x: `${x}%` }}
-                    animate={{ opacity: 0, y: -120 }}
+                    initial={{ opacity: 0, y: 0, scale: 0 }}
+                    animate={{
+                      opacity: [0, 1, 1, 0],
+                      scale: [0, 1.3, 1, 0.8],
+                      y: -240,
+                      x: [0, Math.sin(id) * 35, Math.sin(id + 1) * -35, Math.sin(id + 2) * 15, 0],
+                    }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 2, ease: 'easeOut' }}
-                    className="absolute bottom-4 text-3xl pointer-events-none"
+                    transition={{
+                      duration: 2.2,
+                      ease: 'easeOut',
+                      opacity: { times: [0, 0.1, 0.8, 1] },
+                      scale: { times: [0, 0.15, 0.8, 1] },
+                    }}
+                    className="absolute bottom-6 text-3xl pointer-events-none z-50 select-none filter drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
                     style={{ left: `${x}%` }}
                   >
                     {emoji}
@@ -702,9 +824,9 @@ function StreamingRoomContent() {
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-md border border-gray-600/40 shadow-lg">
                       <div className="w-3.5 h-3.5 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
                       <span className="text-[11px] text-gray-200 font-medium whitespace-nowrap">
-                        {waitReason === 'host_paused' ? 'Host paused — waiting...' :
-                         waitReason === 'host_buffering' ? 'Host buffering...' :
-                         'Syncing with host...'}
+                        {waitReason === 'host_paused' ? t('hostPausedWaiting') :
+                         waitReason === 'host_buffering' ? t('hostBuffering') :
+                         t('syncingWithHost')}
                       </span>
                     </div>
                   </motion.div>
@@ -713,24 +835,24 @@ function StreamingRoomContent() {
             </div>
           </div>
 
-          {/* ─── Chat Panel ─── */}
+          {/* ─── Chat Panel (Ultra Glassmorphism Sidebar) ─── */}
           {showChat && (
             <div
               className={`flex flex-col shrink-0 overflow-hidden relative ${
                 isPlayerFullscreen
                   ? 'w-[340px] h-full bg-gray-950/95 backdrop-blur-md border-l border-gray-700/50'
-                  : 'w-full h-[40vh] sm:h-full sm:flex-grow-0 sm:w-[280px] md:w-[300px] lg:w-[320px] xl:w-[340px] bg-gray-900/70 backdrop-blur-sm border border-gray-800 rounded-xl sm:rounded-l-none sm:rounded-r-xl sm:border-l-0'
+                  : 'w-full h-[40vh] sm:h-full sm:flex-grow-0 sm:w-[280px] md:w-[300px] lg:w-[320px] xl:w-[340px] bg-white/[0.02] backdrop-blur-md border border-white/[0.08] rounded-xl shadow-2xl'
               }`}
             >
               {/* Chat Header */}
-              <div className="px-3 sm:px-4 py-2 sm:py-2.5 border-b border-gray-800/80 flex items-center justify-between shrink-0">
+              <div className="px-3 sm:px-4 py-2 sm:py-2.5 border-b border-white/[0.05] flex items-center justify-between shrink-0">
                 <span className="text-xs sm:text-sm font-semibold text-gray-200">{t('roomChat')}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] sm:text-[11px] text-gray-500">{chatMessages.length}</span>
                   <button
                     onClick={() => setShowChat(false)}
                     className="text-gray-400 hover:text-white transition-colors p-1 rounded-md hover:bg-gray-700/50"
-                    title="Close chat"
+                    title={t('closeChat')}
                   >
                     <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
@@ -741,7 +863,7 @@ function StreamingRoomContent() {
               <div
                 ref={chatScrollRef}
                 onScroll={handleChatScroll}
-                className="chat-scrollbar flex-grow overflow-y-auto px-2 sm:px-3 py-1.5 sm:py-2 space-y-0.5 sm:space-y-1"
+                className="chat-scrollbar flex-grow overflow-y-auto px-2 sm:px-3 py-1.5 sm:py-2 space-y-1.5 sm:space-y-2"
               >
                 {chatMessages.length === 0 && (
                   <div className="text-center text-gray-600 text-xs py-4 sm:py-8">
@@ -750,11 +872,42 @@ function StreamingRoomContent() {
                 )}
 
                 {chatMessages.map((msg, i) => (
-                  msg.type === 'system' ? (
-                    <div key={i} className="text-center text-[10px] sm:text-[11px] text-gray-500 py-0.5">
-                      {msg.message}
-                    </div>
-                  ) : (
+                  msg.type === 'system' ? (() => {
+                    const isJoin = msg.systemKind === 'join';
+                    const isLeave = msg.systemKind === 'leave';
+                    const isPause = msg.systemKind === 'pause';
+                    const isPlay = msg.systemKind === 'play';
+                    const isReact = msg.systemKind === 'react';
+
+                    let bgClass = 'bg-gray-800/40 text-gray-400 border-gray-700/30';
+                    let icon = '📢';
+
+                    if (isJoin) {
+                      bgClass = 'bg-green-500/10 text-green-400 border-green-500/20';
+                      icon = '👋';
+                    } else if (isLeave) {
+                      bgClass = 'bg-red-500/10 text-red-400 border-red-500/20';
+                      icon = '🚪';
+                    } else if (isPause) {
+                      bgClass = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                      icon = '👑';
+                    } else if (isPlay) {
+                      bgClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                      icon = '▶️';
+                    } else if (isReact) {
+                      bgClass = 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+                      icon = '✨';
+                    }
+
+                    return (
+                      <div key={i} className="flex justify-center py-1 sm:py-1.5">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] sm:text-[11px] border shadow-sm ${bgClass}`}>
+                          <span>{icon}</span>
+                          <span className="font-semibold">{msg.message}</span>
+                        </span>
+                      </div>
+                    );
+                  })() : (
                     <div key={i} className="flex items-start gap-1.5 sm:gap-2 py-0.5 hover:bg-white/[0.03] rounded px-1 -mx-1 transition-colors">
                       <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-br ${getAvatarGradient(msg.user_id)} flex items-center justify-center text-[9px] sm:text-[10px] font-bold text-white shrink-0 mt-0.5`}>
                         {msg.username?.charAt(0)?.toUpperCase() || '?'}
@@ -784,21 +937,22 @@ function StreamingRoomContent() {
                 )}
               </AnimatePresence>
 
-              {/* Emoji Bar */}
+              {/* Emoji Bar — Absolute Popover nổi lên trên tin nhắn */}
               <AnimatePresence>
                 {showEmojis && (
                   <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="border-t border-gray-800/80 overflow-hidden"
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className="absolute bottom-12 left-2 right-2 z-50 bg-gray-950/95 backdrop-blur-md border border-gray-800 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.7)] p-2 max-h-[150px] overflow-y-auto chat-scrollbar"
                   >
-                    <div className="flex flex-wrap gap-0.5 sm:gap-1 px-2 sm:px-3 py-1.5 sm:py-2">
+                    <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5 justify-items-center">
                       {EMOJIS.map(emoji => (
                         <button
                           key={emoji}
                           onClick={() => handleEmojiReaction(emoji)}
-                          className="text-lg sm:text-xl hover:scale-125 transition-transform p-0.5 sm:p-1"
+                          className="text-xl hover:scale-125 active:scale-95 transition-transform p-1 rounded hover:bg-white/10"
                         >
                           {emoji}
                         </button>
@@ -822,7 +976,7 @@ function StreamingRoomContent() {
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                    placeholder="Type a message..."
+                    placeholder={t('chatPlaceholder')}
                     className="flex-grow bg-gray-800/50 border border-gray-700/40 rounded-full px-3 py-1 sm:py-1.5 text-base text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-yellow-500/30 focus:border-yellow-500/30 transition-all"
                     maxLength={500}
                   />
@@ -842,10 +996,10 @@ function StreamingRoomContent() {
         {/* Host info bar (hidden in fullscreen) */}
         {!isPlayerFullscreen && roomStatus && (
           <div className="flex items-center justify-between text-xs text-gray-500">
-            <span>Hosted by <span className="text-gray-300 font-medium">{roomStatus.host_name}</span></span>
+            <span>{t('hostedBy')} <span className="text-gray-300 font-medium">{roomStatus.host_name}</span></span>
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              {forceSync ? 'Synced playback' : 'Free seek enabled'}
+              {forceSync ? t('syncedPlayback') : t('freeSeekEnabled')}
             </span>
           </div>
         )}
@@ -857,12 +1011,14 @@ function StreamingRoomContent() {
 // ─── Page Export with Suspense ───────────────────────────────
 
 export default function StreamingRoomPage() {
+  const t = useTranslations('StreamingRoom');
+
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-gray-400">Joining room...</span>
+          <span className="text-sm text-gray-400">{t('joiningRoom')}</span>
         </div>
       </div>
     }>

@@ -29,6 +29,7 @@
     "systemUpdates": "System updates",
     "markAllRead": "Mark all read",
     "marking": "Saving...",
+    "refresh": "Refresh",
     "loading": "Loading notifications...",
     "empty": "No notifications yet",
     "failedLoad": "Could not load notifications",

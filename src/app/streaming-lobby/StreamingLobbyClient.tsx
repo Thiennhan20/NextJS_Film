@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { Plus, Hash, ArrowRight, Radio, Copy, Check, LogIn, Film, Tv, Clock, Users, Trash2, RefreshCw, AlertTriangle, X, Info } from 'lucide-react';
+import { Plus, Hash, ArrowRight, Radio, Copy, Check, LogIn, Film, Tv, Clock, Users, Trash2, RefreshCw, AlertTriangle, X, Info, Sparkles, Activity, TrendingUp, HelpCircle } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
@@ -14,6 +14,9 @@ interface Particle {
   y: number;
   size: number;
   duration: number;
+  xOffset: number;
+  yOffset: number;
+  scale: number;
 }
 
 function StreamingLobbyContent() {
@@ -82,11 +85,14 @@ function StreamingLobbyContent() {
   const [maxRooms, setMaxRooms] = useState(30);
 
   useEffect(() => {
-    const newParticles = Array.from({ length: 100 }).map(() => ({
+    const newParticles = Array.from({ length: 25 }).map(() => ({
       x: Math.random() * 100,
       y: Math.random() * 100,
-      size: Math.random() * 3 + 0.5,
-      duration: Math.random() * 25 + 8,
+      size: Math.random() * 6 + 4, // 4px to 10px
+      duration: Math.random() * 20 + 15,
+      xOffset: Math.random() * 60 - 30,
+      yOffset: Math.random() * -100 - 40,
+      scale: Math.random() * 0.8 + 1.2,
     }));
     setParticles(newParticles);
   }, []);
@@ -130,7 +136,7 @@ function StreamingLobbyContent() {
       setActiveRooms(prev => prev.filter(r => r.room_id !== roomId));
       if (createdRoom?.roomId === roomId) setCreatedRoom(null);
     } catch {
-      setError('Failed to delete room. Please try again.');
+      setError(t('deleteRoomFailed'));
       setTimeout(() => setError(''), 4000);
     } finally {
       setDeletingRoomId(null);
@@ -142,6 +148,19 @@ function StreamingLobbyContent() {
     const m = Math.floor((ttlSeconds % 3600) / 60);
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m`;
+  };
+
+  const getRoomStatusLabel = (status: string) => {
+    switch (status) {
+      case 'PLAYING':
+        return t('playing');
+      case 'PAUSED':
+        return t('paused');
+      case 'ENDED':
+        return t('ended');
+      default:
+        return t('waiting');
+    }
   };
 
   // Generate deterministic gradient color for host avatar based on host_id
@@ -197,7 +216,7 @@ function StreamingLobbyContent() {
         });
         setError(errData.error || t('duplicateRoomError'));
       } else {
-        setError(errData?.error || 'Failed to create room. Please try again.');
+        setError(errData?.error || t('createRoomFailed'));
       }
     } finally {
       setLoading(false);
@@ -230,7 +249,7 @@ function StreamingLobbyContent() {
         setJoinError(t('roomNotFound'));
       } else {
         console.error('Error joining room:', err);
-        setJoinError(axiosErr?.response?.data?.error || 'Failed to join room.');
+        setJoinError(axiosErr?.response?.data?.error || t('joinRoomFailed'));
       }
     } finally {
       setIsJoining(false);
@@ -267,18 +286,18 @@ function StreamingLobbyContent() {
         {particles.map((p, i) => (
           <motion.div
             key={i}
-            className={`absolute rounded-full ${
-              i % 5 === 0 ? 'bg-yellow-400/40' :
-              i % 5 === 1 ? 'bg-purple-400/35' :
-              i % 5 === 2 ? 'bg-blue-400/30' :
-              i % 5 === 3 ? 'bg-pink-400/25' :
-              'bg-green-400/20'
+            className={`absolute rounded-full blur-[2px] ${
+              i % 5 === 0 ? 'bg-yellow-400/25' :
+              i % 5 === 1 ? 'bg-purple-400/20' :
+              i % 5 === 2 ? 'bg-blue-400/15' :
+              i % 5 === 3 ? 'bg-pink-400/15' :
+              'bg-green-400/10'
             }`}
             animate={{
-              x: [0, Math.random() * 50 - 25, 0],
-              y: [0, Math.random() * -50 - 10, 0],
-              scale: [1, Math.random() * 1.2 + 1.2, 1],
-              opacity: [0.15, 0.7, 0.15],
+              x: [0, p.xOffset, 0],
+              y: [0, p.yOffset, 0],
+              scale: [1, p.scale, 1],
+              opacity: [0.1, 0.4, 0.1],
             }}
             transition={{
               duration: p.duration,
@@ -302,18 +321,75 @@ function StreamingLobbyContent() {
         <div className="absolute -bottom-20 -left-20 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
       </div>
 
-      <div className="relative z-10 w-full max-w-2xl">
-        {/* Title */}
-        <motion.div
-          initial={{ opacity: 0, y: -15 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
-        >
-          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-500 bg-clip-text text-transparent mb-2">
-            {t('title')}
-          </h1>
-          <p className="text-sm text-gray-400">{t('subtitle')}</p>
-        </motion.div>
+      <div className="relative z-10 w-full max-w-7xl px-0 sm:px-4">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+          {/* ─── Left Sidebar (Desktop only) ─── */}
+          <div className="hidden lg:flex flex-col gap-4 col-span-1">
+            {/* Quick Start Guide */}
+            <div className="bg-white/[0.02] backdrop-blur-md border border-white/[0.06] rounded-2xl p-4 shadow-lg">
+              <h3 className="text-xs font-bold text-yellow-400 mb-3 flex items-center gap-1.5 uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+                {t('experienceGuide')}
+              </h3>
+              <div className="space-y-3.5 text-xs text-gray-400">
+                <div className="flex gap-2">
+                  <div className="w-5 h-5 rounded bg-white/5 flex items-center justify-center font-bold text-yellow-400 shrink-0">1</div>
+                  <p className="leading-relaxed">{t('experienceStep1')}</p>
+                </div>
+                <div className="flex gap-2">
+                  <div className="w-5 h-5 rounded bg-white/5 flex items-center justify-center font-bold text-yellow-400 shrink-0">2</div>
+                  <p className="leading-relaxed">{t('experienceStep2')}</p>
+                </div>
+                <div className="flex gap-2">
+                  <div className="w-5 h-5 rounded bg-white/5 flex items-center justify-center font-bold text-yellow-400 shrink-0">3</div>
+                  <p className="leading-relaxed">{t('experienceStep3')}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* System Status dashboard */}
+            <div className="bg-white/[0.02] backdrop-blur-md border border-white/[0.06] rounded-2xl p-4 shadow-lg">
+              <h3 className="text-xs font-bold text-blue-400 mb-3 flex items-center gap-1.5 uppercase tracking-wider">
+                <Activity className="w-3.5 h-3.5 text-blue-400" />
+                {t('systemStatus')}
+              </h3>
+              <div className="space-y-2.5 text-xs text-gray-400">
+                <div className="flex items-center justify-between">
+                  <span>{t('serverStatus')}</span>
+                  <span className="flex items-center gap-1 text-green-400 font-medium">
+                    <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                    {t('online')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>{t('activeRooms')}</span>
+                  <span className="text-white font-medium">{activeRooms.length} / {maxRooms}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>{t('maxUsersPerRoom')}</span>
+                  <span className="text-white font-medium">{t('twoUsers')}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>{t('sessionLimit')}</span>
+                  <span className="text-white font-medium">{t('sixHours')}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ─── Center Column (Main Content) ─── */}
+          <div className="col-span-1 lg:col-span-2 flex flex-col gap-4">
+            {/* Title */}
+            <motion.div
+              initial={{ opacity: 0, y: -15 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center mb-8"
+            >
+              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-500 bg-clip-text text-transparent mb-2">
+                {t('title')}
+              </h1>
+              <p className="text-sm text-gray-400">{t('subtitle')}</p>
+            </motion.div>
 
         {/* Room Created Card */}
         <AnimatePresence>
@@ -348,7 +424,7 @@ function StreamingLobbyContent() {
                 </div>
                 <div className="bg-gray-800/50 rounded-lg p-3">
                   <span className="text-gray-400 text-xs flex items-center gap-1"><Clock className="h-3 w-3" /> {t('expires')}</span>
-                  <p className="text-gray-300 font-semibold">6 hours</p>
+                  <p className="text-gray-300 font-semibold">{t('sixHours')}</p>
                 </div>
               </div>
 
@@ -399,7 +475,7 @@ function StreamingLobbyContent() {
                       <Film className="h-4 w-4 text-purple-400" />
                     )}
                     <span className="text-xs text-gray-400 uppercase tracking-wide">
-                      {typeFromParams === 'tvshow' ? 'TV Show' : 'Movie'}
+                      {typeFromParams === 'tvshow' ? t('tvShow') : t('movie')}
                     </span>
                   </div>
                   <p className="text-sm text-white font-medium truncate" title={titleFromParams}>
@@ -407,7 +483,7 @@ function StreamingLobbyContent() {
                   </p>
                   {typeFromParams === 'tvshow' && seasonFromParams && episodeFromParams && (
                     <p className="text-xs text-gray-400 mt-0.5">
-                      Season {seasonFromParams} • Episode {episodeFromParams}
+                      {t('seasonEpisode', { season: seasonFromParams, episode: episodeFromParams })}
                     </p>
                   )}
                   <div className="flex items-center gap-2 mt-2">
@@ -590,7 +666,7 @@ function StreamingLobbyContent() {
               onClick={fetchRooms}
               disabled={loadingRooms}
               className="p-1.5 text-gray-500 hover:text-yellow-400 transition-colors rounded-lg hover:bg-gray-800"
-              title="Refresh"
+              title={t('refresh')}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loadingRooms ? 'animate-spin' : ''}`} />
             </button>
@@ -608,15 +684,15 @@ function StreamingLobbyContent() {
               <p className="text-xs text-gray-600 mt-0.5">{t('createRoomStart')}</p>
             </div>
           ) : (
-            <div className="space-y-2 max-h-[300px] overflow-y-auto chat-scrollbar pr-1">
+            <div className="space-y-3 max-h-[420px] overflow-y-auto chat-scrollbar pr-1 pb-2">
               {activeRooms.map((room) => (
                 <motion.div
                   key={room.room_id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="bg-gray-800/40 backdrop-blur-sm rounded-lg p-3 border border-gray-700/40 hover:border-yellow-500/20 transition-all group"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white/[0.03] backdrop-blur-md rounded-xl p-3 sm:p-4 border border-white/[0.08] hover:border-yellow-500/40 hover:shadow-[0_0_20px_rgba(234,179,8,0.12)] transition-all duration-300 hover:-translate-y-0.5 group flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
                 >
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-grow">
                     {/* Host Avatar */}
                     {room.host_avatar ? (
                       <Image
@@ -634,18 +710,27 @@ function StreamingLobbyContent() {
                     </div>
 
                     <div className="min-w-0 flex-grow">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
                         <span className="text-xs font-mono font-bold text-yellow-300">#{room.room_id}</span>
-                        <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-full ${
-                          room.status === 'PLAYING' ? 'bg-green-500/20 text-green-400' :
-                          room.status === 'PAUSED' ? 'bg-yellow-500/20 text-yellow-400' :
-                          'bg-blue-500/20 text-blue-400'
+                        {room.title?.toLowerCase().includes('tập') || room.title?.toLowerCase().includes('episode') || room.title?.toLowerCase().includes('season') || room.title?.toLowerCase().includes('ss') ? (
+                          <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/10 uppercase tracking-wider">📺 {t('showBadge')}</span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/10 uppercase tracking-wider">🎬 {t('movieBadge')}</span>
+                        )}
+                        <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-full border ${
+                          room.status === 'PLAYING' ? 'bg-green-500/20 text-green-400 border-green-500/10' :
+                          room.status === 'PAUSED' ? 'bg-amber-500/20 text-amber-400 border-amber-500/10' :
+                          'bg-blue-500/20 text-blue-400 border-blue-500/10'
                         }`}>
-                          {room.status}
+                          {getRoomStatusLabel(room.status)}
                         </span>
                       </div>
-                      <p className="text-sm text-white font-medium truncate">{room.title || t('untitledRoom')}</p>
-                      <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-500">
+
+                      <p className="text-sm text-white font-semibold truncate" title={room.title || t('untitledRoom')}>
+                        {room.title || t('untitledRoom')}
+                      </p>
+
+                      <div className="flex items-center gap-3 mt-1.5 text-[11px] text-gray-500">
                         <span>{t('host')}: <span className="text-gray-400">{room.host_name}</span></span>
                         <span className="flex items-center gap-0.5">
                           <Users className="h-3 w-3" />
@@ -657,35 +742,90 @@ function StreamingLobbyContent() {
                         </span>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {userId === room.host_id && (
-                        <button
-                          onClick={() => setDeleteConfirmRoomId(room.room_id)}
-                          disabled={deletingRoomId === room.room_id}
-                          className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all text-xs"
-                          title="Delete room"
-                        >
-                          <Trash2 className={`h-3.5 w-3.5 ${deletingRoomId === room.room_id ? 'animate-spin' : ''}`} />
-                        </button>
-                      )}
+                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                    {userId === room.host_id && (
                       <button
-                        onClick={() => {
-                          if (!requireAuth()) return;
-                          router.push(`/streaming-room?room=${room.room_id}`);
-                        }}
-                        disabled={room.member_count >= room.max_users && userId !== room.host_id}
-                        className="px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-semibold rounded-lg hover:from-yellow-400 hover:to-amber-400 disabled:from-gray-600 disabled:to-gray-700 disabled:text-gray-400 transition-all shadow-sm"
+                        onClick={() => setDeleteConfirmRoomId(room.room_id)}
+                        disabled={deletingRoomId === room.room_id}
+                        className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                        title={t('deleteRoomTitle')}
                       >
-                        {room.member_count >= room.max_users && userId !== room.host_id ? t('full') : t('join')}
+                        <Trash2 className={`h-3.5 w-3.5 ${deletingRoomId === room.room_id ? 'animate-spin' : ''}`} />
                       </button>
-                    </div>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (!requireAuth()) return;
+                        router.push(`/streaming-room?room=${room.room_id}`);
+                      }}
+                      disabled={room.member_count >= room.max_users && userId !== room.host_id}
+                      className="px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-bold rounded-lg hover:from-yellow-400 hover:to-amber-400 disabled:from-gray-600 disabled:to-gray-700 disabled:text-gray-400 transition-all shadow-sm text-center min-w-[70px]"
+                    >
+                      {room.member_count >= room.max_users && userId !== room.host_id ? t('full') : t('join')}
+                    </button>
                   </div>
                 </motion.div>
               ))}
             </div>
           )}
         </motion.div>
+      </div>
+
+          {/* ─── Right Sidebar (Desktop only) ─── */}
+          <div className="hidden lg:flex flex-col gap-4 col-span-1">
+            {/* Trending Watch Party Movies */}
+            <div className="bg-white/[0.02] backdrop-blur-md border border-white/[0.06] rounded-2xl p-4 shadow-lg">
+              <h3 className="text-xs font-bold text-purple-400 mb-3 flex items-center gap-1.5 uppercase tracking-wider">
+                <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
+                {t('trendingShows')}
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                  <div className="w-9 h-12 bg-gradient-to-br from-red-600 to-amber-600 rounded flex items-center justify-center shrink-0 shadow-md">
+                    <Film className="w-4 h-4 text-white/70" />
+                  </div>
+                  <div className="min-w-0 flex-grow">
+                    <p className="text-xs text-white font-semibold truncate">{t('trendingTitle1')}</p>
+                    <span className="px-1 py-0.5 text-[8px] bg-red-500/20 text-red-400 rounded uppercase font-bold tracking-wider">{t('movieBadge')}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                  <div className="w-9 h-12 bg-gradient-to-br from-blue-600 to-cyan-600 rounded flex items-center justify-center shrink-0 shadow-md">
+                    <Tv className="w-4 h-4 text-white/70" />
+                  </div>
+                  <div className="min-w-0 flex-grow">
+                    <p className="text-xs text-white font-semibold truncate">{t('trendingTitle2')}</p>
+                    <span className="px-1 py-0.5 text-[8px] bg-blue-500/20 text-blue-400 rounded uppercase font-bold tracking-wider">{t('showBadge')}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                  <div className="w-9 h-12 bg-gradient-to-br from-indigo-600 to-purple-600 rounded flex items-center justify-center shrink-0 shadow-md">
+                    <Film className="w-4 h-4 text-white/70" />
+                  </div>
+                  <div className="min-w-0 flex-grow">
+                    <p className="text-xs text-white font-semibold truncate">{t('trendingTitle3')}</p>
+                    <span className="px-1 py-0.5 text-[8px] bg-purple-500/20 text-purple-400 rounded uppercase font-bold tracking-wider">{t('movieBadge')}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Cinematic Watch Rules */}
+            <div className="bg-white/[0.02] backdrop-blur-md border border-white/[0.06] rounded-2xl p-4 shadow-lg text-xs text-gray-400">
+              <h3 className="text-xs font-bold text-emerald-400 mb-3 flex items-center gap-1.5 uppercase tracking-wider">
+                <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
+                {t('watchPartyRules')}
+              </h3>
+              <ul className="space-y-2 list-disc list-inside leading-relaxed text-gray-400">
+                <li>{t('ruleRespect')}</li>
+                <li>{t('ruleNoSensitiveSpam')}</li>
+                <li>{t('ruleHeadphones')}</li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </div>
       {/* Auth Required Popup */}
       <AnimatePresence>
