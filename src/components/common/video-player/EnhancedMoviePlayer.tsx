@@ -226,6 +226,13 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     const resumeSkipTimerRef = useRef<NodeJS.Timeout | null>(null);
     const resumeCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const hasCheckedResumeRef = useRef(false);
+    const [isAndroid, setIsAndroid] = useState(false);
+
+    useEffect(() => {
+      if (typeof window !== 'undefined') {
+        setIsAndroid(/Android/i.test(navigator.userAgent));
+      }
+    }, []);
 
     // Update source popup states & ref
     const [showUpdatePopup, setShowUpdatePopup] = useState(false);
@@ -659,11 +666,17 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
 
       if (activeSavedTime > 10) {
         setControlsReady(false);
-        setResumePopup({ show: true, savedTime: activeSavedTime });
+        if (isAndroid) {
+          // Đối với Android, do lỗi giải mã video khi có lịch sử xem (cả xem tiếp lẫn xem từ đầu đều lỗi),
+          // hiển thị trực tiếp popup lỗi stuck để yêu cầu người dùng quay lại trang trước.
+          setResumeStuckNotice(true);
+        } else {
+          setResumePopup({ show: true, savedTime: activeSavedTime });
+        }
       } else {
         setControlsReady(true);
       }
-    }, [savedTime, savedWatchUrl, watchUrl, ref, hasLoadedSavedProgress]);
+    }, [savedTime, savedWatchUrl, watchUrl, ref, hasLoadedSavedProgress, isAndroid]);
 
     // ─── Resume handlers ────────────────────────────────────
     const handleResumeContinue = useCallback(() => {
@@ -675,6 +688,15 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
 
       const video = getVideo(ref, innerRef);
       if (!video) { setResumeSeekPending(false); return; }
+
+      // Xử lý đặc biệt cho thiết bị Android: Hiện popup lỗi stuck sau 1.5s delay (tạo hiệu ứng tải)
+      if (isAndroid) {
+        resumeStuckTimerRef.current = setTimeout(() => {
+          setResumeSeekPending(false);
+          setResumeStuckNotice(true);
+        }, 1500);
+        return;
+      }
 
       let finished = false;
       let seekApplied = false;
@@ -859,7 +881,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
           }
         }, 200);
       }
-    }, [resumePopup.savedTime, ref, startHlsLoadAt]);
+    }, [resumePopup.savedTime, ref, startHlsLoadAt, isAndroid]);
 
     const handleResumeStartOver = useCallback(() => {
       setResumePopup({ show: false, savedTime: 0 });
