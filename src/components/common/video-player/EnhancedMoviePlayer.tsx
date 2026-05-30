@@ -220,6 +220,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     const [showResumeSkip, setShowResumeSkip] = useState(false);
     const resumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const resumeSkipTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const resumeCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Update source popup states & ref
     const [showUpdatePopup, setShowUpdatePopup] = useState(false);
@@ -348,11 +349,12 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       }
     }, [onSkipUpdateSource, popupNewStreamUrl, ref]);
 
-    // Cleanup resume timeouts on unmount
+    // Cleanup resume timeouts and intervals on unmount
     useEffect(() => {
       return () => {
         if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
         if (resumeSkipTimerRef.current) clearTimeout(resumeSkipTimerRef.current);
+        if (resumeCheckIntervalRef.current) clearInterval(resumeCheckIntervalRef.current);
       };
     }, []);
 
@@ -637,8 +639,12 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         finished = true;
         video.removeEventListener('seeked', onSeeked);
         video.removeEventListener('canplay', onCanPlayAfterSeek);
+        video.removeEventListener('loadedmetadata', handleMetaDataLoaded);
+        video.removeEventListener('durationchange', handleMetaDataLoaded);
+        video.removeEventListener('loadeddata', handleMetaDataLoaded);
         if (resumeTimeoutRef.current) { clearTimeout(resumeTimeoutRef.current); resumeTimeoutRef.current = null; }
         if (resumeSkipTimerRef.current) { clearTimeout(resumeSkipTimerRef.current); resumeSkipTimerRef.current = null; }
+        if (resumeCheckIntervalRef.current) { clearInterval(resumeCheckIntervalRef.current); resumeCheckIntervalRef.current = null; }
         setResumeSeekPending(false);
         setShowResumeSkip(false);
       };
@@ -661,7 +667,16 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       // Hard timeout 15s — play from wherever we are
       resumeTimeoutRef.current = setTimeout(() => finish(), 15000);
 
+      let seekedDone = false;
       const doSeek = () => {
+        if (seekedDone) return;
+        seekedDone = true;
+
+        video.removeEventListener('loadedmetadata', handleMetaDataLoaded);
+        video.removeEventListener('durationchange', handleMetaDataLoaded);
+        video.removeEventListener('loadeddata', handleMetaDataLoaded);
+        if (resumeCheckIntervalRef.current) { clearInterval(resumeCheckIntervalRef.current); resumeCheckIntervalRef.current = null; }
+
         const dur = video.duration;
         let target = savedTime;
         if (dur && isFinite(dur) && dur > 0) {
@@ -678,16 +693,27 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         pendingSeekRef.current = target;
         video.currentTime = target;
         setCurrentTime(target);
+        
+        // Re-trigger play in case seek paused it
+        video.play().catch(() => {});
       };
 
-      if (video.duration && isFinite(video.duration) && video.duration > 0) {
+      const handleMetaDataLoaded = () => {
+        doSeek();
+      };
+
+      if (video.readyState >= 1) {
         doSeek();
       } else {
-        const onMeta = () => {
-          video.removeEventListener('loadedmetadata', onMeta);
-          doSeek();
-        };
-        video.addEventListener('loadedmetadata', onMeta);
+        video.addEventListener('loadedmetadata', handleMetaDataLoaded);
+        video.addEventListener('durationchange', handleMetaDataLoaded);
+        video.addEventListener('loadeddata', handleMetaDataLoaded);
+
+        resumeCheckIntervalRef.current = setInterval(() => {
+          if (video.readyState >= 1) {
+            doSeek();
+          }
+        }, 200);
       }
     }, [resumePopup.savedTime, ref]);
 
