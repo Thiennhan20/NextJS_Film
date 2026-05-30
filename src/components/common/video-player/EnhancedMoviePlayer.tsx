@@ -221,6 +221,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     const resumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const resumeSkipTimerRef = useRef<NodeJS.Timeout | null>(null);
     const resumeCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const hasCheckedResumeRef = useRef(false);
 
     // Update source popup states & ref
     const [showUpdatePopup, setShowUpdatePopup] = useState(false);
@@ -594,9 +595,12 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         return;
       }
 
+      if (hasCheckedResumeRef.current) return;
+
       // If video is already playing, skip resume check
       const video = getVideo(ref, innerRef);
       if (video && !video.paused) {
+        hasCheckedResumeRef.current = true;
         setControlsReady(true);
         return;
       }
@@ -609,6 +613,8 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
           activeSavedTime = 0; // Reset progress — link phim đã thay đổi
         }
       }
+
+      hasCheckedResumeRef.current = true;
 
       if (activeSavedTime > 10) {
         setControlsReady(false);
