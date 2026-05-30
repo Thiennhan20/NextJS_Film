@@ -633,9 +633,10 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       video.play().catch(() => { });
 
       let finished = false;
+      let seekedDone = false;
 
-      const finish = () => {
-        if (finished) return;
+      function finish() {
+        if (finished || !video) return;
         finished = true;
         video.removeEventListener('seeked', onSeeked);
         video.removeEventListener('playing', onPlaying);
@@ -648,34 +649,25 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         if (resumeCheckIntervalRef.current) { clearInterval(resumeCheckIntervalRef.current); resumeCheckIntervalRef.current = null; }
         setResumeSeekPending(false);
         setShowResumeSkip(false);
-      };
+      }
 
-      const onSeeked = () => {
+      function onSeeked() {
         finish();
-      };
+      }
 
-      const onPlaying = () => {
+      function onPlaying() {
         finish();
-      };
+      }
 
-      const onTimeUpdate = () => {
+      function onTimeUpdate() {
+        if (!video) return;
         if (video.currentTime > 0) {
           finish();
         }
-      };
+      }
 
-      video.addEventListener('seeked', onSeeked);
-      video.addEventListener('playing', onPlaying);
-      video.addEventListener('timeupdate', onTimeUpdate);
-
-      // Show "skip" option after 5s
-      resumeSkipTimerRef.current = setTimeout(() => setShowResumeSkip(true), 5000);
-      // Hard timeout 15s — play from wherever we are
-      resumeTimeoutRef.current = setTimeout(() => finish(), 15000);
-
-      let seekedDone = false;
-      const doSeek = () => {
-        if (seekedDone) return;
+      function doSeek() {
+        if (seekedDone || !video) return;
         seekedDone = true;
 
         video.removeEventListener('loadedmetadata', handleMetaDataLoaded);
@@ -702,11 +694,20 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         
         // Re-trigger play in case seek paused it
         video.play().catch(() => {});
-      };
+      }
 
-      const handleMetaDataLoaded = () => {
+      function handleMetaDataLoaded() {
         doSeek();
-      };
+      }
+
+      video.addEventListener('seeked', onSeeked);
+      video.addEventListener('playing', onPlaying);
+      video.addEventListener('timeupdate', onTimeUpdate);
+
+      // Show "skip" option after 5s
+      resumeSkipTimerRef.current = setTimeout(() => setShowResumeSkip(true), 5000);
+      // Hard timeout 15s — play from wherever we are
+      resumeTimeoutRef.current = setTimeout(() => finish(), 15000);
 
       if (video.readyState >= 1) {
         doSeek();
