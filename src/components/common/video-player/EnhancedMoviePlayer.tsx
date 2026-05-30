@@ -239,7 +239,8 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       const hls = hlsRef.current;
       if (!hls) return;
       try {
-        hls.startLoad(position);
+        hls.stopLoad();
+        hls.startLoad(Math.max(position, 0));
       } catch {
         // hls.js can throw if the instance is already destroyed during a route change.
       }
@@ -281,6 +282,27 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         }));
       }
     }, [movieId, server, audio, title, poster, season, episode, isTVShow, userId]);
+
+    const playFromStart = useCallback((video: HTMLVideoElement) => {
+      timeOffsetRef.current = 0;
+      pendingSeekRef.current = 0;
+      startHlsLoadAt(0);
+      setCurrentTime(0);
+      setIsEnded(false);
+
+      video.play().catch(() => {});
+      video.currentTime = 0;
+      video.play().catch(() => {});
+
+      window.setTimeout(() => {
+        if (video.paused || (video.currentTime || 0) > 1) {
+          pendingSeekRef.current = 0;
+          startHlsLoadAt(0);
+          video.currentTime = 0;
+          video.play().catch(() => {});
+        }
+      }, 500);
+    }, [startHlsLoadAt]);
 
     const [playerWidth, setPlayerWidth] = useState<number>(0);
 
@@ -347,14 +369,9 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
 
       const video = getVideo(ref, innerRef);
       if (video) {
-        timeOffsetRef.current = 0;
-        pendingSeekRef.current = 0;
-        startHlsLoadAt(0);
-        video.currentTime = 0;
-        setCurrentTime(0);
-        video.play().catch(() => {});
+        playFromStart(video);
       }
-    }, [onUpdateSource, popupNewStreamUrl, ref, saveProgressAtStart, startHlsLoadAt]);
+    }, [onUpdateSource, playFromStart, popupNewStreamUrl, ref, saveProgressAtStart]);
 
     const handleCancelUpdate = useCallback(() => {
       dismissedUpdateUrlRef.current = normalizePlaybackUrl(popupNewStreamUrl);
@@ -658,6 +675,9 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       let seekApplied = false;
       let target = savedTime;
       let playRetryTimer: NodeJS.Timeout | null = null;
+      let lastObservedTime = -1;
+      let stagnantRetries = 0;
+      let lastNudgedTarget: number | null = null;
 
       const requestPlay = () => {
         video.play().catch(() => {});
@@ -670,11 +690,41 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         }
       };
 
+      const hasAdvancedPastResume = (rawTime: number) => {
+        const baseline = lastNudgedTarget ?? target;
+        return rawTime > baseline + 0.25;
+      };
+
       const retryPlayAfterSeek = () => {
         clearPlayRetry();
         playRetryTimer = setTimeout(() => {
           if (finished || !seekApplied) return;
-          startHlsLoadAt(video.currentTime || target);
+          const rawTime = video.currentTime || 0;
+          if (hasAdvancedPastResume(rawTime) && !video.paused) {
+            finish();
+            return;
+          }
+
+          if (Math.abs(rawTime - lastObservedTime) < 0.05) {
+            stagnantRetries += 1;
+          } else {
+            lastObservedTime = rawTime;
+            stagnantRetries = 0;
+          }
+
+          const loadPosition = rawTime > 0 ? rawTime : target;
+          startHlsLoadAt(loadPosition);
+
+          if (stagnantRetries >= 2 && video.readyState >= 1) {
+            const nudgedTarget = Math.min(
+              Math.max(loadPosition + 0.05, target),
+              (Number.isFinite(video.duration) && video.duration > 1) ? video.duration - 0.5 : loadPosition + 0.05
+            );
+            pendingSeekRef.current = nudgedTarget;
+            lastNudgedTarget = nudgedTarget;
+            video.currentTime = nudgedTarget;
+          }
+
           requestPlay();
           retryPlayAfterSeek();
         }, 700);
@@ -702,7 +752,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       function finishIfPlaybackStarted() {
         if (!seekApplied || !video || video.paused) return;
         const rawTime = video.currentTime || 0;
-        if (rawTime >= Math.max(0, target - 1) || rawTime > target + 0.1) {
+        if (hasAdvancedPastResume(rawTime)) {
           finish();
         }
       }
@@ -719,7 +769,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       function onTimeUpdate() {
         if (!seekApplied || !video || video.paused) return;
         const rawTime = video.currentTime || 0;
-        if (rawTime > target + 0.1) {
+        if (hasAdvancedPastResume(rawTime)) {
           finish();
         }
       }
@@ -749,10 +799,14 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         }
         seekApplied = true;
         pendingSeekRef.current = target;
-        startHlsLoadAt(target);
-        video.currentTime = target;
         setCurrentTime(target);
 
+        // Android Chrome can consume the tap gesture if we seek first, leaving
+        // the video parked at the resume time. Start playback inside the tap
+        // gesture, then move the media pipeline to the saved position.
+        requestPlay();
+        startHlsLoadAt(target);
+        video.currentTime = target;
         requestPlay();
         retryPlayAfterSeek();
       }
@@ -801,15 +855,9 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
 
       const video = getVideo(ref, innerRef);
       if (video) {
-        timeOffsetRef.current = 0;
-        pendingSeekRef.current = 0;
-        startHlsLoadAt(0);
-        video.currentTime = 0;
-        setCurrentTime(0);
-        setIsEnded(false);
-        video.play().catch(() => {});
+        playFromStart(video);
       }
-    }, [ref, saveProgressAtStart, startHlsLoadAt]);
+    }, [playFromStart, ref, saveProgressAtStart]);
 
     const handleResumeSkip = useCallback(() => {
       setResumeSeekPending(false);
@@ -820,15 +868,9 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       saveProgressAtStart();
       const video = getVideo(ref, innerRef);
       if (video) {
-        timeOffsetRef.current = 0;
-        pendingSeekRef.current = 0;
-        startHlsLoadAt(0);
-        video.currentTime = 0;
-        setCurrentTime(0);
-        setIsEnded(false);
-        video.play().catch(() => {});
+        playFromStart(video);
       }
-    }, [ref, saveProgressAtStart, startHlsLoadAt]);
+    }, [playFromStart, ref, saveProgressAtStart]);
 
     // ─── Save progress (5 triggers: interval 10s, pause, seek single, seek debounce, beforeunload) ──
     const lastSavedTimeRef = useRef(0);
