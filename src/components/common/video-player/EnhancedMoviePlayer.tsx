@@ -627,6 +627,9 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       const video = getVideo(ref, innerRef);
       if (!video) { setResumeSeekPending(false); return; }
 
+      // Play immediately within user gesture context so mobile browsers accept it
+      video.play().catch(() => { });
+
       let finished = false;
 
       const finish = () => {
@@ -638,7 +641,6 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         if (resumeSkipTimerRef.current) { clearTimeout(resumeSkipTimerRef.current); resumeSkipTimerRef.current = null; }
         setResumeSeekPending(false);
         setShowResumeSkip(false);
-        video.play().catch(() => { });
       };
 
       const onCanPlayAfterSeek = () => {
@@ -997,6 +999,14 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       setCurrentTime(time);
     }, [duration, ref]);
 
+    // ─── Track whether controls were visible when pointer went down ──
+    const controlsVisibleOnPointerDownRef = useRef(false);
+
+    // Capture controls visibility at pointerdown (before handleUserInteraction shows them)
+    const handlePointerDown = useCallback(() => {
+      controlsVisibleOnPointerDownRef.current = showControls;
+    }, [showControls]);
+
     // ─── Double-click fullscreen toggle ─────────────────────
     const handleVideoAreaClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
@@ -1006,6 +1016,9 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       if (hasEndOverlay) return;
       // If edge-hold was just active, skip this click
       if (edgeHoldActiveRef.current) { edgeHoldActiveRef.current = false; return; }
+
+      // If controls were hidden when pointer went down, only show controls — don't toggle play/pause
+      if (!controlsVisibleOnPointerDownRef.current) return;
 
       const now = Date.now();
       const timeSinceLastClick = now - lastClickTimeRef.current;
@@ -1068,8 +1081,9 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       <div
         ref={innerContainerRef}
         className={`relative w-full h-full bg-black overflow-hidden transition-all duration-300 ${showControls ? 'cursor-default' : 'cursor-none'}`}
+        onMouseDown={handlePointerDown}
         onMouseMove={handleUserInteraction}
-        onTouchStart={handleUserInteraction}
+        onTouchStart={() => { handlePointerDown(); handleUserInteraction(); }}
         onClick={handleVideoAreaClick}
         onMouseLeave={() => {
           handleMouseLeave();
@@ -1294,11 +1308,11 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
               )}
             </div>
           ) : (
-            <div className="pointer-events-auto flex items-center gap-4">
+            <div className={`flex items-center gap-4 ${showControls ? 'pointer-events-auto' : 'pointer-events-none'}`}>
               {/* Rewind 10s */}
               <button
                 onClick={(e) => { e.stopPropagation(); if (viewerMode) return; const v = getVideo(ref, innerRef); if (v) { v.currentTime = Math.max(v.currentTime - 10, 0); setCurrentTime(Math.max((v.currentTime || 0) - timeOffsetRef.current, 0)); } }}
-                className={`flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-transparent hover:bg-white/10 text-white transition ${showControls ? 'opacity-100' : 'opacity-0 hover:opacity-100'} ${viewerMode ? 'opacity-40 cursor-not-allowed' : ''}`}
+                className={`flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-transparent hover:bg-white/10 text-white transition ${showControls ? 'opacity-100' : 'opacity-0'} ${viewerMode ? 'opacity-40 cursor-not-allowed' : ''}`}
                 aria-label="Rewind 10 seconds" title="Rewind 10 seconds"
               >
                 <svg className="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1309,7 +1323,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
               {/* Pause */}
               <button
                 onClick={togglePlay}
-                className={`flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-transparent hover:bg-white/10 text-white transition ${showControls ? 'opacity-100' : 'opacity-0 hover:opacity-100'}`}
+                className={`flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-transparent hover:bg-white/10 text-white transition ${showControls ? 'opacity-100' : 'opacity-0'}`}
                 aria-label="Pause" title="Pause"
               >
                 <PauseIcon className="w-8 h-8 sm:w-10 sm:h-10" />
@@ -1318,7 +1332,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
               {/* Forward 10s */}
               <button
                 onClick={(e) => { e.stopPropagation(); if (viewerMode) return; const v = getVideo(ref, innerRef); if (v) { v.currentTime = Math.min(v.currentTime + 10, v.duration || v.currentTime + 10); setCurrentTime(Math.min((v.currentTime || 0) - timeOffsetRef.current, duration || Infinity)); } }}
-                className={`flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-transparent hover:bg-white/10 text-white transition ${showControls ? 'opacity-100' : 'opacity-0 hover:opacity-100'} ${viewerMode ? 'opacity-40 cursor-not-allowed' : ''}`}
+                className={`flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-transparent hover:bg-white/10 text-white transition ${showControls ? 'opacity-100' : 'opacity-0'} ${viewerMode ? 'opacity-40 cursor-not-allowed' : ''}`}
                 aria-label="Forward 10 seconds" title="Forward 10 seconds"
               >
                 <svg className="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
