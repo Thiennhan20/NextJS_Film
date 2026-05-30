@@ -235,6 +235,53 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       }
     }, [watchUrl]);
 
+    const startHlsLoadAt = useCallback((position: number) => {
+      const hls = hlsRef.current;
+      if (!hls) return;
+      try {
+        hls.startLoad(position);
+      } catch {
+        // hls.js can throw if the instance is already destroyed during a route change.
+      }
+    }, []);
+
+    const saveProgressAtStart = useCallback((nextWatchUrl?: string) => {
+      if (!movieId || !server || !audio) return;
+
+      const watchUrlToSave = nextWatchUrl || saveUrlRef.current || '';
+      if (nextWatchUrl) {
+        saveUrlRef.current = nextWatchUrl;
+      }
+
+      if (userId) {
+        useRecentlyWatchedStore.getState().upsertItem({
+          id: String(movieId), server: server || '', audio: audio || '',
+          currentTime: 0, duration: 0,
+          title: title || '', poster: poster || '',
+          isTVShow: !!isTVShow, season, episode,
+        });
+        api.post('/recently-watched', {
+          contentId: String(movieId), isTVShow: !!isTVShow,
+          season: isTVShow ? season : null, episode: isTVShow ? episode : null,
+          server, audio, currentTime: 0, duration: 0,
+          title: title || '', poster: poster || '',
+          watchUrl: watchUrlToSave
+        }).catch(() => {});
+      } else {
+        const key = isTVShow && season && episode
+          ? `tvshow-progress-${movieId}-${season}-${episode}`
+          : `movie-progress-${movieId}`;
+        localStorage.setItem(key, JSON.stringify({
+          currentTime: 0, duration: 0, title: title || '', poster: poster || '',
+          server: server || '', audio: audio || '',
+          watchUrl: watchUrlToSave,
+          lastWatched: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          ...(isTVShow && season && episode ? { season, episode } : {})
+        }));
+      }
+    }, [movieId, server, audio, title, poster, season, episode, isTVShow, userId]);
+
     const [playerWidth, setPlayerWidth] = useState<number>(0);
 
     // Track player container width for responsive settings collapsing
@@ -291,36 +338,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       setControlsReady(true);
 
       if (popupNewStreamUrl) {
-        saveUrlRef.current = popupNewStreamUrl;
-        
-        // Save progress immediately to DB or localStorage with currentTime = 0
-        if (userId) {
-          useRecentlyWatchedStore.getState().upsertItem({
-            id: String(movieId), server: server || '', audio: audio || '',
-            currentTime: 0, duration: 0,
-            title: title || '', poster: poster || '',
-            isTVShow: !!isTVShow, season, episode,
-          });
-          api.post('/recently-watched', {
-            contentId: String(movieId), isTVShow: !!isTVShow,
-            season: isTVShow ? season : null, episode: isTVShow ? episode : null,
-            server, audio, currentTime: 0, duration: 0,
-            title: title || '', poster: poster || '',
-            watchUrl: popupNewStreamUrl
-          }).catch(() => {});
-        } else {
-          const key = isTVShow && season && episode
-            ? `tvshow-progress-${movieId}-${season}-${episode}`
-            : `movie-progress-${movieId}`;
-          localStorage.setItem(key, JSON.stringify({
-            currentTime: 0, duration: 0, title: title || '', poster: poster || '',
-            server: server || '', audio: audio || '',
-            watchUrl: popupNewStreamUrl,
-            lastWatched: new Date().toISOString(),
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            ...(isTVShow && season && episode ? { season, episode } : {})
-          }));
-        }
+        saveProgressAtStart(popupNewStreamUrl);
       }
 
       if (onUpdateSource && popupNewStreamUrl) {
@@ -331,11 +349,12 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       if (video) {
         timeOffsetRef.current = 0;
         pendingSeekRef.current = 0;
+        startHlsLoadAt(0);
         video.currentTime = 0;
         setCurrentTime(0);
         video.play().catch(() => {});
       }
-    }, [onUpdateSource, popupNewStreamUrl, ref, movieId, server, audio, title, poster, season, episode, isTVShow, userId]);
+    }, [onUpdateSource, popupNewStreamUrl, ref, saveProgressAtStart, startHlsLoadAt]);
 
     const handleCancelUpdate = useCallback(() => {
       dismissedUpdateUrlRef.current = normalizePlaybackUrl(popupNewStreamUrl);
@@ -635,18 +654,41 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       const video = getVideo(ref, innerRef);
       if (!video) { setResumeSeekPending(false); return; }
 
-      // Play immediately within user gesture context so mobile browsers accept it
-      video.play().catch(() => { });
-
       let finished = false;
-      let seekedDone = false;
+      let seekApplied = false;
+      let target = savedTime;
+      let playRetryTimer: NodeJS.Timeout | null = null;
+
+      const requestPlay = () => {
+        video.play().catch(() => {});
+      };
+
+      const clearPlayRetry = () => {
+        if (playRetryTimer) {
+          clearTimeout(playRetryTimer);
+          playRetryTimer = null;
+        }
+      };
+
+      const retryPlayAfterSeek = () => {
+        clearPlayRetry();
+        playRetryTimer = setTimeout(() => {
+          if (finished || !seekApplied) return;
+          startHlsLoadAt(video.currentTime || target);
+          requestPlay();
+          retryPlayAfterSeek();
+        }, 700);
+      };
 
       function finish() {
         if (finished || !video) return;
         finished = true;
+        clearPlayRetry();
         video.removeEventListener('seeked', onSeeked);
         video.removeEventListener('playing', onPlaying);
         video.removeEventListener('timeupdate', onTimeUpdate);
+        video.removeEventListener('canplay', onCanPlay);
+        video.removeEventListener('loadeddata', onCanPlay);
         video.removeEventListener('loadedmetadata', handleMetaDataLoaded);
         video.removeEventListener('durationchange', handleMetaDataLoaded);
         video.removeEventListener('loadeddata', handleMetaDataLoaded);
@@ -657,24 +699,38 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         setShowResumeSkip(false);
       }
 
-      function onSeeked() {
-        finish();
-      }
-
-      function onPlaying() {
-        finish();
-      }
-
-      function onTimeUpdate() {
-        if (!video) return;
-        if (video.currentTime > 0) {
+      function finishIfPlaybackStarted() {
+        if (!seekApplied || !video || video.paused) return;
+        const rawTime = video.currentTime || 0;
+        if (rawTime >= Math.max(0, target - 1) || rawTime > target + 0.1) {
           finish();
         }
       }
 
+      function onSeeked() {
+        if (!seekApplied) return;
+        requestPlay();
+      }
+
+      function onPlaying() {
+        finishIfPlaybackStarted();
+      }
+
+      function onTimeUpdate() {
+        if (!seekApplied || !video || video.paused) return;
+        const rawTime = video.currentTime || 0;
+        if (rawTime > target + 0.1) {
+          finish();
+        }
+      }
+
+      function onCanPlay() {
+        if (!seekApplied) return;
+        requestPlay();
+      }
+
       function doSeek() {
-        if (seekedDone || !video) return;
-        seekedDone = true;
+        if (seekApplied || !video) return;
 
         video.removeEventListener('loadedmetadata', handleMetaDataLoaded);
         video.removeEventListener('durationchange', handleMetaDataLoaded);
@@ -682,24 +738,23 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         if (resumeCheckIntervalRef.current) { clearInterval(resumeCheckIntervalRef.current); resumeCheckIntervalRef.current = null; }
 
         const dur = video.duration;
-        let target = savedTime;
+        target = savedTime;
         if (dur && isFinite(dur) && dur > 0) {
           if (savedTime >= dur * 0.98) {
-            finished = true;
-            if (resumeTimeoutRef.current) { clearTimeout(resumeTimeoutRef.current); resumeTimeoutRef.current = null; }
-            if (resumeSkipTimerRef.current) { clearTimeout(resumeSkipTimerRef.current); resumeSkipTimerRef.current = null; }
-            setResumeSeekPending(false);
+            finish();
             return;
           }
           target = Math.min(savedTime, dur - 1);
           setDuration(dur);
         }
+        seekApplied = true;
         pendingSeekRef.current = target;
+        startHlsLoadAt(target);
         video.currentTime = target;
         setCurrentTime(target);
-        
-        // Re-trigger play in case seek paused it
-        video.play().catch(() => {});
+
+        requestPlay();
+        retryPlayAfterSeek();
       }
 
       function handleMetaDataLoaded() {
@@ -709,6 +764,8 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       video.addEventListener('seeked', onSeeked);
       video.addEventListener('playing', onPlaying);
       video.addEventListener('timeupdate', onTimeUpdate);
+      video.addEventListener('canplay', onCanPlay);
+      video.addEventListener('loadeddata', onCanPlay);
 
       // Show "skip" option after 5s
       resumeSkipTimerRef.current = setTimeout(() => setShowResumeSkip(true), 5000);
@@ -718,6 +775,8 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       if (video.readyState >= 1) {
         doSeek();
       } else {
+        startHlsLoadAt(savedTime);
+        requestPlay();
         video.addEventListener('loadedmetadata', handleMetaDataLoaded);
         video.addEventListener('durationchange', handleMetaDataLoaded);
         video.addEventListener('loadeddata', handleMetaDataLoaded);
@@ -728,21 +787,48 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
           }
         }, 200);
       }
-    }, [resumePopup.savedTime, ref]);
+    }, [resumePopup.savedTime, ref, startHlsLoadAt]);
 
     const handleResumeStartOver = useCallback(() => {
       setResumePopup({ show: false, savedTime: 0 });
       setControlsReady(true);
-    }, []);
+      setResumeSeekPending(false);
+      setShowResumeSkip(false);
+      if (resumeTimeoutRef.current) { clearTimeout(resumeTimeoutRef.current); resumeTimeoutRef.current = null; }
+      if (resumeSkipTimerRef.current) { clearTimeout(resumeSkipTimerRef.current); resumeSkipTimerRef.current = null; }
+      if (resumeCheckIntervalRef.current) { clearInterval(resumeCheckIntervalRef.current); resumeCheckIntervalRef.current = null; }
+      saveProgressAtStart();
+
+      const video = getVideo(ref, innerRef);
+      if (video) {
+        timeOffsetRef.current = 0;
+        pendingSeekRef.current = 0;
+        startHlsLoadAt(0);
+        video.currentTime = 0;
+        setCurrentTime(0);
+        setIsEnded(false);
+        video.play().catch(() => {});
+      }
+    }, [ref, saveProgressAtStart, startHlsLoadAt]);
 
     const handleResumeSkip = useCallback(() => {
       setResumeSeekPending(false);
       setShowResumeSkip(false);
       if (resumeTimeoutRef.current) { clearTimeout(resumeTimeoutRef.current); resumeTimeoutRef.current = null; }
       if (resumeSkipTimerRef.current) { clearTimeout(resumeSkipTimerRef.current); resumeSkipTimerRef.current = null; }
+      if (resumeCheckIntervalRef.current) { clearInterval(resumeCheckIntervalRef.current); resumeCheckIntervalRef.current = null; }
+      saveProgressAtStart();
       const video = getVideo(ref, innerRef);
-      if (video) { pendingSeekRef.current = 0; video.currentTime = 0; setCurrentTime(0); }
-    }, [ref]);
+      if (video) {
+        timeOffsetRef.current = 0;
+        pendingSeekRef.current = 0;
+        startHlsLoadAt(0);
+        video.currentTime = 0;
+        setCurrentTime(0);
+        setIsEnded(false);
+        video.play().catch(() => {});
+      }
+    }, [ref, saveProgressAtStart, startHlsLoadAt]);
 
     // ─── Save progress (5 triggers: interval 10s, pause, seek single, seek debounce, beforeunload) ──
     const lastSavedTimeRef = useRef(0);
