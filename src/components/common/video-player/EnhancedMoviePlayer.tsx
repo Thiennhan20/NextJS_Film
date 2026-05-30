@@ -832,11 +832,13 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       // Hard timeout 15s — play from wherever we are
       resumeTimeoutRef.current = setTimeout(() => finish(), 15000);
 
-      // Fail-safe: after 5s if video hasn't started playing, show stuck notice
+      // Fail-safe: record currentTime now, after 5s check if it actually progressed
+      const timeAtResumeStart = video.currentTime || 0;
       resumeStuckTimerRef.current = setTimeout(() => {
         if (finished) return;
-        const rawTime = video.currentTime || 0;
-        if (video.paused || rawTime < 0.5) {
+        const timeNow = video.currentTime || 0;
+        // If time hasn't advanced by at least 0.5s in 5 seconds, video is stuck
+        if (Math.abs(timeNow - timeAtResumeStart) < 0.5) {
           finish();
           setResumeStuckNotice(true);
         }
