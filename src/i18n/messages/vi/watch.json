@@ -35,6 +35,8 @@
     "watchFromBeginning": "Xem từ đầu",
     "loadingToLastWatched": "Đang tải lại vị trí xem cuối...",
     "skipWatchFromBeginning": "Bỏ qua, xem từ đầu",
+    "resumeStuckMessage": "Trình duyệt không thể tiếp tục phát. Vui lòng quay lại và vào xem lại.",
+    "resumeStuckGoBack": "Quay lại",
     "settingsDisabled": "Cài đặt bị vô hiệu hóa khi xem chung",
     "settings": "Cài đặt",
     "speed": "Tốc độ",

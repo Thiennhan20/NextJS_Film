@@ -35,6 +35,8 @@
     "watchFromBeginning": "Watch from beginning",
     "loadingToLastWatched": "Loading to last watched position...",
     "skipWatchFromBeginning": "Skip, watch from beginning",
+    "resumeStuckMessage": "Your browser could not resume playback. Please go back and re-enter to continue watching.",
+    "resumeStuckGoBack": "Go Back",
     "settingsDisabled": "Settings disabled during watch party",
     "settings": "Settings",
     "speed": "Speed",

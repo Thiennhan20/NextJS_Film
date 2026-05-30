@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState, forwardRef, type Dispatch, type SetStateAction } from "react";
+import { useRouter } from 'next/navigation';
 import Hls, { Level } from "hls.js";
 import { PlayIcon, PauseIcon, ArrowsPointingOutIcon } from "@heroicons/react/24/solid";
 import PlayerSettings from "./PlayerSettings";
@@ -174,6 +175,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     const hlsRef = useRef<Hls | null>(null);
     const innerContainerRef = useRef<HTMLDivElement>(null);
     const t = useTranslations('Watch');
+    const router = useRouter();
 
     // Source change and update refs
     const shouldPlayOnLoadRef = useRef(false);
@@ -218,6 +220,8 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     const [controlsReady, setControlsReady] = useState(!movieId || !server || !audio);
     const [resumeSeekPending, setResumeSeekPending] = useState(false);
     const [showResumeSkip, setShowResumeSkip] = useState(false);
+    const [resumeStuckNotice, setResumeStuckNotice] = useState(false);
+    const resumeStuckTimerRef = useRef<NodeJS.Timeout | null>(null);
     const resumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const resumeSkipTimerRef = useRef<NodeJS.Timeout | null>(null);
     const resumeCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -392,6 +396,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
         if (resumeSkipTimerRef.current) clearTimeout(resumeSkipTimerRef.current);
         if (resumeCheckIntervalRef.current) clearInterval(resumeCheckIntervalRef.current);
+        if (resumeStuckTimerRef.current) clearTimeout(resumeStuckTimerRef.current);
       };
     }, []);
 
@@ -747,6 +752,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         if (resumeCheckIntervalRef.current) { clearInterval(resumeCheckIntervalRef.current); resumeCheckIntervalRef.current = null; }
         setResumeSeekPending(false);
         setShowResumeSkip(false);
+        if (resumeStuckTimerRef.current) { clearTimeout(resumeStuckTimerRef.current); resumeStuckTimerRef.current = null; }
       }
 
       function finishIfPlaybackStarted() {
@@ -825,6 +831,16 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       resumeSkipTimerRef.current = setTimeout(() => setShowResumeSkip(true), 5000);
       // Hard timeout 15s — play from wherever we are
       resumeTimeoutRef.current = setTimeout(() => finish(), 15000);
+
+      // Fail-safe: after 5s if video hasn't started playing, show stuck notice
+      resumeStuckTimerRef.current = setTimeout(() => {
+        if (finished) return;
+        const rawTime = video.currentTime || 0;
+        if (video.paused || rawTime < 0.5) {
+          finish();
+          setResumeStuckNotice(true);
+        }
+      }, 5000);
 
       if (video.readyState >= 1) {
         doSeek();
@@ -1388,6 +1404,26 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
                   {t('skipWatchFromBeginning')}
                 </button>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Resume Stuck Notice — shown when browser fails to resume after 5s */}
+        {resumeStuckNotice && (
+          <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/80" data-no-toggle>
+            <div className="bg-gray-900/95 border border-gray-700 rounded-2xl px-6 py-5 sm:px-8 sm:py-6 flex flex-col items-center gap-4 shadow-2xl max-w-sm mx-4 backdrop-blur-sm">
+              <svg className="w-10 h-10 sm:w-12 sm:h-12 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <p className="text-gray-200 text-sm sm:text-base text-center leading-relaxed">
+                {t('resumeStuckMessage')}
+              </p>
+              <button
+                onClick={(e) => { e.stopPropagation(); setResumeStuckNotice(false); router.back(); }}
+                className="px-6 py-2.5 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-semibold text-sm sm:text-base transition-colors shadow-lg hover:shadow-yellow-500/30"
+              >
+                {t('resumeStuckGoBack')}
+              </button>
             </div>
           </div>
         )}
