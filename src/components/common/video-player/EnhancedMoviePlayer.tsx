@@ -638,7 +638,8 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         if (finished) return;
         finished = true;
         video.removeEventListener('seeked', onSeeked);
-        video.removeEventListener('canplay', onCanPlayAfterSeek);
+        video.removeEventListener('playing', onPlaying);
+        video.removeEventListener('timeupdate', onTimeUpdate);
         video.removeEventListener('loadedmetadata', handleMetaDataLoaded);
         video.removeEventListener('durationchange', handleMetaDataLoaded);
         video.removeEventListener('loadeddata', handleMetaDataLoaded);
@@ -649,18 +650,23 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         setShowResumeSkip(false);
       };
 
-      const onCanPlayAfterSeek = () => {
-        video.removeEventListener('canplay', onCanPlayAfterSeek);
+      const onSeeked = () => {
         finish();
       };
 
-      const onSeeked = () => {
-        video.removeEventListener('seeked', onSeeked);
-        if (video.readyState >= 3) { finish(); return; }
-        video.addEventListener('canplay', onCanPlayAfterSeek);
+      const onPlaying = () => {
+        finish();
+      };
+
+      const onTimeUpdate = () => {
+        if (video.currentTime > 0) {
+          finish();
+        }
       };
 
       video.addEventListener('seeked', onSeeked);
+      video.addEventListener('playing', onPlaying);
+      video.addEventListener('timeupdate', onTimeUpdate);
 
       // Show "skip" option after 5s
       resumeSkipTimerRef.current = setTimeout(() => setShowResumeSkip(true), 5000);
