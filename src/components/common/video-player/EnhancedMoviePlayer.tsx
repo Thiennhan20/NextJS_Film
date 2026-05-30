@@ -666,17 +666,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
 
       if (activeSavedTime > 10) {
         setControlsReady(false);
-        if (isAndroid) {
-          // Đối với Android, do lỗi giải mã video khi có lịch sử xem (cả xem tiếp lẫn xem từ đầu đều lỗi),
-          // chúng ta sẽ giả lập đang tải video trong 5 giây rồi mới hiển thị popup lỗi stuck để quay lại.
-          setResumeSeekPending(true);
-          resumeStuckTimerRef.current = setTimeout(() => {
-            setResumeSeekPending(false);
-            setResumeStuckNotice(true);
-          }, 5000);
-        } else {
-          setResumePopup({ show: true, savedTime: activeSavedTime });
-        }
+        setResumePopup({ show: true, savedTime: activeSavedTime });
       } else {
         setControlsReady(true);
       }
@@ -693,15 +683,6 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       const video = getVideo(ref, innerRef);
       if (!video) { setResumeSeekPending(false); return; }
 
-      // Xử lý đặc biệt cho thiết bị Android: Hiện popup lỗi stuck sau 1.5s delay (tạo hiệu ứng tải)
-      if (isAndroid) {
-        resumeStuckTimerRef.current = setTimeout(() => {
-          setResumeSeekPending(false);
-          setResumeStuckNotice(true);
-        }, 1500);
-        return;
-      }
-
       let finished = false;
       let seekApplied = false;
       let target = savedTime;
@@ -709,6 +690,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       let lastObservedTime = -1;
       let stagnantRetries = 0;
       let lastNudgedTarget: number | null = null;
+      let timeAtResumeStart = 0;
 
       const requestPlay = () => {
         video.play().catch(() => {});
@@ -832,6 +814,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         seekApplied = true;
         pendingSeekRef.current = target;
         setCurrentTime(target);
+        timeAtResumeStart = target; // Ghi nhận mốc tua tới
 
         // Android Chrome can consume the tap gesture if we seek first, leaving
         // the video parked at the resume time. Start playback inside the tap
@@ -858,13 +841,17 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       // Hard timeout 15s — play from wherever we are
       resumeTimeoutRef.current = setTimeout(() => finish(), 15000);
 
-      // Fail-safe: record currentTime now, after 5s check if it actually progressed
-      const timeAtResumeStart = video.currentTime || 0;
+      // Fail-safe: Khởi tạo đếm ngược 5 giây. Nếu sau 5 giây video chưa tiến triển hoặc chưa được seek thành công, kích hoạt stuck notice.
       resumeStuckTimerRef.current = setTimeout(() => {
         if (finished) return;
         const timeNow = video.currentTime || 0;
-        // If time hasn't advanced by at least 0.5s in 5 seconds, video is stuck
-        if (Math.abs(timeNow - timeAtResumeStart) < 0.5) {
+        
+        // Nếu sau 5 giây mà chưa seek thành công (chưa chạy doSeek) 
+        // hoặc thời gian phát không tiến triển thực sự ít nhất là 1.0 giây so với mốc tua tới (target)
+        // hoặc video đang bị paused, ta coi như video bị stuck.
+        const isStuck = !seekApplied || video.paused || (timeNow - timeAtResumeStart) < 1.0;
+        
+        if (isStuck) {
           finish();
           setResumeStuckNotice(true);
         }
@@ -885,7 +872,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
           }
         }, 200);
       }
-    }, [resumePopup.savedTime, ref, startHlsLoadAt, isAndroid]);
+    }, [resumePopup.savedTime, ref, startHlsLoadAt]);
 
     const handleResumeStartOver = useCallback(() => {
       setResumePopup({ show: false, savedTime: 0 });
