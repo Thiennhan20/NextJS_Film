@@ -668,8 +668,12 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         setControlsReady(false);
         if (isAndroid) {
           // Đối với Android, do lỗi giải mã video khi có lịch sử xem (cả xem tiếp lẫn xem từ đầu đều lỗi),
-          // hiển thị trực tiếp popup lỗi stuck để yêu cầu người dùng quay lại trang trước.
-          setResumeStuckNotice(true);
+          // chúng ta sẽ giả lập đang tải video trong 5 giây rồi mới hiển thị popup lỗi stuck để quay lại.
+          setResumeSeekPending(true);
+          resumeStuckTimerRef.current = setTimeout(() => {
+            setResumeSeekPending(false);
+            setResumeStuckNotice(true);
+          }, 5000);
         } else {
           setResumePopup({ show: true, savedTime: activeSavedTime });
         }
