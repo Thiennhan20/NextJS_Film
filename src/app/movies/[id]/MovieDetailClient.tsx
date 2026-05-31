@@ -126,23 +126,17 @@ export default function MovieDetailClient({ params }: { params: Promise<{ id: st
     const fetchMovie = async () => {
       setLoading(true);
       try {
-        // Fetch all TMDB data in parallel for faster loading
-        const [detailResult, imgResult, videoResult, creditsResult] = await Promise.allSettled([
-          axios.get(`/api/tmdb-proxy?endpoint=/movie/${id}`),
-          axios.get(`/api/tmdb-proxy?endpoint=/movie/${id}/images`),
-          axios.get(`/api/tmdb-proxy?endpoint=/movie/${id}/videos`),
-          axios.get(`/api/tmdb-proxy?endpoint=/movie/${id}/credits`),
-        ]);
+        // Fetch all TMDB data in a single bundled request (saves 3 serverless invocations)
+        const bundleResponse = await axios.get(`/api/tmdb-bundle?type=movie&id=${id}`);
+        const { detail: data, images: imgData, videos: videoData, credits } = bundleResponse.data;
 
-        // Detail is required - if it fails, throw
-        if (detailResult.status === 'rejected') throw detailResult.reason;
-        const data = detailResult.value.data;
+        if (!data) throw new Error('Failed to fetch movie detail');
 
         // Images - optional, graceful fallback
         let scenes: string[] = [];
-        if (imgResult.status === 'fulfilled') {
-          const backdrops: { file_path: string }[] = imgResult.value.data.backdrops || [];
-          scenes = backdrops.slice(0, 3).map((img) => `https://image.tmdb.org/t/p/w780${img.file_path}`);
+        if (imgData) {
+          const backdrops: { file_path: string }[] = imgData.backdrops || [];
+          scenes = backdrops.slice(0, 3).map((img: { file_path: string }) => `https://image.tmdb.org/t/p/w780${img.file_path}`);
         }
         if (scenes.length < 3) {
           if (data.backdrop_path) scenes.push(`https://image.tmdb.org/t/p/w780${data.backdrop_path}`);
@@ -152,16 +146,16 @@ export default function MovieDetailClient({ params }: { params: Promise<{ id: st
 
         // Videos - optional, graceful fallback
         let trailer = '';
-        if (videoResult.status === 'fulfilled') {
-          const videos: { type: string; site: string; key: string }[] = videoResult.value.data.results || [];
+        if (videoData) {
+          const videos: { type: string; site: string; key: string }[] = videoData.results || [];
           const ytTrailer = videos.find((v) => v.type === 'Trailer' && v.site === 'YouTube');
           if (ytTrailer) {
             trailer = `https://www.youtube.com/embed/${ytTrailer.key}`;
           }
         }
 
-        // Credits - graceful fallback
-        const credits = creditsResult.status === 'fulfilled' ? creditsResult.value.data : { crew: [], cast: [] };
+        // Credits - graceful fallback (already destructured from bundle)
+        const creditsData = credits || { crew: [], cast: [] };
 
         const movieData = {
           id: data.id,
@@ -170,8 +164,8 @@ export default function MovieDetailClient({ params }: { params: Promise<{ id: st
           duration: data.runtime ? `${Math.floor(data.runtime / 60)}h ${data.runtime % 60}m` : '',
           year: data.release_date ? Number(data.release_date.slice(0, 4)) : '' as number | '',
           releaseDate: data.release_date || '',
-          director: credits.crew?.find((person: { job: string; name: string }) => person.job === 'Director')?.name || '',
-          cast: credits.cast?.slice(0, 10).map((person: { name: string; character?: string; profile_path?: string }) => ({
+          director: creditsData.crew?.find((person: { job: string; name: string }) => person.job === 'Director')?.name || '',
+          cast: creditsData.cast?.slice(0, 10).map((person: { name: string; character?: string; profile_path?: string }) => ({
             name: person.name,
             character: person.character || '',
             profilePath: person.profile_path ? `https://image.tmdb.org/t/p/w185${person.profile_path}` : ''

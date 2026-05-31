@@ -188,23 +188,17 @@ export default function TVShowDetailClient({ params }: { params: Promise<{ id: s
     const fetchTVShow = async () => {
       setLoading(true)
       try {
-        // Fetch all TMDB data in parallel for faster loading
-        const [detailResult, imgResult, videoResult, creditsResult] = await Promise.allSettled([
-          axios.get(`/api/tmdb-proxy?endpoint=/tv/${id}`),
-          axios.get(`/api/tmdb-proxy?endpoint=/tv/${id}/images`),
-          axios.get(`/api/tmdb-proxy?endpoint=/tv/${id}/videos`),
-          axios.get(`/api/tmdb-proxy?endpoint=/tv/${id}/credits`),
-        ])
+        // Fetch all TMDB data in a single bundled request (saves 3 serverless invocations)
+        const bundleResponse = await axios.get(`/api/tmdb-bundle?type=tv&id=${id}`)
+        const { detail: data, images: imgData, videos: videoData, credits } = bundleResponse.data
 
-        // Detail is required - if it fails, throw
-        if (detailResult.status === 'rejected') throw detailResult.reason
-        const data = detailResult.value.data
+        if (!data) throw new Error('Failed to fetch TV show detail')
 
         // Images - optional, graceful fallback
         let scenes: string[] = []
-        if (imgResult.status === 'fulfilled') {
-          const backdrops: { file_path: string }[] = imgResult.value.data.backdrops || []
-          scenes = backdrops.slice(0, 3).map((img) => `https://image.tmdb.org/t/p/w780${img.file_path}`)
+        if (imgData) {
+          const backdrops: { file_path: string }[] = imgData.backdrops || []
+          scenes = backdrops.slice(0, 3).map((img: { file_path: string }) => `https://image.tmdb.org/t/p/w780${img.file_path}`)
         }
         if (scenes.length < 3) {
           if (data.backdrop_path) scenes.push(`https://image.tmdb.org/t/p/w780${data.backdrop_path}`)
@@ -214,8 +208,8 @@ export default function TVShowDetailClient({ params }: { params: Promise<{ id: s
 
         // Videos - optional, graceful fallback
         let trailer = ''
-        if (videoResult.status === 'fulfilled') {
-          const videos: { type: string; site: string; key: string }[] = videoResult.value.data.results || []
+        if (videoData) {
+          const videos: { type: string; site: string; key: string }[] = videoData.results || []
           const ytTrailer = videos.find((v) => v.type === 'Trailer' && v.site === 'YouTube')
           if (ytTrailer) {
             trailer = `https://www.youtube.com/embed/${ytTrailer.key}`
@@ -223,7 +217,7 @@ export default function TVShowDetailClient({ params }: { params: Promise<{ id: s
         }
 
         // Credits - graceful fallback
-        const credits = creditsResult.status === 'fulfilled' ? creditsResult.value.data : { crew: [], cast: [] }
+        const creditsData = credits || { crew: [], cast: [] }
 
         // Set seasons data
         setSeasons(data.seasons || [])
@@ -236,8 +230,8 @@ export default function TVShowDetailClient({ params }: { params: Promise<{ id: s
             ? `${data.episode_run_time[0]}m` : '',
           year: data.first_air_date ? Number(data.first_air_date.slice(0, 4)) : '' as number | '',
           firstAirDate: data.first_air_date || '',
-          creator: credits.crew?.find((person: Person) => person.job === 'Creator')?.name || '',
-          cast: credits.cast?.slice(0, 10).map((person: { name: string; character?: string; profile_path?: string }) => ({
+          creator: creditsData.crew?.find((person: Person) => person.job === 'Creator')?.name || '',
+          cast: creditsData.cast?.slice(0, 10).map((person: { name: string; character?: string; profile_path?: string }) => ({
             name: person.name,
             character: person.character || '',
             profilePath: person.profile_path ? `https://image.tmdb.org/t/p/w185${person.profile_path}` : ''

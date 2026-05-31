@@ -38,7 +38,7 @@ class TelegramImageCacheDB {
     this.cache.set(key, image);
   }
 
-  async uploadToTelegram(imageBuffer: Buffer, filename: string, originalUrl?: string): Promise<{ file_id: string; file_path?: string }> {
+  async uploadToTelegram(imageData: Uint8Array, filename: string, originalUrl?: string): Promise<{ file_id: string; file_path?: string }> {
     if (!this.botToken || !this.chatId) {
       throw new Error('Telegram Bot not configured');
     }
@@ -49,8 +49,13 @@ class TelegramImageCacheDB {
     if (!photoUrl) {
       // Tạo temp URL bằng cách upload lên imgur hoặc service tương tự
       // Hoặc có thể sử dụng base64 data URL cho ảnh nhỏ
-      if (imageBuffer.length < 100000) { // Chỉ dùng data URL cho ảnh < 100KB
-        const base64 = imageBuffer.toString('base64');
+      if (imageData.length < 100000) { // Chỉ dùng data URL cho ảnh < 100KB
+        // Web API base64 encoding (Edge-compatible, no Node.js Buffer)
+        let binary = '';
+        for (let i = 0; i < imageData.length; i++) {
+          binary += String.fromCharCode(imageData[i]);
+        }
+        const base64 = btoa(binary);
         photoUrl = `data:image/jpeg;base64,${base64}`;
       } else {
         // Fallback: sử dụng placeholder URL
@@ -156,11 +161,11 @@ export async function cacheImageToTelegram(id: string, url: string, type: 'poste
     // Fetch từ URL
     const response = await fetch(url);
     const arrayBuffer = await response.arrayBuffer();
-    const imageBuffer = Buffer.from(arrayBuffer);
+    const imageData = new Uint8Array(arrayBuffer);
 
     // Upload lên Telegram
     const filename = `${id}_${type}_${Date.now()}.jpg`;
-    const telegramResult = await telegramImageCacheDB.uploadToTelegram(imageBuffer, filename, url);
+    const telegramResult = await telegramImageCacheDB.uploadToTelegram(imageData, filename, url);
 
     // Lưu vào cache
     await telegramImageCacheDB.set({

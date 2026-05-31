@@ -163,6 +163,7 @@ export default function ActorsFrame() {
                   fill
                   sizes="(max-width: 640px) 132px, (max-width: 768px) 152px, 174px"
                   className="object-cover transition-transform duration-500 ease-out group-hover/actor:scale-[1.04]"
+                  unoptimized
                 />
                 <div className="absolute inset-x-0 bottom-0 h-[44%] bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
               </div>

@@ -69,15 +69,15 @@ export async function cacheImage(
   }
 
   const arrayBuffer = await response.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
+  const uint8 = new Uint8Array(arrayBuffer)
   const contentType = response.headers.get('content-type') || 'image/jpeg'
 
-  console.log('[SupabaseImageCache] Uploading to Storage:', storagePath, `(${buffer.length} bytes)`)
+  console.log('[SupabaseImageCache] Uploading to Storage:', storagePath, `(${uint8.length} bytes)`)
 
   // 2. Upload to Supabase Storage
   const { error: uploadError } = await supabaseAdmin.storage
     .from(BUCKET_NAME)
-    .upload(storagePath, buffer, {
+    .upload(storagePath, uint8, {
       contentType,
       upsert: true, // Overwrite if exists
       cacheControl: '31536000', // 1 year cache (images don't change)
@@ -101,7 +101,7 @@ export async function cacheImage(
         original_url: url,
         storage_path: storagePath,
         public_url: publicUrl,
-        file_size: buffer.length,
+        file_size: uint8.length,
       },
       {
         onConflict: 'tmdb_id,type',
