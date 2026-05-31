@@ -183,34 +183,35 @@ export default function FriendsClient() {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
       key={user._id}
-      className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-4 flex items-center justify-between"
+      className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-2.5 sm:p-4 flex items-center justify-between"
     >
-      <Link href={`/profile/${user._id}`} className="flex items-center gap-3 flex-1 min-w-0 group">
+      <Link href={`/profile/${user._id}`} className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 group">
         <div className="flex-shrink-0">
           {user.avatar ? (
-            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-gray-600 group-hover:border-red-500 transition-colors">
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full overflow-hidden border-2 border-gray-600 group-hover:border-red-500 transition-colors">
               <Image
                 src={user.avatar}
                 alt={user.name}
                 width={48}
                 height={48}
+                sizes="(max-width: 640px) 36px, 48px"
                 className="w-full h-full object-cover"
                 unoptimized={user.avatar.startsWith('http')}
               />
             </div>
           ) : (
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-red-500 flex items-center justify-center text-white font-bold text-lg border-2 border-transparent group-hover:border-red-500 transition-colors">
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-purple-500 to-red-500 flex items-center justify-center text-white font-bold text-sm sm:text-lg border-2 border-transparent group-hover:border-red-500 transition-colors">
               {getInitials(user.name)}
             </div>
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <h4 className="text-white font-medium truncate group-hover:text-red-400 transition-colors">{user.name}</h4>
-          <p className="text-sm text-gray-400 truncate">{t('viewProfile')}</p>
+          <h4 className="text-sm sm:text-base text-white font-medium truncate group-hover:text-red-400 transition-colors">{user.name}</h4>
+          <p className="text-xs sm:text-sm text-gray-400 truncate">{t('viewProfile')}</p>
         </div>
       </Link>
 
-      <div className="flex items-center gap-2 ml-4">
+      <div className="flex items-center gap-1.5 sm:gap-2 ml-2 sm:ml-4">
         {type === 'received' && (
           <>
             <button
@@ -254,18 +255,18 @@ export default function FriendsClient() {
   )
 
   return (
-    <div className="min-h-screen bg-black text-white pt-24 pb-12 px-4">
+    <div className="min-h-screen bg-black text-white pt-20 sm:pt-24 pb-8 sm:pb-12 px-3 sm:px-4">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-3 mb-8">
-          <UserGroupIcon className="w-8 h-8 text-blue-500" />
-          <h1 className="text-3xl font-bold">{t('title')}</h1>
+        <div className="flex items-center gap-2 sm:gap-3 mb-5 sm:mb-8">
+          <UserGroupIcon className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />
+          <h1 className="text-2xl sm:text-3xl font-bold">{t('title')}</h1>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 overflow-x-auto pb-4 mb-6 border-b border-gray-800 scrollbar-hide">
+        <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-3 sm:pb-4 mb-4 sm:mb-6 border-b border-gray-800 scrollbar-hide">
           <button
             onClick={() => setActiveTab('friends')}
-            className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+            className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-sm sm:text-base font-medium whitespace-nowrap transition-colors ${
               activeTab === 'friends' ? 'bg-blue-600 text-white' : 'bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-800'
             }`}
           >
@@ -273,7 +274,7 @@ export default function FriendsClient() {
           </button>
           <button
             onClick={() => setActiveTab('received')}
-            className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${
+            className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-sm sm:text-base font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${
               activeTab === 'received' ? 'bg-blue-600 text-white' : 'bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-800'
             }`}
           >
@@ -284,7 +285,7 @@ export default function FriendsClient() {
           </button>
           <button
             onClick={() => setActiveTab('sent')}
-            className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
+            className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-sm sm:text-base font-medium whitespace-nowrap transition-colors ${
               activeTab === 'sent' ? 'bg-blue-600 text-white' : 'bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-800'
             }`}
           >
@@ -301,7 +302,7 @@ export default function FriendsClient() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
-                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4"
               >
                 {friends.length === 0 ? (
                   <div className="col-span-full text-center py-12 text-gray-500">
@@ -320,7 +321,7 @@ export default function FriendsClient() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
-                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4"
               >
                 {friendRequests.length === 0 ? (
                   <div className="col-span-full text-center py-12 text-gray-500">
@@ -339,7 +340,7 @@ export default function FriendsClient() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
-                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4"
               >
                 {sentRequests.length === 0 ? (
                   <div className="col-span-full text-center py-12 text-gray-500">

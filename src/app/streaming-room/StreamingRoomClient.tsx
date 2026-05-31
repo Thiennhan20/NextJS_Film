@@ -28,6 +28,9 @@ function StreamingRoomContent() {
   const titleFromParams = searchParams.get('title') || '';
   const t = useTranslations('StreamingRoom');
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const userId = (user as any)?.id || (user as any)?._id || '';
+
   // ─── State ──────────────────────────────────────────────
 
   const [roomStatus, setRoomStatus] = useState<RoomStatus | null>(null);
@@ -345,12 +348,15 @@ function StreamingRoomContent() {
       }
     },
 
-    onEmojiReaction: ({ emoji, username: emojiUser }) => {
-      const id = ++emojiIdRef.current;
-      setFloatingEmojis(prev => [...prev, { id, emoji, x: Math.random() * 80 + 10 }]);
-      setTimeout(() => {
-        setFloatingEmojis(prev => prev.filter(e => e.id !== id));
-      }, 2000);
+    onEmojiReaction: ({ emoji, username: emojiUser, user_id: senderUserId }) => {
+      // Only show floating emoji if it's from another user (sender handles it instantly locally)
+      if (senderUserId !== userId) {
+        const id = ++emojiIdRef.current;
+        setFloatingEmojis(prev => [...prev, { id, emoji, x: Math.random() * 80 + 10 }]);
+        setTimeout(() => {
+          setFloatingEmojis(prev => prev.filter(e => e.id !== id));
+        }, 5500); // Float for 5.5 seconds
+      }
       setChatMessages(prev => [...prev, {
         user_id: 'system', username: t('systemUser'),
         message: t('reactedWithEmoji', { user: emojiUser, emoji }),
@@ -509,6 +515,13 @@ function StreamingRoomContent() {
   const handleEmojiReaction = (emoji: string) => {
     emitEmoji(emoji);
     setShowEmojis(false);
+
+    // Show floating emoji immediately (local feedback) with no lag
+    const id = ++emojiIdRef.current;
+    setFloatingEmojis(prev => [...prev, { id, emoji, x: Math.random() * 80 + 10 }]);
+    setTimeout(() => {
+      setFloatingEmojis(prev => prev.filter(e => e.id !== id));
+    }, 5500); // Float for 5.5 seconds
   };
 
   const handleCopyInvite = () => {
@@ -581,9 +594,6 @@ function StreamingRoomContent() {
     );
   }
 
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const userId = (user as any)?.id || (user as any)?._id || '';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex flex-col">
@@ -789,21 +799,25 @@ function StreamingRoomContent() {
                 {floatingEmojis.map(({ id, emoji, x }) => (
                   <motion.div
                     key={id}
-                    initial={{ opacity: 0, y: 0, scale: 0 }}
+                    initial={{ opacity: 0, y: 0, scale: 0, rotate: 0 }}
                     animate={{
-                      opacity: [0, 1, 1, 0],
-                      scale: [0, 1.3, 1, 0.8],
-                      y: -240,
-                      x: [0, Math.sin(id) * 35, Math.sin(id + 1) * -35, Math.sin(id + 2) * 15, 0],
+                      opacity: [0, 1, 1, 0.8, 0],
+                      scale: [0, 1.4, 1.1, 1.2, 1, 0],
+                      y: [0, -50, -100, -150, -200, -250, -300],
+                      x: [0, Math.sin(id) * 30, Math.sin(id + 1) * -35, Math.sin(id + 2) * 25, Math.sin(id + 3) * -20, 0],
+                      rotate: [0, -10, 10, -5, 5, 0],
                     }}
-                    exit={{ opacity: 0 }}
+                    exit={{ opacity: 0, scale: 0.3 }}
                     transition={{
-                      duration: 2.2,
-                      ease: 'easeOut',
-                      opacity: { times: [0, 0.1, 0.8, 1] },
-                      scale: { times: [0, 0.15, 0.8, 1] },
+                      duration: 5,
+                      ease: [0.25, 0.1, 0.25, 1],
+                      opacity: { duration: 5, times: [0, 0.05, 0.8, 0.9, 1] },
+                      scale: { duration: 5, times: [0, 0.05, 0.15, 0.8, 0.9, 1] },
+                      y: { duration: 5, ease: 'easeOut' },
+                      x: { duration: 5, ease: 'easeInOut' },
+                      rotate: { duration: 5, ease: 'easeInOut' },
                     }}
-                    className="absolute bottom-6 text-3xl pointer-events-none z-50 select-none filter drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
+                    className="absolute bottom-6 text-4xl pointer-events-none z-50 select-none filter drop-shadow-[0_2px_12px_rgba(0,0,0,0.7)]"
                     style={{ left: `${x}%` }}
                   >
                     {emoji}

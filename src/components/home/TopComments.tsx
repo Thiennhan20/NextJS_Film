@@ -84,7 +84,7 @@ export default function TopComments() {
         ]);
 
         // Process trending movies
-        const trending = trendingRes.data.results.slice(0, 6).map((movie: { id: number; title: string; poster_path?: string }, index: number) => ({
+        const trending = trendingRes.data.results.slice(0, 7).map((movie: { id: number; title: string; poster_path?: string }, index: number) => ({
           id: movie.id,
           title: movie.title,
           poster: movie.poster_path ? `https://image.tmdb.org/t/p/w92${movie.poster_path}` : '',
@@ -94,7 +94,7 @@ export default function TopComments() {
         }));
 
         // Process top rated movies
-        const topRated = topRatedRes.data.results.slice(0, 6).map((movie: { id: number; title: string; poster_path?: string; vote_average?: number }, index: number) => ({
+        const topRated = topRatedRes.data.results.slice(0, 7).map((movie: { id: number; title: string; poster_path?: string; vote_average?: number }, index: number) => ({
           id: movie.id,
           title: movie.title,
           poster: movie.poster_path ? `https://image.tmdb.org/t/p/w92${movie.poster_path}` : '',
@@ -120,15 +120,24 @@ export default function TopComments() {
   }
 
   useEffect(() => {
+    let resizeTimer: NodeJS.Timeout
     const checkScreenSize = () => {
       const width = window.innerWidth
       setIsMobile(width < 768)
       setIsTablet(width >= 768 && width < 1024)
     }
 
+    const handleResize = () => {
+      clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(checkScreenSize, 150)
+    }
+
     checkScreenSize()
-    window.addEventListener('resize', checkScreenSize)
-    return () => window.removeEventListener('resize', checkScreenSize)
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      clearTimeout(resizeTimer)
+    }
   }, [])
 
   useEffect(() => {
@@ -234,41 +243,13 @@ export default function TopComments() {
   return (
     <section className="py-8 sm:py-12 lg:py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-900 to-black relative overflow-hidden">
       {/* Enhanced Background Effects */}
-      <div className="absolute inset-0 overflow-hidden">
-        <motion.div
-          animate={{
-            rotate: [0, 360],
-            scale: [1, 1.1, 1]
-          }}
-          transition={{
-            rotate: { duration: 50, repeat: Infinity, ease: "linear" },
-            scale: { duration: 20, repeat: Infinity, repeatType: "mirror" }
-          }}
-          className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-full blur-3xl"
-        />
-        <motion.div
-          animate={{
-            rotate: [360, 0],
-            scale: [1.1, 1, 1.1]
-          }}
-          transition={{
-            rotate: { duration: 45, repeat: Infinity, ease: "linear" },
-            scale: { duration: 25, repeat: Infinity, repeatType: "mirror" }
-          }}
-          className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-tr from-blue-500/20 to-cyan-500/20 rounded-full blur-3xl"
-        />
-        <motion.div
-          animate={{
-            x: [0, 100, 0],
-            y: [0, -50, 0]
-          }}
-          transition={{
-            duration: 30,
-            repeat: Infinity,
-            repeatType: "mirror"
-          }}
-          className="absolute top-1/4 left-1/4 w-40 h-40 bg-yellow-500/10 rounded-full blur-2xl"
-        />
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Purple/Pink Glow (Top Right) */}
+        <div className="hidden md:block absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-purple-500/15 to-pink-500/15 rounded-full blur-[100px] opacity-70" />
+        {/* Blue/Cyan Glow (Bottom Left) */}
+        <div className="hidden md:block absolute -bottom-40 -left-40 w-96 h-96 bg-gradient-to-tr from-blue-500/15 to-cyan-500/15 rounded-full blur-[100px] opacity-70" />
+        {/* Yellow/Amber Glow (Center Left) */}
+        <div className="hidden md:block absolute top-1/4 left-1/12 w-80 h-80 bg-yellow-500/5 rounded-full blur-[120px] opacity-50" />
       </div>
 
       <div className="max-w-7xl mx-auto relative z-10">
@@ -367,8 +348,11 @@ export default function TopComments() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: index * 0.1 }}
                     whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                    className="bg-gray-800/40 backdrop-blur-md rounded-xl p-3 sm:p-4 border border-white/5 hover:border-gray-500/30 transition-all duration-300 flex flex-col h-full group cursor-pointer shadow-lg hover:shadow-xl"
+                    className="bg-gradient-to-br from-white/[0.03] to-white/[0.01] backdrop-blur-xl rounded-xl p-4 sm:p-5 border border-white/[0.06] hover:border-white/[0.15] hover:shadow-[0_0_30px_rgba(255,255,255,0.02)] hover:bg-white/[0.04] transition-all duration-500 flex flex-col h-full group cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative overflow-hidden"
                   >
+                    {/* Subtle Top Shiny Border */}
+                    <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
                     {/* User Info */}
                     <div className="flex items-center gap-2 sm:gap-3 mb-3">
                       <div className="relative flex-shrink-0">
@@ -401,17 +385,17 @@ export default function TopComments() {
                             alt={comment.movie.title}
                             width={40}
                             height={56}
-                            className="w-10 h-14 sm:w-12 sm:h-16 object-cover rounded-md shadow-md"
+                            className="w-10 h-14 sm:w-12 sm:h-16 object-cover rounded-lg shadow-lg border border-white/10 transition-transform duration-300 group-hover:scale-105"
                           />
                         ) : (
-                          <div className="w-10 h-14 sm:w-12 sm:h-16 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-md flex items-center justify-center shadow-inner">
+                          <div className="w-10 h-14 sm:w-12 sm:h-16 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-lg flex items-center justify-center shadow-inner">
                             <span className="text-white text-[10px] font-bold">MOVIE</span>
                           </div>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="text-white font-semibold text-xs sm:text-sm truncate group-hover:text-blue-400 transition-colors">
-                          {comment.movie.title}
+                           {comment.movie.title}
                         </h4>
                         <p className="text-gray-300 text-xs sm:text-sm leading-relaxed mt-1 line-clamp-2">
                           {comment.content}
@@ -423,23 +407,29 @@ export default function TopComments() {
                     <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-700/50">
                       <div className="flex items-center gap-4 text-xs text-gray-400">
                         <motion.span
-                          whileHover={{ scale: 1.1 }}
+                          whileHover={{ scale: 1.15 }}
+                          whileTap={{ scale: 0.85 }}
                           className="flex items-center gap-1.5 hover:text-red-400 transition-colors cursor-pointer group/like"
                         >
-                          <HeartIcon className="w-4 h-4 group-hover/like:fill-red-400 transition-colors" />
+                          <HeartIcon className="w-4 h-4 group-hover/like:fill-red-400 group-hover/like:scale-110 transition-all duration-300" />
                           <span>{comment.likes}</span>
                         </motion.span>
                         <motion.span
-                          whileHover={{ scale: 1.1 }}
+                          whileHover={{ scale: 1.15 }}
+                          whileTap={{ scale: 0.85 }}
                           className="flex items-center gap-1.5 hover:text-blue-400 transition-colors cursor-pointer group/reply"
                         >
-                          <ChatBubbleLeftIcon className="w-4 h-4 group-hover/reply:fill-blue-400 transition-colors" />
+                          <ChatBubbleLeftIcon className="w-4 h-4 group-hover/reply:fill-blue-400 group-hover/reply:scale-110 transition-all duration-300" />
                           <span>{comment.replies}</span>
                         </motion.span>
                       </div>
                       <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-medium bg-blue-400/10 hover:bg-blue-400/20 px-3 py-1 rounded-full"
+                        whileHover={{ 
+                          scale: 1.05,
+                          boxShadow: "0 0 12px rgba(96, 165, 250, 0.4)" 
+                        }}
+                        whileTap={{ scale: 0.95 }}
+                        className="text-xs text-blue-400 hover:text-blue-300 transition-all duration-300 font-semibold bg-blue-400/10 hover:bg-blue-400/20 px-3.5 py-1.5 rounded-full border border-blue-400/20 hover:border-blue-400/40 relative overflow-hidden"
                       >
                         {t('reply')}
                       </motion.button>
@@ -457,9 +447,9 @@ export default function TopComments() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="bg-gray-900/40 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
+          className="bg-gradient-to-br from-gray-900/60 to-black/60 backdrop-blur-2xl rounded-2xl border border-white/[0.08] shadow-[0_16px_48px_rgba(0,0,0,0.5)] overflow-hidden"
         >
-          <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-white/10">
+          <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
             {/* Trending Now */}
             <div className="p-3 sm:p-4 lg:p-6 flex flex-col h-full hover:bg-white/[0.02] transition-colors">
               <div className="flex items-center gap-2 mb-3">
@@ -475,7 +465,7 @@ export default function TopComments() {
                   </div>
                 ) : (
                   trendingMovies.map((movie, index) => (
-                    <Link key={movie.id} href={`/movies/${movie.id}`} className={index === 5 ? "hidden lg:block" : "block"}>
+                    <Link key={movie.id} href={`/movies/${movie.id}`} className={index >= 5 ? "hidden lg:block" : "block"}>
                       <motion.div
                         whileHover={{ x: 4, backgroundColor: "rgba(55, 65, 81, 0.4)" }}
                         className="flex items-center gap-2 p-1.5 sm:p-2 rounded-lg transition-all cursor-pointer group/trending"
@@ -493,7 +483,7 @@ export default function TopComments() {
                             alt={movie.title}
                             width={32}
                             height={48}
-                            className="w-8 h-12 object-cover rounded shadow-inner flex-shrink-0"
+                            className="w-8 h-12 object-cover rounded-md shadow-md border border-white/5 flex-shrink-0 group-hover/trending:scale-105 transition-transform duration-300"
                           />
                         ) : (
                           <div className="w-8 h-12 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded flex items-center justify-center shadow-inner flex-shrink-0">
@@ -533,7 +523,7 @@ export default function TopComments() {
                   </div>
                 ) : (
                   mostLikedMovies.map((movie, index) => (
-                    <Link key={movie.id} href={`/movies/${movie.id}`} className={index === 5 ? "hidden lg:block" : "block"}>
+                    <Link key={movie.id} href={`/movies/${movie.id}`} className={index >= 5 ? "hidden lg:block" : "block"}>
                       <motion.div
                         whileHover={{ x: 4, backgroundColor: "rgba(55, 65, 81, 0.4)" }}
                         className="flex items-center gap-2 p-1.5 sm:p-2 rounded-lg transition-all cursor-pointer group/liked"
@@ -551,7 +541,7 @@ export default function TopComments() {
                             alt={movie.title}
                             width={32}
                             height={48}
-                            className="w-8 h-12 object-cover rounded shadow-inner flex-shrink-0"
+                            className="w-8 h-12 object-cover rounded-md shadow-md border border-white/5 flex-shrink-0 group-hover/liked:scale-105 transition-transform duration-300"
                           />
                         ) : (
                           <div className="w-8 h-12 bg-gradient-to-br from-red-500/20 to-pink-500/20 rounded flex items-center justify-center shadow-inner flex-shrink-0">
@@ -620,12 +610,15 @@ export default function TopComments() {
                   >
                     {shouldCycleNewComments && (
                       <div className="pointer-events-none absolute left-1 top-2 bottom-2 z-30 w-px bg-cyan-300/15">
-                        <motion.div
+                        <div
                           className="absolute -left-1 h-6 w-2 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(34,211,238,0.85)]"
-                          animate={{
-                            y: (newCommentStartIndex % NEW_COMMENTS_VISIBLE_COUNT) * (NEW_COMMENT_ROW_HEIGHT + NEW_COMMENT_ROW_GAP)
+                          style={{
+                            transform: `translateY(${(newCommentStartIndex % NEW_COMMENTS_VISIBLE_COUNT) * (NEW_COMMENT_ROW_HEIGHT + NEW_COMMENT_ROW_GAP)}px)`,
+                            transition: newCommentsTransitionEnabled
+                              ? `transform ${NEW_COMMENT_SCROLL_DURATION}s cubic-bezier(0.22, 1, 0.36, 1)`
+                              : 'none',
+                            willChange: 'transform'
                           }}
-                          transition={{ duration: NEW_COMMENT_SCROLL_DURATION, ease: [0.22, 1, 0.36, 1] }}
                         />
                       </div>
                     )}
@@ -637,17 +630,19 @@ export default function TopComments() {
                           : undefined
                       }}
                     >
-                    <motion.div
+                    <div
                       className="relative z-10 flex flex-col gap-2.5"
-                      animate={{
-                        y: shouldCycleNewComments
-                          ? -newCommentStartIndex * (NEW_COMMENT_ROW_HEIGHT + NEW_COMMENT_ROW_GAP)
-                          : 0
+                      style={{
+                        transform: `translateY(${
+                          shouldCycleNewComments
+                            ? -newCommentStartIndex * (NEW_COMMENT_ROW_HEIGHT + NEW_COMMENT_ROW_GAP)
+                            : 0
+                        }px)`,
+                        transition: newCommentsTransitionEnabled
+                          ? `transform ${NEW_COMMENT_SCROLL_DURATION}s cubic-bezier(0.22, 1, 0.36, 1)`
+                          : 'none',
+                        willChange: 'transform'
                       }}
-                      transition={newCommentsTransitionEnabled
-                        ? { duration: NEW_COMMENT_SCROLL_DURATION, ease: [0.22, 1, 0.36, 1] }
-                        : { duration: 0 }
-                      }
                     >
                       {newCommentsTrack.map((comment, index) => (
                     <Link
@@ -698,7 +693,7 @@ export default function TopComments() {
                       </motion.div>
                     </Link>
                       ))}
-                    </motion.div>
+                    </div>
                     </div>
                   </motion.div>
                 )}

@@ -32,7 +32,7 @@ interface Movie {
   year: number | '';
   releaseDate?: string;
   director: string;
-  cast: string[];
+  cast: unknown[];
   genre: string;
   description: string;
   poster: string;

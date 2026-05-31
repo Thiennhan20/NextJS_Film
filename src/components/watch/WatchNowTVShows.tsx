@@ -32,7 +32,7 @@ interface TVShow {
   year: number | ''
   firstAirDate?: string
   creator: string
-  cast: string[]
+  cast: unknown[]
   genre: string
   description: string
   poster: string

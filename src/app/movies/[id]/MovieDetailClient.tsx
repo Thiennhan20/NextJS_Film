@@ -16,6 +16,12 @@ import WatchNowMovies from '@/components/watch/WatchNowMovies';
 import RelatedContent from '@/components/RelatedContent';
 import { useTranslations } from 'next-intl';
 
+interface CastMember {
+  name: string;
+  character: string;
+  profilePath: string;
+}
+
 // Định nghĩa kiểu Movie rõ ràng
 interface Movie {
   id: number;
@@ -25,7 +31,7 @@ interface Movie {
   year: number | '';
   releaseDate?: string;
   director: string;
-  cast: string[];
+  cast: CastMember[];
   genre: string;
   description: string;
   poster: string;
@@ -33,8 +39,8 @@ interface Movie {
   trailer: string;
   movieUrl: string;
   scenes: string[];
-
 }
+
 
 
 
@@ -165,7 +171,11 @@ export default function MovieDetailClient({ params }: { params: Promise<{ id: st
           year: data.release_date ? Number(data.release_date.slice(0, 4)) : '' as number | '',
           releaseDate: data.release_date || '',
           director: credits.crew?.find((person: { job: string; name: string }) => person.job === 'Director')?.name || '',
-          cast: credits.cast?.slice(0, 10).map((person: { name: string }) => person.name) || [],
+          cast: credits.cast?.slice(0, 10).map((person: { name: string; character?: string; profile_path?: string }) => ({
+            name: person.name,
+            character: person.character || '',
+            profilePath: person.profile_path ? `https://image.tmdb.org/t/p/w185${person.profile_path}` : ''
+          })) || [],
           genre: data.genres ? data.genres.map((g: { name: string }) => g.name).join(', ') : '',
           description: data.overview,
           poster: data.poster_path ? `https://image.tmdb.org/t/p/w342${data.poster_path}` : '',
@@ -173,7 +183,6 @@ export default function MovieDetailClient({ params }: { params: Promise<{ id: st
           trailer,
           movieUrl: '',
           scenes,
-
         };
         setMovie(movieData);
       } catch {
@@ -296,74 +305,166 @@ export default function MovieDetailClient({ params }: { params: Promise<{ id: st
                 <p className="text-gray-300">{t('director')}: {director}</p>
               )}
               {/* Cast: collapsed to a single line with Show more */}
-              <div>
-                {!isCastExpanded ? (
-                  <div className="flex items-center">
-                    <div className="min-w-0 overflow-hidden">
-                      <div className="flex flex-nowrap gap-2 whitespace-nowrap">
-                        {cast.map((actor: string, index: number) => (
-                          <span key={index} className="shrink-0 last:shrink last:min-w-0 last:max-w-[50%] last:truncate px-3 py-1 rounded-full text-sm bg-gray-900/60 border border-white/15 text-white shadow-sm backdrop-blur-[2px]">
-                            {actor}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex-none flex items-center gap-2 pl-2">
-                      <span className="px-2 py-0.5 rounded-full bg-gray-900/60 border border-white/15 text-white text-xs shadow-sm backdrop-blur-[2px] select-none">…</span>
-                      <button
-                        onClick={() => setIsCastExpanded(true)}
-                        className="text-xs px-2 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white border border-white/20 backdrop-blur-sm"
-                      >
-                        {t('showMore')}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-2 items-center">
-                    {cast.map((actor: string, index: number) => (
-                      <span key={index} className="px-3 py-1 rounded-full text-sm bg-gray-900/60 border border-white/15 text-white shadow-sm backdrop-blur-[2px]">
-                        {actor}
-                      </span>
-                    ))}
-                    <button
-                      onClick={() => setIsCastExpanded(false)}
-                      className="text-xs px-2 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white border border-white/20"
+              <div className="min-h-[36px]">
+                <AnimatePresence mode="wait">
+                  {!isCastExpanded ? (
+                    <motion.div
+                      key="cast-collapsed"
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.2 }}
+                      className="flex items-center w-full"
                     >
-                      {t('showLess')}
-                    </button>
-                  </div>
-                )}
+                      <div className="min-w-0 overflow-hidden flex-1">
+                        <div className="flex flex-nowrap gap-2 whitespace-nowrap py-1">
+                          {cast.map((actor: CastMember, index: number) => (
+                            <span key={index} className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm bg-gray-900/60 border border-white/15 text-white shadow-sm backdrop-blur-[2px]">
+                              {actor.profilePath ? (
+                                <div className="relative w-5 h-5 rounded-full overflow-hidden shrink-0 border border-white/20">
+                                  <Image
+                                    src={actor.profilePath}
+                                    alt={actor.name}
+                                    fill
+                                    className="object-cover"
+                                    unoptimized
+                                  />
+                                </div>
+                              ) : (
+                                <div className="w-5 h-5 rounded-full bg-gray-800 flex items-center justify-center text-[10px] shrink-0 text-gray-400">
+                                  👤
+                                </div>
+                              )}
+                              <span className="max-w-[100px] truncate">{actor.name}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex-none flex items-center gap-2 pl-2">
+                        <span className="px-2 py-0.5 rounded-full bg-gray-900/60 border border-white/15 text-white text-xs shadow-sm backdrop-blur-[2px] select-none">…</span>
+                        <button
+                          onClick={() => setIsCastExpanded(true)}
+                          className="text-xs px-2.5 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white border border-white/20 backdrop-blur-sm transition-colors"
+                        >
+                          {t('showMore')}
+                        </button>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="cast-expanded"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 4 }}
+                      transition={{ duration: 0.2 }}
+                      className="w-full"
+                    >
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6 py-2">
+                        {cast.map((actor: CastMember, index: number) => (
+                          <motion.div
+                            key={index}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: index * 0.03, duration: 0.2 }}
+                            whileHover={{ y: -4 }}
+                            className="flex flex-col items-center text-center group"
+                          >
+                            <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-red-500 transition-colors duration-300 shadow-md">
+                              {actor.profilePath ? (
+                                <Image
+                                  src={actor.profilePath}
+                                  alt={actor.name}
+                                  fill
+                                  className="object-cover transition-transform duration-300 group-hover:scale-110"
+                                  unoptimized
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-gray-800 flex items-center justify-center text-xl text-gray-500">
+                                  👤
+                                </div>
+                              )}
+                            </div>
+                            <span className="mt-2 text-xs font-semibold text-white group-hover:text-red-400 transition-colors line-clamp-1 w-full px-1">
+                              {actor.name}
+                            </span>
+                            <span className="text-[10px] text-gray-400 line-clamp-1 w-full px-1">
+                              {actor.character}
+                            </span>
+                          </motion.div>
+                        ))}
+
+                        {/* Beautiful circular Show Less action card directly inside the grid */}
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: cast.length * 0.03, duration: 0.2 }}
+                          whileHover={{ y: -4 }}
+                          onClick={() => setIsCastExpanded(false)}
+                          className="flex flex-col items-center text-center group cursor-pointer"
+                        >
+                          <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-white/15 bg-white/10 group-hover:bg-red-600/20 group-hover:border-red-500 transition-all duration-300 shadow-md flex items-center justify-center backdrop-blur-sm">
+                            <svg className="w-5 h-5 text-white group-hover:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+                            </svg>
+                          </div>
+                          <span className="mt-2 text-xs font-semibold text-white group-hover:text-red-400 transition-colors line-clamp-1 w-full px-1">
+                            {t('showLess')}
+                          </span>
+                          <span className="text-[10px] text-gray-400 line-clamp-1 w-full px-1">
+                            Collapse
+                          </span>
+                        </motion.div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
 
             {/* Description: collapsed to a single line with Show more */}
-            {!isDescExpanded ? (
-              <div className="relative">
-                <p className="text-gray-300 leading-relaxed whitespace-nowrap overflow-hidden text-ellipsis pr-24">
-                  {description}
-                </p>
-                <div className="absolute inset-y-0 right-0 flex items-center pl-6">
-                  <div className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-black/70 to-transparent"></div>
-
-                  <button
-                    onClick={() => setIsDescExpanded(true)}
-                    className="relative z-10 text-xs px-2 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white border border-white/20 backdrop-blur-sm"
+            <div className="min-h-[24px]">
+              <AnimatePresence mode="wait">
+                {!isDescExpanded ? (
+                  <motion.div
+                    key="desc-collapsed"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="relative"
                   >
-                    {t('readMore')}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-gray-300 leading-relaxed">{description}</p>
-                <button
-                  onClick={() => setIsDescExpanded(false)}
-                  className="text-xs px-2 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white border border-white/20"
-                >
-                  {t('showLess')}
-                </button>
-              </div>
-            )}
+                    <p className="text-gray-300 leading-relaxed text-sm sm:text-base whitespace-nowrap overflow-hidden text-ellipsis pr-24">
+                      {description}
+                    </p>
+                    <div className="absolute inset-y-0 right-0 flex items-center pl-6">
+                      <button
+                        onClick={() => setIsDescExpanded(true)}
+                        className="relative z-10 text-xs px-2 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white border border-white/20 backdrop-blur-sm transition-colors"
+                      >
+                        {t('readMore')}
+                      </button>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="desc-expanded"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="space-y-2"
+                  >
+                    <p className="text-gray-300 leading-relaxed text-sm sm:text-base">{description}</p>
+                    <button
+                      onClick={() => setIsDescExpanded(false)}
+                      className="text-xs px-2 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white border border-white/20 transition-colors"
+                    >
+                      {t('showLess')}
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             <div className="flex flex-wrap gap-2 sm:gap-3">
               <motion.button
@@ -400,7 +501,7 @@ export default function MovieDetailClient({ params }: { params: Promise<{ id: st
                   <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
-                  {t('scenes')}
+                  <span className="hidden sm:inline">{t('scenes')}</span>
                 </motion.button>
               )}
             </div>
