@@ -354,12 +354,12 @@ export default function Navigation() {
                     afterLeave={() => setIsProfileDropdownActive(false)}
                   >
                     <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right bg-gray-900 backdrop-blur-md divide-y divide-gray-700 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-60 border border-gray-700">
-                      <div className="px-1 py-1 ">
+                      <div className="px-1 py-1">
                         <Menu.Item>
                           {({ active }) => (
                             <Link
                               href="/profile"
-                              className={`w-full flex items-center space-x-2 text-left px-4 py-2 text-gray-300 ${
+                              className={`w-full flex items-center space-x-2 text-left px-3 py-2 rounded-md text-sm text-gray-300 ${
                                 active ? 'bg-gray-700 text-white' : 'hover:bg-gray-800 hover:text-white'
                               }`}
                             >
@@ -372,7 +372,7 @@ export default function Navigation() {
                           {({ active }) => (
                             <Link
                               href="/watchlist"
-                              className={`w-full flex items-center space-x-2 text-left px-4 py-2 text-gray-300 ${
+                              className={`w-full flex items-center space-x-2 text-left px-3 py-2 rounded-md text-sm text-gray-300 ${
                                 active ? 'bg-gray-700 text-white' : 'hover:bg-gray-800 hover:text-white'
                               }`}
                             >
@@ -385,7 +385,7 @@ export default function Navigation() {
                           {({ active }) => (
                             <Link
                               href="/settings"
-                              className={`w-full flex items-center space-x-2 text-left px-4 py-2 text-gray-300 ${
+                              className={`w-full flex items-center space-x-2 text-left px-3 py-2 rounded-md text-sm text-gray-300 ${
                                 active ? 'bg-gray-700 text-white' : 'hover:bg-gray-800 hover:text-white'
                               }`}
                             >
@@ -401,7 +401,7 @@ export default function Navigation() {
                                 await logout();
                                 toast.success(t('loggedOut'));
                               }}
-                              className={`w-full text-left px-4 py-2 text-gray-300 ${
+                              className={`w-full text-left px-3 py-2 rounded-md text-sm text-gray-300 ${
                                 active ? 'bg-red-500 text-white' : 'hover:bg-gray-800 hover:text-white'
                               }`}
                             >

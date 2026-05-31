@@ -29,15 +29,60 @@ export function middleware(request: NextRequest) {
   }
 
   const langParam = searchParams.get('lang');
-  const cookieLocale = request.cookies.get('locale')?.value;
+  const cookieLocaleRaw = request.cookies.get('locale')?.value;
 
-  // 1. ?lang= is present in URL → use it as source of truth
   const paramLocale = parseLocale(langParam);
-  if (paramLocale) {
-    const response = NextResponse.next();
-    // Update cookie if it differs
-    if (cookieLocale !== paramLocale) {
-      response.cookies.set('locale', paramLocale, {
+  const cookieLocale = parseLocale(cookieLocaleRaw);
+
+  // Check if navigation is internal or external
+  const referer = request.headers.get('referer');
+  const host = request.headers.get('host');
+  let isInternalNavigation = false;
+  if (referer && host) {
+    try {
+      const refererUrl = new URL(referer);
+      if (refererUrl.host === host) {
+        isInternalNavigation = true;
+      }
+    } catch {
+      // Ignore invalid URL
+    }
+  }
+
+  // Determine target locale:
+  // - If URL has a param AND (either cookie is empty OR it is an external direct entry), URL param wins
+  // - Otherwise, cookie wins (keeps active preference persistent across history and routes)
+  let targetLocale: string;
+  if (paramLocale && (!cookieLocale || !isInternalNavigation)) {
+    targetLocale = paramLocale;
+  } else if (cookieLocale) {
+    targetLocale = cookieLocale;
+  } else {
+    targetLocale = 'en';
+  }
+
+  // Check if URL or Cookie needs updating to match targetLocale
+  const cookieNeedsUpdate = cookieLocale !== targetLocale;
+  
+  // URL matches if:
+  // - targetLocale is 'en' and no langParam is present
+  // - targetLocale is 'vi' and langParam matches 'vi'
+  const urlMatches =
+    targetLocale === 'en'
+      ? !langParam
+      : paramLocale === targetLocale;
+
+  if (!urlMatches) {
+    const url = request.nextUrl.clone();
+    if (targetLocale === 'en') {
+      url.searchParams.delete('lang');
+    } else {
+      url.searchParams.set('lang', LOCALE_TO_FULL[targetLocale] || `${targetLocale}-${targetLocale.toUpperCase()}`);
+    }
+    
+    const response = NextResponse.redirect(url);
+    if (cookieNeedsUpdate) {
+      response.cookies.set('locale', targetLocale, {
         path: '/',
         maxAge: 365 * 24 * 60 * 60, // 1 year
         sameSite: 'lax',
@@ -46,16 +91,17 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // 2. No ?lang= in URL but cookie exists → redirect to add ?lang= to URL
-  const savedLocale = parseLocale(cookieLocale);
-  if (savedLocale && savedLocale !== 'en') {
-    const url = request.nextUrl.clone();
-    url.searchParams.set('lang', LOCALE_TO_FULL[savedLocale] || `${savedLocale}-${savedLocale.toUpperCase()}`);
-    return NextResponse.redirect(url);
+  // If URL matches, but cookie still needs update
+  if (cookieNeedsUpdate) {
+    const response = NextResponse.next();
+    response.cookies.set('locale', targetLocale, {
+      path: '/',
+      maxAge: 365 * 24 * 60 * 60, // 1 year
+      sameSite: 'lax',
+    });
+    return response;
   }
 
-  // 3. No param, no cookie (or cookie is 'en') → continue with default 'en'
-  // For 'en' we don't add ?lang= to keep URLs clean (default language)
   return NextResponse.next();
 }
 

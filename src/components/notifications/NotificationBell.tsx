@@ -191,34 +191,60 @@ export default function NotificationBell({ isScrolled = false, compact = false }
   }, [isAuthenticated, t])
 
   const checkVersionNotification = useCallback(async () => {
-    try {
-      const response = await fetch('/api/version', { cache: 'no-store' })
-      if (!response.ok) return
+    const now = Date.now()
+    const lastCheck = localStorage.getItem('last_version_check_timestamp')
+    let data: VersionInfo | null = null
 
-      const data: VersionInfo = await response.json()
-      if (!data.hash) {
-        setVersionNotification(null)
-        return
+    // Attempt to read from localStorage cache first
+    const cachedUpdate = localStorage.getItem('cached_version_update')
+    if (lastCheck && now - parseInt(lastCheck, 10) < 10 * 60 * 1000 && cachedUpdate) {
+      try {
+        data = JSON.parse(cachedUpdate)
+      } catch {
+        // Ignore parse error
       }
-
-      const readHash = localStorage.getItem('notification_version_read_hash')
-      const notifiedHash = localStorage.getItem('notified_hash')
-      const message = data.changelog?.[0] || data.description
-      const isCurrentVersion = data.hash === CURRENT_HASH || CURRENT_HASH === 'dev'
-
-      setVersionNotification({
-        id: `version-${data.hash}`,
-        type: 'version_updated',
-        read: isCurrentVersion || readHash === data.hash || notifiedHash === data.hash,
-        metadata: {
-          versionHash: data.hash,
-          versionMessage: message
-        },
-        createdAt: data.updatedAt || new Date().toISOString()
-      })
-    } catch {
-      // Version notifications are best-effort and should never block the header.
     }
+
+    // If cache missed or is too old, fetch from server
+    if (!data) {
+      try {
+        const response = await fetch('/api/version', { cache: 'no-store' })
+        if (!response.ok) return
+
+        data = await response.json()
+        if (data) {
+          localStorage.setItem('last_version_check_timestamp', String(now))
+          if (data.hash !== CURRENT_HASH) {
+            localStorage.setItem('cached_version_update', JSON.stringify(data))
+          } else {
+            localStorage.removeItem('cached_version_update')
+          }
+        }
+      } catch {
+        // Fail silently
+      }
+    }
+
+    if (!data || !data.hash) {
+      setVersionNotification(null)
+      return
+    }
+
+    const readHash = localStorage.getItem('notification_version_read_hash')
+    const notifiedHash = localStorage.getItem('notified_hash')
+    const message = data.changelog?.[0] || data.description
+    const isCurrentVersion = data.hash === CURRENT_HASH || CURRENT_HASH === 'dev'
+
+    setVersionNotification({
+      id: `version-${data.hash}`,
+      type: 'version_updated',
+      read: isCurrentVersion || readHash === data.hash || notifiedHash === data.hash,
+      metadata: {
+        versionHash: data.hash,
+        versionMessage: message
+      },
+      createdAt: data.updatedAt || new Date().toISOString()
+    })
   }, [])
 
   useEffect(() => {

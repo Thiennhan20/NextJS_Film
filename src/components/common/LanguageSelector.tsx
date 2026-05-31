@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -31,6 +31,31 @@ export default function LanguageSelector({ isScrolled = false, className = '' }:
   const searchParams = useSearchParams()
   const selectedLanguage = languages.find(l => l.code === locale) || languages[0]
 
+  useEffect(() => {
+    // Detect mismatch between rendered locale and actual cookie
+    const getCookie = (name: string) => {
+      const value = `; ${document.cookie}`
+      const parts = value.split(`; ${name}=`)
+      if (parts.length === 2) return parts.pop()?.split(';').shift()
+      return null
+    }
+
+    const cookieLocale = getCookie('locale')
+    if (cookieLocale && cookieLocale !== locale) {
+      // Reload/redirect to match cookie preference when browser history traversal leaves them out of sync
+      const params = new URLSearchParams(window.location.search)
+      if (cookieLocale === 'en') {
+        params.delete('lang')
+      } else {
+        const fullCode = cookieLocale === 'vi' ? 'vi-VN' : 'en-US'
+        params.set('lang', fullCode)
+      }
+      const query = params.toString()
+      const newUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname
+      window.location.replace(newUrl)
+    }
+  }, [locale])
+
   const handleLanguageChange = (language: Language) => {
     setIsOpen(false)
 
@@ -50,8 +75,8 @@ export default function LanguageSelector({ isScrolled = false, className = '' }:
     const query = params.toString()
     const newUrl = query ? `${pathname}?${query}` : pathname
 
-    // Use window.location.href for a hard navigation to avoid race conditions with Next.js router
-    window.location.href = newUrl
+    // Use window.location.replace to avoid duplicating the same page in different languages on the history stack
+    window.location.replace(newUrl)
   }
 
   return (

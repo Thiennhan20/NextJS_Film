@@ -15,18 +15,51 @@ export default function VersionChecker() {
   const [showModal, setShowModal] = useState(false)
 
   const checkVersion = useCallback(async () => {
-    // Không chạy check ở môi trường dev để tránh spam
+    // Do not run check in dev environment to avoid noise
     if (process.env.NODE_ENV === 'development' || CURRENT_HASH === 'dev') return;
+
+    const now = Date.now()
+    const lastCheck = localStorage.getItem('last_version_check_timestamp')
+    
+    // Throttle checks to once every 10 minutes (10 * 60 * 1000 ms)
+    if (lastCheck && now - parseInt(lastCheck, 10) < 10 * 60 * 1000) {
+      // Try to load cached update if there was one
+      const cachedUpdate = localStorage.getItem('cached_version_update')
+      if (cachedUpdate) {
+        try {
+          const data: VersionInfo = JSON.parse(cachedUpdate)
+          if (data.hash !== CURRENT_HASH) {
+            const notified = localStorage.getItem('notified_hash')
+            if (notified !== data.hash) {
+              setServerVersion(data)
+              setShowModal(true)
+            }
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+      return;
+    }
 
     try {
       const res = await fetch('/api/version', { cache: 'no-store' })
       if (!res.ok) return
       const data: VersionInfo = await res.json()
 
-      // Nếu hash trên Vercel khác với hash lúc user nạp trang ban đầu -> Có update!
-      if (data.hash === CURRENT_HASH) return
+      // Save check timestamp
+      localStorage.setItem('last_version_check_timestamp', String(now))
 
-      // Đã nạp thông báo này rồi (User vừa bấm Tải lại, trang đang reload, đừng hiện lại)
+      // If matches, clear cache and do nothing
+      if (data.hash === CURRENT_HASH) {
+        localStorage.removeItem('cached_version_update')
+        return
+      }
+
+      // Cache the version info for offline/throttled checks
+      localStorage.setItem('cached_version_update', JSON.stringify(data))
+
+      // Already notified
       const notified = localStorage.getItem('notified_hash')
       if (notified === data.hash) return
 
@@ -38,10 +71,10 @@ export default function VersionChecker() {
   }, [])
 
   useEffect(() => {
-    // Initial check sau 5s phòng khi app cache cũ mở lên
+    // Initial check after 5s
     const initTimeout = setTimeout(checkVersion, 5000)
 
-    // Chỉ check khi user quay lại tab (không dùng setInterval nữa)
+    // Check only when tab becomes active (throttled inside checkVersion)
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') checkVersion()
     }
