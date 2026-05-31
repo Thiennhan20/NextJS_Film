@@ -45,6 +45,7 @@ export interface UserEvent {
   username: string;
   avatar?: string;
   member_count: number;
+  is_host?: boolean;
 }
 
 interface UseWatchPartySocketOptions {

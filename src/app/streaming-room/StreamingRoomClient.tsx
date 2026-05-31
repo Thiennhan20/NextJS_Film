@@ -138,13 +138,9 @@ function StreamingRoomContent() {
         setStreamUrl(status.stream_url);
       }
 
-      // Sync members list
-      if (status.members) {
+      // Sync members list — always prefer server-provided members
+      if (status.members && status.members.length > 0) {
         setRoomMembers(status.members);
-      } else {
-        setRoomMembers([
-          { user_id: status.is_host ? userId : 'host', username: status.host_name, is_host: true }
-        ]);
       }
 
       // Apply initial position + auto-play if host is playing
@@ -239,7 +235,7 @@ function StreamingRoomContent() {
       showNotification(`🎬 ${t('streamChanged')}`);
     },
 
-    onUserJoined: ({ username, user_id, avatar, member_count }) => {
+    onUserJoined: ({ username, user_id, avatar, member_count, is_host: joinedIsHost }) => {
       setMemberCount(member_count);
       showNotification(`👋 ${t('userJoined', { user: username })}`);
       setChatMessages(prev => [...prev, {
@@ -247,10 +243,11 @@ function StreamingRoomContent() {
         message: t('userJoined', { user: username }),
         sent_at: new Date().toISOString(), type: 'system', systemKind: 'join',
       }]);
-      // Update roomMembers
+      // Update roomMembers — deduplicate by user_id
       setRoomMembers(prev => {
-        if (prev.some(m => m.user_id === user_id)) return prev;
-        return [...prev, { user_id, username, avatar, is_host: false }];
+        // Remove any existing entry with the same user_id (prevents duplicates)
+        const filtered = prev.filter(m => m.user_id !== user_id);
+        return [...filtered, { user_id, username, avatar, is_host: !!joinedIsHost }];
       });
     },
 
@@ -599,49 +596,43 @@ function StreamingRoomContent() {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex flex-col">
       {/* ─── Top HUD Bar (Floating in non-fullscreen) ─── */}
       <div className={`z-40 w-full ${isPlayerFullscreen ? 'bg-black/60 border-b border-gray-800' : 'max-w-7xl mx-auto px-2 sm:px-6 pt-3 shrink-0'}`}>
-        <div className={isPlayerFullscreen ? 'px-3 sm:px-6 py-2.5' : 'bg-black/40 backdrop-blur-xl border border-white/[0.05] rounded-xl px-4 py-2.5 shadow-2xl'}>
-          <div className="flex items-center justify-between">
-            {/* Left */}
-            <div className="flex items-center gap-3 sm:gap-5 min-w-0">
-              <button onClick={() => router.push('/streaming-lobby')} className="flex items-center gap-1.5 text-gray-400 hover:text-yellow-400 transition-colors text-sm shrink-0">
+        <div className={isPlayerFullscreen ? 'px-3 sm:px-6 py-2.5' : 'bg-black/40 backdrop-blur-xl border border-white/[0.05] rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 shadow-2xl'}>
+          {/* Row 1: Back + Room ID + Connection status */}
+          <div className="flex items-center justify-between gap-2">
+            {/* Left: Back + Room ID */}
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+              <button onClick={() => router.push('/streaming-lobby')} className="flex items-center gap-1 text-gray-400 hover:text-yellow-400 transition-colors text-sm shrink-0">
                 <ArrowLeft className="h-4 w-4" />
                 <span className="hidden sm:inline">{t('lobby')}</span>
               </button>
 
-              <div className="flex items-center gap-1.5 text-yellow-400 shrink-0">
-                <Hash className="h-3.5 w-3.5" />
-                <span className="text-sm font-mono font-bold">{roomId}</span>
+              <div className="flex items-center gap-1 text-yellow-400 shrink-0 min-w-0">
+                <Hash className="h-3.5 w-3.5 shrink-0" />
+                <span className="text-xs sm:text-sm font-mono font-bold truncate max-w-[80px] sm:max-w-none">{roomId}</span>
                 <button
                   onClick={handleCopyRoomId}
-                  className="p-1 text-gray-500 hover:text-yellow-400 transition-colors rounded"
+                  className="p-0.5 sm:p-1 text-gray-500 hover:text-yellow-400 transition-colors rounded shrink-0"
                   title={t('copyRoomId')}
                 >
                   {copiedId ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
                 </button>
               </div>
-
-              <div className="hidden sm:flex items-center gap-1.5">
-                {isConnected ? (
-                  <><div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" /><span className="text-xs text-green-400">{t('connected')}</span></>
-                ) : (
-                  <><div className="w-2 h-2 bg-red-400 rounded-full" /><span className="text-xs text-red-400">{t('disconnected')}</span></>
-                )}
-              </div>
             </div>
 
-            {/* Right */}
-            <div className="flex items-center gap-2 sm:gap-4">
+            {/* Right: Actions row */}
+            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
               {isHost && (
-                <span className="flex items-center gap-1 text-yellow-400 text-xs font-semibold bg-yellow-500/10 px-2 py-1 rounded-md">
+                <span className="hidden sm:flex items-center gap-1 text-yellow-400 text-xs font-semibold bg-yellow-500/10 px-2 py-1 rounded-md">
                   <Crown className="h-3 w-3 animate-pulse" /> {t('hostBadge')}
                 </span>
               )}
+
 
               {/* Dynamic Member Popover Button */}
               <div className="relative">
                 <button
                   onClick={() => setShowMembers(prev => !prev)}
-                  className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors text-xs sm:text-sm px-2 py-1 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-white/[0.08]"
+                  className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors text-xs px-1.5 sm:px-2 py-1 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-white/[0.08]"
                   title={t('viewActiveMembers')}
                 >
                   <Users className="h-3.5 w-3.5" />
@@ -700,19 +691,28 @@ function StreamingRoomContent() {
                 </AnimatePresence>
               </div>
 
-              <button onClick={handleCopyInvite} className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-all text-xs border border-gray-700">
+              <button onClick={handleCopyInvite} className="flex items-center gap-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-all text-xs border border-gray-700">
                 {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Share2 className="h-3.5 w-3.5" />}
                 <span className="hidden sm:inline">{copied ? t('copied') : t('share')}</span>
               </button>
 
               {isHost && (
                 <button onClick={handleToggleSync} title={forceSync ? t('forceSyncOn') : t('freeSeekOn')}
-                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs border transition-all ${forceSync ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' : 'bg-gray-800 text-gray-400 border-gray-700'}`}
+                  className={`flex items-center gap-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-xs border transition-all ${forceSync ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' : 'bg-gray-800 text-gray-400 border-gray-700'}`}
                 >
                   {forceSync ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
                   <span className="hidden sm:inline">{forceSync ? t('syncLabel') : t('freeLabel')}</span>
                 </button>
               )}
+
+              {/* Connection status indicator - mobile: dot only, desktop: dot + text */}
+              <div className="flex items-center gap-1">
+                {isConnected ? (
+                  <><div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" /><span className="hidden sm:inline text-xs text-green-400">{t('connected')}</span></>
+                ) : (
+                  <><div className="w-2 h-2 bg-red-400 rounded-full" /><span className="hidden sm:inline text-xs text-red-400">{t('disconnected')}</span></>
+                )}
+              </div>
             </div>
           </div>
         </div>
