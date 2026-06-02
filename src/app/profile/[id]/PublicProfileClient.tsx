@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useState, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { 
   CalendarIcon,
   ClockIcon,
@@ -46,6 +46,9 @@ export default function PublicProfileClient({ userId }: { userId: string }) {
   const [friendStatus, setFriendStatus] = useState<'none' | 'friends' | 'request_sent' | 'request_received'>('none')
   const [showConfirm, setShowConfirm] = useState(false)
   const [recentlyWatched, setRecentlyWatched] = useState<RecentlyWatchedItem[]>([])
+  
+  // Preview state
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -256,7 +259,11 @@ export default function PublicProfileClient({ userId }: { userId: string }) {
                 <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6">
                   <div className="relative flex-shrink-0">
                     {profileUser.avatar && isValidAvatarUrl(profileUser.avatar) && !avatarError ? (
-                      <div className="w-20 h-20 sm:w-28 sm:h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden shadow-xl border-2 sm:border-4 border-gray-700/50 relative bg-gray-800">
+                      <div 
+                        onClick={() => setIsPreviewOpen(true)}
+                        className="w-20 h-20 sm:w-28 sm:h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden shadow-xl border-2 sm:border-4 border-gray-700/50 relative bg-gray-800 cursor-pointer hover:brightness-110 active:scale-95 transition-all"
+                        title="View full avatar"
+                      >
                         <Image
                           src={profileUser.avatar}
                           alt={profileUser.name}
@@ -409,6 +416,41 @@ export default function PublicProfileClient({ userId }: { userId: string }) {
         onConfirm={handleConfirmRemoveFriend}
         onCancel={() => setShowConfirm(false)}
       />
+
+      {/* Avatar Full-screen Preview Modal */}
+      <AnimatePresence>
+        {isPreviewOpen && profileUser.avatar && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsPreviewOpen(false)}
+            className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 cursor-zoom-out"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-[300px] h-[300px] sm:w-[360px] sm:h-[360px] bg-gray-900 border border-gray-800 p-2 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={profileUser.avatar}
+                alt={profileUser.name}
+                className="w-full h-full object-cover rounded-xl"
+              />
+              <button
+                onClick={() => setIsPreviewOpen(false)}
+                className="absolute top-4 right-4 w-9 h-9 bg-black/75 hover:bg-black/90 rounded-full border border-gray-700/80 flex items-center justify-center text-white text-sm transition-colors cursor-pointer shadow-lg"
+                title="Close"
+              >
+                ✕
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

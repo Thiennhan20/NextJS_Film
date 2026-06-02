@@ -67,7 +67,7 @@
     "actionError": "Lỗi khi thực hiện thao tác",
     "errors": {
       "selectImage": "Vui lòng chọn một file ảnh",
-      "sizeLimit": "Kích thước ảnh phải nhỏ hơn 5MB",
+      "sizeLimit": "Kích thước ảnh phải nhỏ hơn 10MB",
       "uploadSuccess": "Cập nhật ảnh đại diện thành công!",
       "uploadFailed": "Lỗi khi tải ảnh lên",
       "noAvatarToRemove": "Không có ảnh để xóa",

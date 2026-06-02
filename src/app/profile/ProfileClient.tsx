@@ -35,6 +35,18 @@ export default function ProfilePage() {
   const [showAvatarMenu, setShowAvatarMenu] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  
+  // Crop states
+  const [showCropModal, setShowCropModal] = useState(false)
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null)
+  const [cropZoom, setCropZoom] = useState(1)
+  const [cropPosition, setCropPosition] = useState({ x: 0, y: 0 })
+  const [isDraggingCrop, setIsDraggingCrop] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const cropImageRef = useRef<HTMLImageElement>(null)
+  
+  // Preview state
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -119,7 +131,46 @@ export default function ProfilePage() {
     // Validation logic runs silently
   }, [user, avatarUrl])
 
-  // Handle avatar upload
+  // Panning handlers for crop modal
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsDraggingCrop(true)
+    setDragStart({ x: e.clientX - cropPosition.x, y: e.clientY - cropPosition.y })
+  }
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingCrop) return
+    setCropPosition({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    })
+  }
+
+  const handleMouseUp = () => {
+    setIsDraggingCrop(false)
+  }
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return
+    setIsDraggingCrop(true)
+    const touch = e.touches[0]
+    setDragStart({ x: touch.clientX - cropPosition.x, y: touch.clientY - cropPosition.y })
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDraggingCrop || e.touches.length !== 1) return
+    const touch = e.touches[0]
+    setCropPosition({
+      x: touch.clientX - dragStart.x,
+      y: touch.clientY - dragStart.y
+    })
+  }
+
+  const handleTouchEnd = () => {
+    setIsDraggingCrop(false)
+  }
+
+  // Handle avatar upload - open cropper first
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -130,46 +181,103 @@ export default function ProfilePage() {
       return
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size must be less than 5MB')
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image size must be less than 10MB')
       return
     }
 
+    const reader = new FileReader()
+    reader.onload = () => {
+      setCropImageSrc(reader.result as string)
+      setCropZoom(1)
+      setCropPosition({ x: 0, y: 0 })
+      setShowCropModal(true)
+    }
+    reader.onerror = () => {
+      toast.error('Failed to read image file')
+    }
+    reader.readAsDataURL(file)
+
+    // Reset file input
+    if (event.target) {
+      event.target.value = ''
+    }
+  }
+
+  // Process visual crop using HTML5 Canvas & Upload
+  const handleSaveCrop = async () => {
+    if (!cropImageSrc || !cropImageRef.current) return
     setIsUploading(true)
+    setShowCropModal(false)
     setAvatarError(false)
 
     try {
-      // Compress image - Server will optimize further with Sharp
+      const img = new Image()
+      img.src = cropImageSrc
+      await new Promise((resolve) => {
+        img.onload = resolve
+      })
+
+      const canvas = document.createElement('canvas')
+      canvas.width = 400
+      canvas.height = 400
+      const ctx = canvas.getContext('2d')
+
+      if (ctx) {
+        // Center the transform point on the canvas center
+        ctx.translate(200, 200)
+        ctx.scale(cropZoom, cropZoom)
+
+        // Translate using visual offset scaled to canvas size
+        const scaleFactor = 400 / 250
+        ctx.translate((cropPosition.x * scaleFactor) / cropZoom, (cropPosition.y * scaleFactor) / cropZoom)
+
+        // Draw image centered to cover
+        const imgWidth = img.naturalWidth
+        const imgHeight = img.naturalHeight
+        const minRatio = Math.max(250 / imgWidth, 250 / imgHeight)
+        
+        const visualWidth = imgWidth * minRatio
+        const visualHeight = imgHeight * minRatio
+        
+        const drawWidth = visualWidth * scaleFactor
+        const drawHeight = visualHeight * scaleFactor
+
+        ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
+      }
+
+      const croppedBase64 = canvas.toDataURL('image/jpeg', 0.9)
+
+      // Convert base64 to File object to compress
+      const resBlob = await fetch(croppedBase64).then((res) => res.blob())
+      const croppedFile = new File([resBlob], 'avatar.jpg', { type: 'image/jpeg' })
+
+      // Compress image
       const options = {
-        maxSizeMB: 0.5, // 500KB - server will optimize to ~100KB WebP
-        maxWidthOrHeight: 400, // Server will resize to 300x300
+        maxSizeMB: 0.5, // 500KB
+        maxWidthOrHeight: 400,
         useWebWorker: true,
         fileType: 'image/jpeg',
-        initialQuality: 0.85, // Higher quality, server will optimize
+        initialQuality: 0.85,
       }
       
-      const compressedFile = await imageCompression(file, options)
+      const compressedFile = await imageCompression(croppedFile, options)
 
-      // Convert to base64
       const reader = new FileReader()
       reader.onloadend = async () => {
         try {
           const base64String = reader.result as string
-          
-          // Show preview immediately
           setPreviewAvatar(base64String)
 
-          // Upload to server
           const response = await api.put('/auth/profile', {
             avatar: base64String,
           })
 
-          // Update user in store
           if (response.data?.user) {
-            await checkAuth() // Refresh user data
+            await checkAuth()
             toast.success('Avatar updated successfully!')
-            setPreviewAvatar(null) // Clear preview after successful upload
+            setPreviewAvatar(null)
           }
         } catch (error: unknown) {
           const err = error as { response?: { data?: { message?: string } } }
@@ -181,20 +289,15 @@ export default function ProfilePage() {
         }
       }
       reader.onerror = () => {
-        toast.error('Failed to read image file')
+        toast.error('Failed to read compressed file')
         setIsUploading(false)
         setPreviewAvatar(null)
       }
       reader.readAsDataURL(compressedFile)
     } catch {
-      toast.error('Failed to process image')
+      toast.error('Failed to process image cropping')
       setIsUploading(false)
       setPreviewAvatar(null)
-    }
-    
-    // Reset file input
-    if (event.target) {
-      event.target.value = ''
     }
   }
 
@@ -319,7 +422,11 @@ export default function ProfilePage() {
                 {/* Avatar - Compact on mobile */}
                 <div className="relative flex-shrink-0">
                   {avatarUrl && !avatarError ? (
-                    <div className="w-20 h-20 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-full overflow-hidden shadow-xl border-3 sm:border-4 border-gray-700 relative bg-gray-800">
+                    <div 
+                      onClick={() => setIsPreviewOpen(true)}
+                      className="w-20 h-20 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-full overflow-hidden shadow-xl border-3 sm:border-4 border-gray-700 relative bg-gray-800 cursor-pointer hover:brightness-110 active:scale-95 transition-all"
+                      title="View full avatar"
+                    >
                       {/* Avatar image */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -543,6 +650,127 @@ export default function ProfilePage() {
           </div>
         </section>
       </div>
+      
+      {/* Interactive Avatar Cropper Modal */}
+      <AnimatePresence>
+        {showCropModal && cropImageSrc && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[9999] px-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-gray-900 border border-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative"
+            >
+              <h3 className="text-xl font-bold text-white mb-4 text-center">
+                {t('changeAvatar') || 'Cắt ảnh đại diện'}
+              </h3>
+              
+              {/* Cropping box with circular mask */}
+              <div 
+                className="w-[250px] h-[250px] mx-auto rounded-full border-4 border-gray-700 relative overflow-hidden bg-black select-none cursor-move"
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
+                {/* Crop Image preview */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  ref={cropImageRef}
+                  src={cropImageSrc}
+                  alt="Crop Preview"
+                  className="absolute pointer-events-none select-none max-w-none origin-center"
+                  style={{
+                    transform: `translate(${cropPosition.x}px, ${cropPosition.y}px) scale(${cropZoom})`,
+                    width: 'auto',
+                    height: '100%',
+                    top: 0,
+                    left: 0,
+                  }}
+                />
+              </div>
+              
+              <p className="text-xs text-gray-400 text-center mt-3">
+                Kéo để di chuyển, dùng thanh trượt để phóng to/thu nhỏ
+              </p>
+
+              {/* Zoom Slider */}
+              <div className="mt-6 flex items-center gap-4">
+                <span className="text-gray-400 text-sm">Zoom</span>
+                <input
+                  type="range"
+                  min="1"
+                  max="3"
+                  step="0.01"
+                  value={cropZoom}
+                  onChange={(e) => setCropZoom(parseFloat(e.target.value))}
+                  className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-500"
+                />
+                <span className="text-white text-xs font-mono">{Math.round(cropZoom * 100)}%</span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowCropModal(false)}
+                  className="flex-1 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-medium transition-colors"
+                >
+                  Huỷ
+                </button>
+                <button
+                  onClick={handleSaveCrop}
+                  className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-medium transition-colors"
+                >
+                  Lưu & Tải lên
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Avatar Full-screen Preview Modal */}
+      <AnimatePresence>
+        {isPreviewOpen && avatarUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsPreviewOpen(false)}
+            className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 cursor-zoom-out"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-[300px] h-[300px] sm:w-[360px] sm:h-[360px] bg-gray-900 border border-gray-800 p-2 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={avatarUrl}
+                alt={user.name}
+                className="w-full h-full object-cover rounded-xl"
+              />
+              <button
+                onClick={() => setIsPreviewOpen(false)}
+                className="absolute top-4 right-4 w-9 h-9 bg-black/75 hover:bg-black/90 rounded-full border border-gray-700/80 flex items-center justify-center text-white text-sm transition-colors cursor-pointer shadow-lg"
+                title="Close"
+              >
+                ✕
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 } 

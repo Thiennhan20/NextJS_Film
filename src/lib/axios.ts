@@ -25,6 +25,14 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Đọc ngôn ngữ từ cookies và gửi lên Server
+    if (typeof document !== 'undefined') {
+      const match = document.cookie.match(/(^| )locale=([^;]+)/);
+      const locale = match ? match[2] : 'en';
+      config.headers['Accept-Language'] = locale;
+    }
+    
     return config;
   },
   (error) => {
