@@ -11,14 +11,14 @@ import {
   PhotoIcon,
   EllipsisVerticalIcon,
   Cog6ToothIcon,
-  UsersIcon
+  UsersIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline'
 import useAuthStore from '@/store/useAuthStore'
 import { useWatchlistStore } from '@/store/store'
 import useAuthHydrated from '@/store/useAuthHydrated'
 import Link from 'next/link'
 import api from '@/lib/axios'
-import UserComments from '@/components/UserComments'
 import { toast } from 'react-hot-toast'
 import imageCompression from 'browser-image-compression'
 import { useTranslations } from 'next-intl'
@@ -642,11 +642,25 @@ export default function ProfilePage() {
                     </div>
                   </motion.div>
                 </Link>
+                <Link href="/mycomments">
+                  <motion.div
+                    whileHover={{ scale: 1.02, x: 5 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="bg-gray-800/50 hover:bg-gray-700/50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-700/50 hover:border-amber-500/50 transition-all duration-300 cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className="p-2 sm:p-3 bg-amber-500/20 rounded-lg group-hover:bg-amber-500/30 transition-colors flex-shrink-0">
+                        <ChatBubbleLeftRightIcon className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-semibold text-white mb-0.5 sm:mb-1 text-sm sm:text-base truncate">{t('myComments')}</h4>
+                        <p className="text-xs sm:text-sm text-gray-400 truncate">{t('manageComments')}</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                </Link>
               </div>
             </motion.div>
-
-            {/* User Comments Component */}
-            <UserComments />
           </div>
         </section>
       </div>

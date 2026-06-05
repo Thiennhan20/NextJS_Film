@@ -679,7 +679,7 @@ export default function TopComments() {
                                 {comment.user.name}
                               </span>
                             </div>
-                            <p className="text-gray-300 text-xs sm:text-sm leading-relaxed mb-1.5 line-clamp-2">
+                            <p className="text-gray-300 text-xs sm:text-sm leading-relaxed mb-1.5 line-clamp-1">
                               {comment.content}
                             </p>
                             <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-400">

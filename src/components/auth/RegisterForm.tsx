@@ -1,15 +1,49 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import useAuthStore from '@/store/useAuthStore';
 import { RegisterCredentials } from '@/types/auth';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import axios from 'axios';
 import { useWatchlistStore } from '@/store/store';
 import { useTranslations } from 'next-intl';
+
+// Profanity word list (Vietnamese + English)
+const BANNED_WORDS = [
+  // Vietnamese
+  'cặc', 'cac', 'lồn', 'lon', 'địt', 'dit', 'đụ', 'du', 'đéo', 'deo',
+  'đồ chó', 'thằng chó', 'con chó', 'con đĩ', 'đĩ', 'di~', 'đ\u0129',
+  'mẹ mày', 'má mày', 'bố mày', 'cứt', 'cut',
+  'dâm', 'ngu', 'đần', 'khốn nạn', 'khốn', 'chết mẹ', 'chết cha',
+  'đồ ngu', 'thằng ngu', 'con ngu', 'vãi', 'vai~',
+  'đồ khốn', 'thằng khốn', 'con khốn', 'đồ điên', 'thằng điên',
+  'đồ chết', 'đồ rác', 'rác rưởi', 'súc vật', 'đồ súc vật',
+  'chó má', 'đồ phản', 'phản bội', 'lừa đảo', 'đồ lừa',
+  'dmm', 'dcm', 'vcl', 'vkl', 'vlone', 'clgt', 'cmnr', 'wtf',
+  'dm', 'đm', 'cc', 'cl', 'ml', 'cmm',
+  // English
+  'fuck', 'shit', 'bitch', 'asshole', 'bastard', 'damn',
+  'dick', 'pussy', 'cock', 'cunt', 'whore', 'slut',
+  'nigger', 'nigga', 'faggot', 'retard', 'motherfucker',
+  'bullshit', 'jackass', 'dumbass', 'piss', 'crap',
+  'stfu', 'gtfo', 'lmao', 'fk', 'fuk', 'fucker',
+  'bitchy', 'slutty', 'horny', 'penis', 'vagina',
+  'boob', 'porn', 'sex', 'nude', 'naked',
+];
+
+function containsProfanity(text: string): boolean {
+  const normalized = text.toLowerCase().trim();
+  return BANNED_WORDS.some((word) => {
+    // Match whole word or as part of compound (e.g. "thằng chó")
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(^|\\s|[^a-zA-ZÀ-ỹ])${escaped}($|\\s|[^a-zA-ZÀ-ỹ])`, 'i');
+    // Also check if the entire name equals the word or starts/ends with it
+    return regex.test(` ${normalized} `) || normalized === word;
+  });
+}
 
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center">
@@ -132,15 +166,44 @@ export default function RegisterForm() {
     password: '',
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [nameError, setNameError] = useState('');
+  const nameMaxLenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const hasProfanity = useMemo(() => containsProfanity(formData.name), [formData.name]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (registerError) clearError();
+    if (name === 'name') {
+      if (containsProfanity(value)) {
+        setNameError(t('profanityError'));
+      } else {
+        setNameError('');
+      }
+    }
+  };
+
+  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+    const isTypingChar = e.key.length === 1 && !e.ctrlKey && !e.metaKey;
+    const hasSelection = input.selectionStart !== input.selectionEnd;
+    if (isTypingChar && !hasSelection && input.value.length >= 20) {
+      setNameError(t('maxLengthError'));
+      if (nameMaxLenTimerRef.current) clearTimeout(nameMaxLenTimerRef.current);
+      nameMaxLenTimerRef.current = setTimeout(() => {
+        setNameError((prev) => prev === t('maxLengthError') ? '' : prev);
+      }, 2000);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (hasProfanity) {
+      setNameError(t('profanityError'));
+      toast.error(t('profanityError'));
+      return;
+    }
     try {
       await register(formData);
       toast.success(t('registerSuccess'));
@@ -168,16 +231,23 @@ export default function RegisterForm() {
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label htmlFor="name" className="block text-sm font-medium text-yellow-200 mb-1">
-            {t('usernameLabel')}
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label htmlFor="name" className="text-sm font-medium text-yellow-200">
+              {t('usernameLabel')}
+            </label>
+            <span className={`text-xs ${formData.name.length >= 20 ? 'text-red-400' : 'text-yellow-500/70'}`}>
+              {formData.name.length}/20
+            </span>
+          </div>
           <motion.input
             type="text"
             id="name"
             name="name"
             value={formData.name}
             onChange={handleChange}
-            className="mt-1 block w-full px-4 py-3 bg-black/40 border border-yellow-700 rounded-lg text-white placeholder-yellow-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-200 appearance-none"
+            onKeyDown={handleNameKeyDown}
+            maxLength={20}
+            className={`mt-1 block w-full px-4 py-3 bg-black/40 border rounded-lg text-white placeholder-yellow-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-200 appearance-none ${nameError ? 'border-red-500' : 'border-yellow-700'}`}
             placeholder={t('usernamePlaceholder')}
             required
             disabled={isLoading}
@@ -185,6 +255,22 @@ export default function RegisterForm() {
             whileHover="hover"
             whileFocus="focus"
           />
+          <AnimatePresence>
+            {nameError && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2 }}
+                className="mt-1.5 flex items-start gap-1.5 text-xs text-red-400 bg-red-950/40 border border-red-800/50 rounded-md px-2.5 py-1.5"
+              >
+                <svg className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <span>{nameError}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-yellow-200 mb-1">

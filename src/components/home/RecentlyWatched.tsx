@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Play, Clock, Trash2, ChevronDown, AlertCircle } from 'lucide-react'
+import { Play, Clock, Trash2, AlertCircle } from 'lucide-react'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import useAuthStore from '@/store/useAuthStore'
 import { useRecentlyWatchedStore } from '@/store/useRecentlyWatchedStore'
@@ -223,25 +223,6 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
       window.removeEventListener('resize', checkScrollPosition)
     }
   }, [checkScrollPosition, recentItems])
-
-  const scrollToTrending = useCallback(() => {
-    const trendingSection = document.querySelector('[data-section="trending"]')
-    if (trendingSection) {
-      trendingSection.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-        inline: 'nearest'
-      })
-
-      setTimeout(() => {
-        const elementTop = trendingSection.getBoundingClientRect().top + window.pageYOffset
-        const offsetTop = elementTop - 120
-        window.scrollTo({ top: offsetTop, behavior: 'smooth' })
-      }, 100)
-    } else {
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
-    }
-  }, [])
 
   // ✅ OPTIMIZATION 3: Cached localStorage parsing
   const fetchRecentItems = useCallback(async () => {
@@ -506,56 +487,10 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
                       initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: shouldReduceMotion ? 0 : 0.1 }}
-                      className="text-xl font-semibold text-white mb-4"
+                      className="text-xl font-semibold text-white"
                     >
                       {t('noMovies')}
                     </motion.h3>
-
-                    <div className="flex justify-center mb-4">
-                      <motion.button
-                        initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: shouldReduceMotion ? 0 : 0.2 }}
-                        whileHover={{ scale: shouldReduceMotion ? 1 : 1.05 }}
-                        whileTap={{ scale: shouldReduceMotion ? 1 : 0.95 }}
-                        onClick={scrollToTrending}
-                        style={{
-                          background: 'linear-gradient(135deg, #dc2626 0%, #ec4899 100%)',
-                          borderRadius: '50%',
-                          width: 80,
-                          height: 80,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: '0 0 20px 6px #ec489955, 0 4px 20px rgba(0,0,0,0.25)',
-                          cursor: 'pointer',
-                          border: 'none',
-                          outline: 'none'
-                        }}
-                        aria-label="Explore trending movies"
-                      >
-                        {shouldReduceMotion ? (
-                          <ChevronDown className="w-8 h-8 text-white" />
-                        ) : (
-                          <motion.span
-                            animate={{ y: [0, -6, 0] }}
-                            transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          >
-                            <ChevronDown className="w-8 h-8 text-white" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }} />
-                          </motion.span>
-                        )}
-                      </motion.button>
-                    </div>
-
-                    <motion.p
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: shouldReduceMotion ? 0 : 0.3 }}
-                      className="text-gray-400 text-sm"
-                    >
-                      {t('exploreButton')}
-                    </motion.p>
                   </div>
                 </motion.div>
               )}
