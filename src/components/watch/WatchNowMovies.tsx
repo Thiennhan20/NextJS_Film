@@ -15,7 +15,7 @@ import {
   type AudioNodes,
   type AudioSettings,
 } from '@/lib/audioUtils'
-import { proxyHlsUrl, extractOriginalUrl, getCleanPlaylistUrl } from '@/lib/hlsProxy'
+import { extractOriginalUrl } from '@/lib/hlsProxy'
 
 import WatchNowMoviesServer1 from './WatchNowMoviesServer1'
 import WatchNowMoviesServer2 from './WatchNowMoviesServer2'
@@ -706,10 +706,14 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
             }
 
             return playUrl ? (
+              (() => {
+                const rawPlayUrl = extractOriginalUrl(playUrl);
+
+                return (
               <EnhancedMoviePlayer
                 key={movie.id}
                 ref={handlePlayerRef}
-                src={selectedServer === 'server1' ? getCleanPlaylistUrl(playUrl) : proxyHlsUrl(playUrl)}
+                src={rawPlayUrl}
                 poster={movie.poster}
                 autoPlay={false}
                 movieId={movie.id}
@@ -717,7 +721,8 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
                 audio={effectiveAudio || undefined}
                 title={movie.title}
                 userId={typeof userId === 'string' ? userId : undefined}
-                watchUrl={extractOriginalUrl(playUrl)}
+                watchUrl={rawPlayUrl}
+                cleanHlsInBrowser={true}
                 latestWatchUrl={apiSearchCompleted ? extractOriginalUrl(videoSrc) : undefined}
                 savedTime={savedProgress?.currentTime}
                 savedWatchUrl={savedProgress?.watchUrl}
@@ -735,6 +740,8 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
                 audioSettings={selectedServer === 'server1' ? audioSettings : undefined}
                 onAudioSettingsChange={selectedServer === 'server1' ? setAudioSettings : undefined}
               />
+                );
+              })()
             ) : (
               <div className="flex items-center justify-center h-full text-white text-lg font-semibold">
                 {t('noVideoSource')}

@@ -6,6 +6,7 @@ import Hls, { Level } from "hls.js";
 import { PlayIcon, PauseIcon, ArrowsPointingOutIcon } from "@heroicons/react/24/solid";
 import PlayerSettings from "./PlayerSettings";
 import api from '@/lib/axios';
+import { createClientCleanPlaylistUrl } from '@/lib/hlsProxy';
 import { useRecentlyWatchedStore } from '@/store/useRecentlyWatchedStore';
 import { useTranslations } from 'next-intl';
 import type { AudioSettings } from '@/lib/audioUtils';
@@ -46,6 +47,8 @@ export interface EnhancedMoviePlayerProps {
   endOverlay?: React.ReactNode;
   /** Original m3u8 URL (pre-proxy) from Server 1. Used to detect link changes and reset progress. */
   watchUrl?: string;
+  /** When true, fetches and removes ad segments from the HLS playlist in the browser. */
+  cleanHlsInBrowser?: boolean;
   latestWatchUrl?: string;
   savedTime?: number;
   savedWatchUrl?: string;
@@ -113,16 +116,18 @@ function safeDecodeUrl(value: string): string {
 function normalizePlaybackUrl(value?: string): string {
   let current = (value || '').trim().replace(/&amp;/g, '&');
   if (!current) return '';
+  if (/^blob:/i.test(current)) return '';
 
   for (let i = 0; i < 2; i += 1) {
     const decoded = safeDecodeUrl(current).trim().replace(/&amp;/g, '&');
     if (/^https?:\/\//i.test(decoded)) {
       current = decoded;
     }
+    if (/^blob:/i.test(current)) return '';
 
     try {
       const url = new URL(current);
-      const wrappedUrl = url.searchParams.get('url');
+      const wrappedUrl = url.searchParams.get('url') || url.searchParams.get('source');
       if (wrappedUrl && /^https?:\/\//i.test(safeDecodeUrl(wrappedUrl))) {
         current = safeDecodeUrl(wrappedUrl).trim().replace(/&amp;/g, '&');
         continue;
@@ -170,7 +175,7 @@ function parseQualities(levels: Level[]): Array<{ index: number; label: string }
 
 // ─── Component ────────────────────────────────────────────────────
 const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProps>(
-  ({ src, poster, autoPlay = false, onError, movieId, server, audio, title, season, episode, isTVShow = false, userId, viewerMode = false, onToggleChat, isStreamingRoom = false, fullscreenTarget, hostHasPlayed = false, chatUnreadCount = 0, waitingForHost = false, onVideoEnded, endOverlay, watchUrl, latestWatchUrl, savedTime, savedWatchUrl, onUpdateSource, onSkipUpdateSource, hasLoadedSavedProgress, audioSettings, onAudioSettingsChange }, ref) => {
+  ({ src, poster, autoPlay = false, onError, movieId, server, audio, title, season, episode, isTVShow = false, userId, viewerMode = false, onToggleChat, isStreamingRoom = false, fullscreenTarget, hostHasPlayed = false, chatUnreadCount = 0, waitingForHost = false, onVideoEnded, endOverlay, watchUrl, cleanHlsInBrowser = false, latestWatchUrl, savedTime, savedWatchUrl, onUpdateSource, onSkipUpdateSource, hasLoadedSavedProgress, audioSettings, onAudioSettingsChange }, ref) => {
     const innerRef = useRef<HTMLVideoElement>(null);
     const hlsRef = useRef<Hls | null>(null);
     const innerContainerRef = useRef<HTMLDivElement>(null);
@@ -238,11 +243,12 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     const [showUpdatePopup, setShowUpdatePopup] = useState(false);
     const [popupNewStreamUrl, setPopupNewStreamUrl] = useState('');
     const dismissedUpdateUrlRef = useRef('');
-    const saveUrlRef = useRef(watchUrl || '');
+    const saveUrlRef = useRef(normalizePlaybackUrl(watchUrl));
 
     useEffect(() => {
-      if (watchUrl) {
-        saveUrlRef.current = watchUrl;
+      const normalizedWatchUrl = normalizePlaybackUrl(watchUrl);
+      if (normalizedWatchUrl) {
+        saveUrlRef.current = normalizedWatchUrl;
       }
     }, [watchUrl]);
 
@@ -260,9 +266,10 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     const saveProgressAtStart = useCallback((nextWatchUrl?: string) => {
       if (!movieId || !server || !audio) return;
 
-      const watchUrlToSave = nextWatchUrl || saveUrlRef.current || '';
-      if (nextWatchUrl) {
-        saveUrlRef.current = nextWatchUrl;
+      const normalizedNextWatchUrl = normalizePlaybackUrl(nextWatchUrl);
+      const watchUrlToSave = normalizedNextWatchUrl || saveUrlRef.current || '';
+      if (normalizedNextWatchUrl) {
+        saveUrlRef.current = normalizedNextWatchUrl;
       }
 
       if (userId) {
@@ -535,49 +542,94 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       setVolume(savedVol);
 
       let hls: Hls | null = null;
-      if (Hls.isSupported()) {
-        hls = new Hls(HLS_CONFIG);
-        hls.loadSource(src);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, (_, data: { levels: Level[] }) => {
-          setQualities(parseQualities(data.levels));
-          setCurrentQuality(-1);
-          if (targetResumeTime > 0) {
-            pendingSeekRef.current = targetResumeTime;
-            video.currentTime = targetResumeTime;
-            setCurrentTime(targetResumeTime);
-            video.play().catch(() => {});
-          } else if (autoPlay || shouldPlayOnLoadRef.current) {
-            video.play().catch(() => { });
-            shouldPlayOnLoadRef.current = false;
-          }
-        });
-        hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (data.fatal) {
-            switch (data.type) {
-              case Hls.ErrorTypes.NETWORK_ERROR: hls?.startLoad(); break;
-              case Hls.ErrorTypes.MEDIA_ERROR: hls?.recoverMediaError(); break;
-              default: hls?.destroy(); if (onError) onError(); break;
-            }
-          }
-        });
-        hlsRef.current = hls;
-      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        video.src = src;
+      let cancelled = false;
+      let preparedCleanup: (() => void) | null = null;
+      let onLoadedMetadataForResume: (() => void) | null = null;
+      let networkErrorRetries = 0;
+
+      const applyResumeOrAutoplay = () => {
         if (targetResumeTime > 0) {
-          const onLoadedMetadataForResume = () => {
-            video.removeEventListener('loadedmetadata', onLoadedMetadataForResume);
-            pendingSeekRef.current = targetResumeTime;
-            video.currentTime = targetResumeTime;
-            setCurrentTime(targetResumeTime);
-            video.play().catch(() => {});
-          };
-          video.addEventListener('loadedmetadata', onLoadedMetadataForResume);
+          pendingSeekRef.current = targetResumeTime;
+          video.currentTime = targetResumeTime;
+          setCurrentTime(targetResumeTime);
+          video.play().catch(() => {});
         } else if (autoPlay || shouldPlayOnLoadRef.current) {
           video.play().catch(() => { });
           shouldPlayOnLoadRef.current = false;
         }
-      }
+      };
+
+      const loadPlaybackSource = (playbackSrc: string) => {
+        if (cancelled) return;
+
+        if (Hls.isSupported()) {
+          hls = new Hls(HLS_CONFIG);
+          hls.loadSource(playbackSrc);
+          hls.attachMedia(video);
+          hls.on(Hls.Events.MANIFEST_PARSED, (_, data: { levels: Level[] }) => {
+            networkErrorRetries = 0;
+            setQualities(parseQualities(data.levels));
+            setCurrentQuality(-1);
+            applyResumeOrAutoplay();
+          });
+          hls.on(Hls.Events.ERROR, (_event, data) => {
+            if (data.fatal) {
+              switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  networkErrorRetries += 1;
+                  if (networkErrorRetries <= 2) {
+                    hls?.startLoad();
+                  } else {
+                    hls?.destroy();
+                    if (onError) onError();
+                  }
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  networkErrorRetries = 0;
+                  hls?.recoverMediaError();
+                  break;
+                default: hls?.destroy(); if (onError) onError(); break;
+              }
+            }
+          });
+          hlsRef.current = hls;
+        } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          video.src = playbackSrc;
+          if (targetResumeTime > 0) {
+            onLoadedMetadataForResume = () => {
+              if (onLoadedMetadataForResume) {
+                video.removeEventListener('loadedmetadata', onLoadedMetadataForResume);
+              }
+              applyResumeOrAutoplay();
+            };
+            video.addEventListener('loadedmetadata', onLoadedMetadataForResume);
+          } else {
+            applyResumeOrAutoplay();
+          }
+        }
+      };
+
+      const prepareAndLoadSource = async () => {
+        let playbackSrc = src;
+
+        if (cleanHlsInBrowser) {
+          try {
+            const prepared = await createClientCleanPlaylistUrl(src);
+            if (cancelled) {
+              prepared.cleanup();
+              return;
+            }
+            playbackSrc = prepared.url;
+            preparedCleanup = prepared.cleanup;
+          } catch (error) {
+            console.warn('Unable to clean HLS playlist in browser, using original source:', error);
+          }
+        }
+
+        loadPlaybackSource(playbackSrc);
+      };
+
+      prepareAndLoadSource();
 
       const onLoadedMetadata = () => {
         const dur = video.duration || 0;
@@ -620,6 +672,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       video.addEventListener("seeked", onSeeked);
 
       return () => {
+        cancelled = true;
         video.removeEventListener("loadedmetadata", onLoadedMetadata);
         video.removeEventListener("timeupdate", onTimeUpdate);
         video.removeEventListener("play", onPlay);
@@ -629,11 +682,15 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         video.removeEventListener("canplay", onCanPlay);
         video.removeEventListener("seeking", onSeeking);
         video.removeEventListener("seeked", onSeeked);
+        if (onLoadedMetadataForResume) {
+          video.removeEventListener('loadedmetadata', onLoadedMetadataForResume);
+        }
         if (hls) hls.destroy();
         hlsRef.current = null;
+        if (preparedCleanup) preparedCleanup();
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [src, autoPlay, ref]);
+    }, [src, autoPlay, ref, cleanHlsInBrowser]);
 
     // ─── Resume: check saved props → show popup ──────────────
     useEffect(() => {

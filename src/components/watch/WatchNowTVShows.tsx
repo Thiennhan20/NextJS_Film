@@ -15,7 +15,7 @@ import {
   type AudioNodes,
   type AudioSettings,
 } from '@/lib/audioUtils'
-import { proxyHlsUrl, extractOriginalUrl, getCleanPlaylistUrl } from '@/lib/hlsProxy'
+import { extractOriginalUrl } from '@/lib/hlsProxy'
 
 import WatchNowTVShowsServer1 from './WatchNowTVShowsServer1'
 import WatchNowTVShowsServer2 from './WatchNowTVShowsServer2'
@@ -865,10 +865,14 @@ export default function WatchNowTVShows({
             }
 
             return playUrl ? (
+              (() => {
+                const rawPlayUrl = extractOriginalUrl(playUrl);
+
+                return (
               <EnhancedMoviePlayer
                 key={`${selectedSeason}-${selectedEpisode}`}
                 ref={handlePlayerRef}
-                src={selectedServer === 'server1' ? getCleanPlaylistUrl(playUrl) : proxyHlsUrl(playUrl)}
+                src={rawPlayUrl}
                 poster={tvShow.poster}
                 autoPlay={false}
                 movieId={tvShow.id}
@@ -880,7 +884,8 @@ export default function WatchNowTVShows({
                 isTVShow={true}
                 userId={typeof userId === 'string' ? userId : undefined}
                 onVideoEnded={handleVideoEnded}
-                watchUrl={extractOriginalUrl(playUrl)}
+                watchUrl={rawPlayUrl}
+                cleanHlsInBrowser={true}
                 latestWatchUrl={apiSearchCompleted ? extractOriginalUrl(videoSrc) : undefined}
                 savedTime={savedProgress?.currentTime}
                 savedWatchUrl={savedProgress?.watchUrl}
@@ -969,6 +974,8 @@ export default function WatchNowTVShows({
                   </div>
                 ) : undefined}
               />
+                );
+              })()
             ) : (
               <div className="flex items-center justify-center h-full text-white text-lg font-semibold">
                 {t('noVideoSource')}
