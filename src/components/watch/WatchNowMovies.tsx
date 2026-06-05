@@ -15,7 +15,7 @@ import {
   type AudioNodes,
   type AudioSettings,
 } from '@/lib/audioUtils'
-import { proxyHlsUrl } from '@/lib/hlsProxy'
+import { proxyHlsUrl, extractOriginalUrl, getCleanPlaylistUrl } from '@/lib/hlsProxy'
 
 import WatchNowMoviesServer1 from './WatchNowMoviesServer1'
 import WatchNowMoviesServer2 from './WatchNowMoviesServer2'
@@ -188,9 +188,9 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
     if (apiSearchCompleted && isSavedLinkFatalError && videoSrc) {
       setActiveWatchUrl(videoSrc);
       setIsSavedLinkFatalError(false);
-      
+      const rawVideoSrc = extractOriginalUrl(videoSrc);
       // Update savedProgress to new working source at 0
-      setSavedProgress(prev => prev ? { ...prev, watchUrl: videoSrc, currentTime: 0 } : { watchUrl: videoSrc, currentTime: 0 });
+      setSavedProgress(prev => prev ? { ...prev, watchUrl: rawVideoSrc, currentTime: 0 } : { watchUrl: rawVideoSrc, currentTime: 0 });
       
       // Save it immediately in database or localStorage
       if (userId) {
@@ -200,14 +200,14 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
           server: selectedServer, audio: selectedAudio || '',
           currentTime: 0, duration: 0,
           title: movie.title, poster: movie.poster,
-          watchUrl: videoSrc
+          watchUrl: rawVideoSrc
         }).catch(() => {});
       } else {
         const key = `movie-progress-${movie.id}`;
         localStorage.setItem(key, JSON.stringify({
           currentTime: 0, duration: 0, title: movie.title, poster: movie.poster,
           server: selectedServer, audio: selectedAudio || '',
-          watchUrl: videoSrc,
+          watchUrl: rawVideoSrc,
           lastWatched: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
         }));
@@ -709,7 +709,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
               <EnhancedMoviePlayer
                 key={movie.id}
                 ref={handlePlayerRef}
-                src={proxyHlsUrl(playUrl)}
+                src={selectedServer === 'server1' ? getCleanPlaylistUrl(playUrl) : proxyHlsUrl(playUrl)}
                 poster={movie.poster}
                 autoPlay={false}
                 movieId={movie.id}
@@ -717,14 +717,15 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
                 audio={effectiveAudio || undefined}
                 title={movie.title}
                 userId={typeof userId === 'string' ? userId : undefined}
-                watchUrl={playUrl}
-                latestWatchUrl={apiSearchCompleted ? videoSrc : undefined}
+                watchUrl={extractOriginalUrl(playUrl)}
+                latestWatchUrl={apiSearchCompleted ? extractOriginalUrl(videoSrc) : undefined}
                 savedTime={savedProgress?.currentTime}
                 savedWatchUrl={savedProgress?.watchUrl}
                 hasLoadedSavedProgress={hasLoadedSavedProgress}
                 onUpdateSource={(newUrl) => {
-                  setActiveWatchUrl(newUrl);
-                  setSavedProgress(prev => prev ? { ...prev, watchUrl: newUrl, currentTime: 0 } : { watchUrl: newUrl, currentTime: 0 });
+                  const rawUrl = extractOriginalUrl(newUrl);
+                  setActiveWatchUrl(rawUrl);
+                  setSavedProgress(prev => prev ? { ...prev, watchUrl: rawUrl, currentTime: 0 } : { watchUrl: rawUrl, currentTime: 0 });
                 }}
                 onError={() => {
                   if (activeWatchUrl && !apiSearchCompleted) {

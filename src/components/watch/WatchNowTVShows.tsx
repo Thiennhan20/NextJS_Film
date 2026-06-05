@@ -15,7 +15,7 @@ import {
   type AudioNodes,
   type AudioSettings,
 } from '@/lib/audioUtils'
-import { proxyHlsUrl } from '@/lib/hlsProxy'
+import { proxyHlsUrl, extractOriginalUrl, getCleanPlaylistUrl } from '@/lib/hlsProxy'
 
 import WatchNowTVShowsServer1 from './WatchNowTVShowsServer1'
 import WatchNowTVShowsServer2 from './WatchNowTVShowsServer2'
@@ -234,9 +234,10 @@ export default function WatchNowTVShows({
     if (apiSearchCompleted && isSavedLinkFatalError && videoSrc) {
       setActiveWatchUrl(videoSrc);
       setIsSavedLinkFatalError(false);
+      const rawVideoSrc = extractOriginalUrl(videoSrc);
 
       // Update savedProgress to new working source at 0
-      setSavedProgress(prev => prev ? { ...prev, watchUrl: videoSrc, currentTime: 0 } : { watchUrl: videoSrc, currentTime: 0 });
+      setSavedProgress(prev => prev ? { ...prev, watchUrl: rawVideoSrc, currentTime: 0 } : { watchUrl: rawVideoSrc, currentTime: 0 });
 
       // Save it immediately in database or localStorage
       if (userId) {
@@ -246,14 +247,14 @@ export default function WatchNowTVShows({
           server: selectedServer, audio: selectedAudio || '',
           currentTime: 0, duration: 0,
           title: tvShow.name, poster: tvShow.poster,
-          watchUrl: videoSrc
+          watchUrl: rawVideoSrc
         }).catch(() => {});
       } else {
         const key = `tvshow-progress-${tvShow.id}-${selectedSeason}-${selectedEpisode}`;
         localStorage.setItem(key, JSON.stringify({
           currentTime: 0, duration: 0, title: tvShow.name, poster: tvShow.poster,
           server: selectedServer, audio: selectedAudio || '',
-          watchUrl: videoSrc,
+          watchUrl: rawVideoSrc,
           lastWatched: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
           season: selectedSeason,
@@ -867,7 +868,7 @@ export default function WatchNowTVShows({
               <EnhancedMoviePlayer
                 key={`${selectedSeason}-${selectedEpisode}`}
                 ref={handlePlayerRef}
-                src={proxyHlsUrl(playUrl)}
+                src={selectedServer === 'server1' ? getCleanPlaylistUrl(playUrl) : proxyHlsUrl(playUrl)}
                 poster={tvShow.poster}
                 autoPlay={false}
                 movieId={tvShow.id}
@@ -879,14 +880,15 @@ export default function WatchNowTVShows({
                 isTVShow={true}
                 userId={typeof userId === 'string' ? userId : undefined}
                 onVideoEnded={handleVideoEnded}
-                watchUrl={playUrl}
-                latestWatchUrl={apiSearchCompleted ? videoSrc : undefined}
+                watchUrl={extractOriginalUrl(playUrl)}
+                latestWatchUrl={apiSearchCompleted ? extractOriginalUrl(videoSrc) : undefined}
                 savedTime={savedProgress?.currentTime}
                 savedWatchUrl={savedProgress?.watchUrl}
                 hasLoadedSavedProgress={hasLoadedSavedProgress}
                 onUpdateSource={(newUrl) => {
-                  setActiveWatchUrl(newUrl);
-                  setSavedProgress(prev => prev ? { ...prev, watchUrl: newUrl, currentTime: 0 } : { watchUrl: newUrl, currentTime: 0 });
+                  const rawUrl = extractOriginalUrl(newUrl);
+                  setActiveWatchUrl(rawUrl);
+                  setSavedProgress(prev => prev ? { ...prev, watchUrl: rawUrl, currentTime: 0 } : { watchUrl: rawUrl, currentTime: 0 });
                 }}
                 onError={() => {
                   if (activeWatchUrl && !apiSearchCompleted) {
