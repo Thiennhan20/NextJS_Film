@@ -23,7 +23,7 @@ import useAuthStore from '@/store/useAuthStore'
 import { Menu, Transition } from '@headlessui/react'
 import { Fragment } from 'react'
 import { toast } from 'react-hot-toast'
-import { LogOut, Settings } from 'lucide-react';
+import { ArrowRightOnRectangleIcon as LogOut, Cog6ToothIcon as Settings } from '@heroicons/react/24/outline';
 import { useUIStore } from '@/store/store';
 import { useWatchlistStore } from '@/store/store';
 import useAuthHydrated from '@/store/useAuthHydrated';

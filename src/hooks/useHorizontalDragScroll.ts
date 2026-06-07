@@ -27,15 +27,18 @@ interface DragState {
 
 interface UseHorizontalDragScrollOptions {
   threshold?: number
+  dragSpeed?: number
 }
 
 const DEFAULT_DRAG_THRESHOLD = 6
+const DEFAULT_DRAG_SPEED = 0.7
 
 export function useHorizontalDragScroll<T extends HTMLElement>(
   scrollRef: { current: T | null },
   options: UseHorizontalDragScrollOptions = {},
 ) {
   const threshold = options.threshold ?? DEFAULT_DRAG_THRESHOLD
+  const dragSpeed = options.dragSpeed ?? DEFAULT_DRAG_SPEED
   const dragStateRef = useRef<DragState | null>(null)
   const suppressClickRef = useRef(false)
   const scrollIdleTimerRef = useRef<number | null>(null)
@@ -117,7 +120,7 @@ export function useHorizontalDragScroll<T extends HTMLElement>(
       setIsDragging(true)
     }
 
-    dragState.targetScrollLeft = dragState.startScrollLeft - deltaX
+    dragState.targetScrollLeft = dragState.startScrollLeft - deltaX * dragSpeed
     if (dragState.frameId !== null) return
 
     dragState.frameId = window.requestAnimationFrame(() => {
@@ -127,7 +130,7 @@ export function useHorizontalDragScroll<T extends HTMLElement>(
       container.scrollLeft = currentDragState.targetScrollLeft
       currentDragState.frameId = null
     })
-  }, [applyDragStyles, scrollRef, threshold])
+  }, [applyDragStyles, dragSpeed, scrollRef, threshold])
 
   const finishDrag = useCallback((event: PointerEvent<T>, cancelled = false) => {
     const dragState = dragStateRef.current

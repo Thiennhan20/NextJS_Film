@@ -78,6 +78,12 @@ export type PreparedClientHlsSource = {
   cleanup: () => void;
 };
 
+export type PreparedHlsPlayerSource = {
+  src: string;
+  watchUrl: string;
+  cleanHlsInBrowser: boolean;
+};
+
 function isHttpUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -101,6 +107,21 @@ function directoryUrl(url: string): string {
 
 function looksLikeHlsUrl(value: string): boolean {
   return /\.m3u8(?:$|[?#])/i.test(value);
+}
+
+export function shouldCleanHlsInBrowser(originalUrl?: string): boolean {
+  const rawUrl = extractOriginalUrl(originalUrl);
+  return !!rawUrl && looksLikeHlsUrl(rawUrl) && isHttpUrl(rawUrl);
+}
+
+export function prepareHlsPlayerSource(originalUrl?: string): PreparedHlsPlayerSource {
+  const rawUrl = extractOriginalUrl(originalUrl);
+
+  return {
+    src: rawUrl ? proxyHlsUrl(rawUrl) : '',
+    watchUrl: rawUrl,
+    cleanHlsInBrowser: shouldCleanHlsInBrowser(rawUrl),
+  };
 }
 
 function rewriteUriAttributes(line: string, playlistUrl: string): string {

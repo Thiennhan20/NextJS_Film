@@ -2,16 +2,16 @@
 
 import { useState, useEffect, type Dispatch, type SetStateAction } from 'react'
 import {
-  ChevronDown,
-  Power,
-  SlidersHorizontal,
-  Tv,
-  Laptop,
-  Headphones,
-  Smartphone,
-  Speaker,
-  Sparkles,
-} from 'lucide-react'
+  ChevronDownIcon as ChevronDown,
+  BoltIcon as Power,
+  AdjustmentsHorizontalIcon as SlidersHorizontal,
+  TvIcon as Tv,
+  ComputerDesktopIcon as Laptop,
+  MusicalNoteIcon as Headphones,
+  DevicePhoneMobileIcon as Smartphone,
+  SpeakerWaveIcon as Speaker,
+  SparklesIcon as Sparkles,
+} from '@heroicons/react/24/outline'
 import { useTranslations } from 'next-intl'
 import {
   AUDIO_PRESETS,

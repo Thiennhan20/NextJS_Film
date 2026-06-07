@@ -10,6 +10,7 @@ import { useApiCache } from '@/hooks/useApiCache'
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 import CardWithHover, { batchPrefetchDetails } from '@/components/common/CardWithHover'
 import { useTranslations } from 'next-intl'
+import FrameLoadingPlaceholder from './FrameLoadingPlaceholder'
 
 interface MovieItem {
   id: number;
@@ -63,7 +64,7 @@ export default function MoviesFrame() {
   };
 
   if (error) return null;
-  if (loading && !items) return null;
+  if (loading && !items) return <FrameLoadingPlaceholder variant="top-five" />;
   if (!items || items.length === 0) return null;
 
   return (
@@ -78,11 +79,11 @@ export default function MoviesFrame() {
       <div 
         ref={scrollRef}
         {...dragScrollProps}
-        className="horizontal-scroll-container flex md:grid md:grid-cols-5 gap-4 px-3 pt-6 overflow-x-auto md:overflow-visible pb-6 snap-x snap-proximity select-none cursor-grab active:cursor-grabbing md:cursor-default"
+        className="horizontal-scroll-container flex md:grid md:grid-cols-5 gap-4 px-3 pt-6 overflow-x-auto md:overflow-visible pb-6 snap-x snap-mandatory select-none cursor-grab active:cursor-grabbing md:cursor-default"
         style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {items.map((item, index) => (
-          <div key={item.id} className="flex flex-col group cursor-pointer snap-start min-w-[220px] md:min-w-0 w-[220px] md:w-auto shrink-0" onClick={() => router.push(getRoute(item))}>
+          <div key={item.id} className="flex flex-col group cursor-pointer snap-start snap-always min-w-[250px] md:min-w-0 w-[250px] md:w-auto shrink-0" onClick={() => router.push(getRoute(item))}>
             {/* Poster */}
             <CardWithHover
                 id={item.id}

@@ -13,7 +13,7 @@ import { useTranslations } from 'next-intl'
 import LazySection from '@/components/common/LazySection'
 
 // ONLY load HeroMovies immediately (above the fold)
-import HeroMovies from '@/components/home/HeroMovies'
+import HeroMovies, { type HeroItem } from '@/components/home/HeroMovies'
 
 // Lazy load all other components with React.lazy (true code splitting)
 const RecentlyWatchedMovies = lazy(() => import('@/components/home').then(m => ({ default: m.RecentlyWatched })))
@@ -32,14 +32,21 @@ const HorrorFrame = lazy(() => import('@/components/home/frames/HorrorFrame'))
 const RomanceFrame = lazy(() => import('@/components/home/frames/RomanceFrame'))
 const ActorsFrame = lazy(() => import('@/components/home/frames/ActorsFrame'))
 
+const RECENTLY_WATCHED_SECTION_RESERVE = 'clamp(260px, 31vw, 360px)'
+const STREAMING_ROOMS_SECTION_RESERVE = '220px'
+const POSTER_ROW_SECTION_RESERVE = 'clamp(330px, 37vw, 430px)'
+const TOP_FIVE_SECTION_RESERVE = 'clamp(430px, 48vw, 560px)'
+const COMING_SOON_SECTION_RESERVE = 'clamp(250px, 30vw, 360px)'
+const ANIME_SECTION_RESERVE = 'clamp(560px, 62vw, 680px)'
 const ROMANCE_SECTION_RESERVE = 'clamp(490px, 55vw, 650px)'
 const ACTORS_SECTION_RESERVE = 'clamp(360px, 39vw, 470px)'
+const ENTERTAINMENT_SECTION_RESERVE = 'clamp(430px, 48vw, 700px)'
 
-// Minimal placeholder - no skeleton animation, sections appear when ready
-const SectionSkeleton = () => <div />
 const ReservedSectionSpace = ({ minHeight }: { minHeight: string }) => (
   <div aria-hidden="true" style={{ minHeight }} />
 )
+
+const SectionSkeleton = () => <div />
 
 interface Particle {
   x: number;
@@ -48,7 +55,11 @@ interface Particle {
   duration: number;
 }
 
-export default function Home() {
+interface HomePageClientProps {
+  initialHeroItems?: HeroItem[] | null
+}
+
+export default function Home({ initialHeroItems = null }: HomePageClientProps) {
   const [particles, setParticles] = useState<Particle[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const t = useTranslations('HomePage');
@@ -118,25 +129,25 @@ export default function Home() {
       )}
 
       {/* Hero Movies Section - Load immediately (above the fold) */}
-      <HeroMovies />
+      <HeroMovies initialItems={initialHeroItems} />
 
       {/* Recently Watched Movies Section - Near fold, load early */}
-      <LazySection rootMargin="200px" minHeight="300px">
-        <Suspense fallback={<SectionSkeleton />}>
+      <LazySection rootMargin="200px" minHeight={RECENTLY_WATCHED_SECTION_RESERVE}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={RECENTLY_WATCHED_SECTION_RESERVE} />}>
           <RecentlyWatchedMovies />
         </Suspense>
       </LazySection>
 
       {/* Active Streaming Rooms Section */}
-      <LazySection rootMargin="200px" minHeight="200px">
-        <Suspense fallback={<SectionSkeleton />}>
+      <LazySection rootMargin="200px" minHeight={STREAMING_ROOMS_SECTION_RESERVE}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={STREAMING_ROOMS_SECTION_RESERVE} />}>
           <ActiveStreamingRooms />
         </Suspense>
       </LazySection>
 
       {/* Korean Frame - Each frame gets its own LazySection */}
-      <LazySection rootMargin="150px" minHeight="350px">
-        <Suspense fallback={<SectionSkeleton />}>
+      <LazySection rootMargin="150px" minHeight={POSTER_ROW_SECTION_RESERVE}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={POSTER_ROW_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto py-4 sm:py-6">
             <KoreanFrame />
           </div>
@@ -144,8 +155,8 @@ export default function Home() {
       </LazySection>
 
       {/* US-UK Frame */}
-      <LazySection rootMargin="150px" minHeight="350px">
-        <Suspense fallback={<SectionSkeleton />}>
+      <LazySection rootMargin="150px" minHeight={POSTER_ROW_SECTION_RESERVE}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={POSTER_ROW_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto py-4 sm:py-6">
             <USUKFrame />
           </div>
@@ -153,8 +164,8 @@ export default function Home() {
       </LazySection>
 
       {/* China Frame */}
-      <LazySection rootMargin="150px" minHeight="350px">
-        <Suspense fallback={<SectionSkeleton />}>
+      <LazySection rootMargin="150px" minHeight={POSTER_ROW_SECTION_RESERVE}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={POSTER_ROW_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto py-4 sm:py-6">
             <ChinaFrame />
           </div>
@@ -169,8 +180,8 @@ export default function Home() {
       </LazySection>
 
       {/* Top Movies Section */}
-      <LazySection rootMargin="150px" minHeight="350px">
-        <Suspense fallback={<SectionSkeleton />}>
+      <LazySection rootMargin="150px" minHeight={TOP_FIVE_SECTION_RESERVE}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={TOP_FIVE_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto">
             <MoviesFrame />
           </div>
@@ -178,15 +189,15 @@ export default function Home() {
       </LazySection>
 
       {/* Coming Soon Movies Section */}
-      <LazySection rootMargin="150px" minHeight="350px">
-        <Suspense fallback={<SectionSkeleton />}>
+      <LazySection rootMargin="150px" minHeight={COMING_SOON_SECTION_RESERVE}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={COMING_SOON_SECTION_RESERVE} />}>
           <ComingSoonMovies />
         </Suspense>
       </LazySection>
 
       {/* Top TV Shows Section */}
-      <LazySection rootMargin="150px" minHeight="350px">
-        <Suspense fallback={<SectionSkeleton />}>
+      <LazySection rootMargin="150px" minHeight={TOP_FIVE_SECTION_RESERVE}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={TOP_FIVE_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto">
             <TVShowsFrame />
           </div>
@@ -194,8 +205,8 @@ export default function Home() {
       </LazySection>
 
       {/* Anime Frame Section */}
-      <LazySection rootMargin="150px" minHeight="500px" onIntersect={preloadFeatureFrames}>
-        <Suspense fallback={<SectionSkeleton />}>
+      <LazySection rootMargin="150px" minHeight={ANIME_SECTION_RESERVE} onIntersect={preloadFeatureFrames}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={ANIME_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto pb-12">
             <AnimeFrame />
           </div>
@@ -203,8 +214,8 @@ export default function Home() {
       </LazySection>
 
       {/* Action Frame - Separate LazySection */}
-      <LazySection rootMargin="150px" minHeight="350px">
-        <Suspense fallback={<SectionSkeleton />}>
+      <LazySection rootMargin="150px" minHeight={POSTER_ROW_SECTION_RESERVE}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={POSTER_ROW_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto py-4 sm:py-6">
             <ActionFrame />
           </div>
@@ -212,8 +223,8 @@ export default function Home() {
       </LazySection>
 
       {/* Horror Frame - Separate LazySection */}
-      <LazySection rootMargin="150px" minHeight="350px">
-        <Suspense fallback={<SectionSkeleton />}>
+      <LazySection rootMargin="150px" minHeight={POSTER_ROW_SECTION_RESERVE}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={POSTER_ROW_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto py-4 sm:py-6">
             <HorrorFrame />
           </div>
@@ -239,8 +250,8 @@ export default function Home() {
       </LazySection>
 
       {/* Entertainment Frames Section */}
-      <LazySection rootMargin="150px" minHeight="500px">
-        <Suspense fallback={<SectionSkeleton />}>
+      <LazySection rootMargin="150px" minHeight={ENTERTAINMENT_SECTION_RESERVE}>
+        <Suspense fallback={<ReservedSectionSpace minHeight={ENTERTAINMENT_SECTION_RESERVE} />}>
           <EntertainmentFrames />
         </Suspense>
       </LazySection>
@@ -265,7 +276,7 @@ export default function Home() {
               >
                 {t('comingSoon')}
               </h2>
-              
+
               <p
                 className="text-lg text-gray-300 mb-8"
                 style={{ animation: 'ctaPulseOpacity 3s ease-in-out infinite' }}

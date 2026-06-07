@@ -11,6 +11,7 @@ import { useApiCache } from '@/hooks/useApiCache'
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 import CardWithHover, { batchPrefetchDetails } from '@/components/common/CardWithHover'
 import { useTranslations } from 'next-intl'
+import FrameLoadingPlaceholder from './FrameLoadingPlaceholder'
 
 interface MovieItem {
   id: number;
@@ -111,7 +112,7 @@ export default function USUKFrame() {
   };
 
   if (error) return null;
-  if (loading && !items) return null;
+  if (loading && !items) return <FrameLoadingPlaceholder variant="poster-row" />;
   if (!items || items.length === 0) return null;
 
   return (
@@ -150,11 +151,11 @@ export default function USUKFrame() {
         <div
           ref={scrollRef}
           {...dragScrollProps}
-          className="horizontal-scroll-container flex gap-3 sm:gap-4 overflow-x-auto overflow-y-visible pb-4 pt-2 scrollbar-none snap-x snap-proximity px-3"
+          className="horizontal-scroll-container flex gap-3 sm:gap-4 overflow-x-auto overflow-y-visible pb-4 pt-2 scrollbar-none snap-x snap-mandatory px-3"
           style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {items.map((item) => (
-            <div key={item.id} className="min-w-[140px] sm:min-w-[160px] md:min-w-[180px] max-w-[180px] snap-start">
+            <div key={item.id} className="min-w-[140px] sm:min-w-[160px] md:min-w-[180px] max-w-[180px] snap-start snap-always">
               <CardWithHover
                 id={item.id}
                 type={item.media_type || 'movie'}

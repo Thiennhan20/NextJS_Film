@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import CardWithHover from '@/components/common/CardWithHover';
+import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll';
 
 interface RelatedItem {
   id: number;
@@ -31,6 +32,7 @@ export default function RelatedContent({ id, type, title }: RelatedContentProps)
   const [relatedItems, setRelatedItems] = useState<RelatedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const { dragScrollProps } = useHorizontalDragScroll(scrollContainerRef);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
@@ -155,11 +157,12 @@ export default function RelatedContent({ id, type, title }: RelatedContentProps)
         {/* Scroll container */}
         <div
           ref={scrollContainerRef}
-          className="flex gap-3 sm:gap-4 overflow-x-auto overflow-y-visible pb-4 pt-2 scrollbar-none snap-x snap-mandatory px-1 sm:px-3"
+          {...dragScrollProps}
+          className="horizontal-scroll-container flex gap-3 sm:gap-4 overflow-x-auto overflow-y-visible pb-4 pt-2 scrollbar-none snap-x snap-mandatory px-1 sm:px-3"
           style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {relatedItems.map((item, index) => (
-            <div key={item.id} className="min-w-[140px] sm:min-w-[160px] md:min-w-[180px] max-w-[180px] snap-start">
+          {relatedItems.map((item) => (
+            <div key={item.id} className="min-w-[140px] sm:min-w-[160px] md:min-w-[180px] max-w-[180px] snap-start snap-always">
               <CardWithHover
                 id={item.id}
                 type={type}
@@ -170,9 +173,6 @@ export default function RelatedContent({ id, type, title }: RelatedContentProps)
               >
                 <Link href={`${linkPrefix}/${item.id}`}>
                   <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
                     whileHover={{ scale: 1.05, y: -5 }}
                     className="relative rounded-xl overflow-hidden shadow-lg cursor-pointer group bg-gray-900 border border-white/5"
                   >

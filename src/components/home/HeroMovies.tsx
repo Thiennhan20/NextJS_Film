@@ -3,7 +3,6 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
-import Head from 'next/head'
 import axios from 'axios'
 import Link from 'next/link'
 import { PlayIcon, BookmarkIcon, XMarkIcon, ArrowUpRightIcon } from '@heroicons/react/24/outline'
@@ -12,7 +11,7 @@ import { useWatchlistStore } from '@/store/store'
 import useAuthStore from '@/store/useAuthStore'
 import { toast } from 'react-hot-toast'
 import api from '@/lib/axios'
-import { ChevronDownIcon } from 'lucide-react'
+import { ChevronDownIcon } from '@heroicons/react/24/outline'
 import { useTranslations } from 'next-intl'
 import { useApiCache } from '@/hooks/useApiCache'
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
@@ -47,7 +46,7 @@ interface TVShow {
   vote_average?: number;
 }
 
-type HeroItem = (Movie | TVShow) & { 
+export type HeroItem = (Movie | TVShow) & {
   image: string; 
   backdrop: string;
   type: 'movie' | 'tv';
@@ -159,7 +158,7 @@ const DesktopTrailerHint = () => {
 );
 };
 
-export default function HeroMovies() {
+export default function HeroMovies({ initialItems = null }: { initialItems?: HeroItem[] | null }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showTrailer, setShowTrailer] = useState(false);
@@ -217,7 +216,8 @@ export default function HeroMovies() {
   const { data: cachedHeroItems, loading } = useApiCache<HeroItem[]>(
     'home-hero-movies',
     fetchHeroData,
-    8 * 60 * 60 * 1000 // 8 tiếng
+    8 * 60 * 60 * 1000, // 8 tiếng
+    initialItems && initialItems.length > 0 ? initialItems : null
   );
   const heroItems = useMemo(() => cachedHeroItems || [], [cachedHeroItems]);
 
@@ -472,16 +472,10 @@ export default function HeroMovies() {
   const currentItem = heroItems[currentIndex];
   const visibleItems = heroItems; // Show all 5 items in thumbnail row
   const isFirstSlide = currentIndex === 0;
-  const firstBackdropUrl = heroItems[0]?.backdrop || heroItems[0]?.image || '';
+  const currentBackdropUrl = currentItem.backdrop || currentItem.image || '';
 
   return (
     <>
-      {/* Preload first backdrop to improve LCP */}
-      {firstBackdropUrl ? (
-        <Head>
-          <link rel="preload" as="image" href={firstBackdropUrl} fetchPriority="high" />
-        </Head>
-      ) : null}
     <section 
       className="relative w-full min-h-[60vh] max-h-[60vh] md:min-h-[calc(100vh-4rem)] md:max-h-[calc(100vh-4rem)] overflow-hidden flex items-center justify-center"
       onMouseEnter={stopAutoPlay}
@@ -497,12 +491,19 @@ export default function HeroMovies() {
           exit={{ opacity: 0, scale: 1 }}
           transition={{ duration: 0.8, ease: "easeInOut" }}
         >
-          <div
-            className="w-full h-full bg-cover bg-center"
-            style={{
-              backgroundImage: `url(${currentItem.backdrop || currentItem.image})`,
-            }}
-          />
+          {currentBackdropUrl ? (
+            <Image
+              src={currentBackdropUrl}
+              alt=""
+              fill
+              priority={isFirstSlide}
+              loading={isFirstSlide ? 'eager' : 'lazy'}
+              sizes="100vw"
+              className="object-cover object-center"
+            />
+          ) : (
+            <div className="h-full w-full bg-gray-900" />
+          )}
           <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40" />
         </motion.div>
@@ -644,12 +645,12 @@ export default function HeroMovies() {
                 <div
                   ref={mobileThumbnailsRef}
                   {...mobileThumbnailDragScrollProps}
-                  className="horizontal-scroll-container flex items-center justify-center gap-1.5 px-4 pt-1.5 overflow-x-auto pb-1 scrollbar-hide"
+                  className="horizontal-scroll-container flex items-center justify-center gap-1.5 px-4 pt-1.5 overflow-x-auto pb-1 scrollbar-hide snap-x snap-mandatory"
                 >
                   {visibleItems.map((item, index) => (
                     <motion.button
                       key={item.id}
-                      className={`relative flex-shrink-0 w-10 h-14 sm:w-12 sm:h-16 rounded-lg overflow-hidden border-2 transition-all duration-300 ${
+                      className={`relative flex-shrink-0 w-10 h-14 sm:w-12 sm:h-16 rounded-lg overflow-hidden border-2 transition-all duration-300 snap-center snap-always ${
                         index === currentIndex 
                           ? 'border-red-500 shadow-lg shadow-red-500/30' 
                           : 'border-white/20'
@@ -816,12 +817,12 @@ export default function HeroMovies() {
             <div
               ref={desktopThumbnailsRef}
               {...desktopThumbnailDragScrollProps}
-              className="horizontal-scroll-container flex items-center gap-3 max-w-full overflow-x-auto pb-2 scrollbar-hide"
+              className="horizontal-scroll-container flex items-center gap-3 max-w-full overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory"
             >
               {visibleItems.map((item, index) => (
                 <motion.button
                   key={item.id}
-                  className={`relative flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden border-2 transition-all duration-300 ${
+                  className={`relative flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden border-2 transition-all duration-300 snap-center snap-always ${
                     index === currentIndex 
                       ? 'border-red-500 shadow-lg shadow-red-500/30' 
                       : 'border-white/20 hover:border-white/40'

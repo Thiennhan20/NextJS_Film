@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
 import api from '@/lib/axios'
-import { Radio, Users, Clock, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
+import { SignalIcon as Radio, UsersIcon as Users, ClockIcon as Clock, ArrowRightIcon as ArrowRight, ChevronLeftIcon as ChevronLeft, ChevronRightIcon as ChevronRight } from '@heroicons/react/24/outline'
 import { useTranslations } from 'next-intl'
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 
@@ -162,14 +162,14 @@ export default function ActiveStreamingRooms() {
           <div
             ref={scrollRef}
             {...dragScrollProps}
-            className="horizontal-scroll-container flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth px-4 sm:px-6 lg:px-8 pb-1"
+            className="horizontal-scroll-container flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth snap-x snap-mandatory px-4 sm:px-6 lg:px-8 pb-1"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {/* Loading skeletons */}
             {loading && [1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="shrink-0 w-[260px] sm:w-[280px] bg-gray-800/40 rounded-xl p-3.5 border border-gray-700/30 animate-pulse"
+                className="shrink-0 w-[260px] sm:w-[280px] snap-start snap-always bg-gray-800/40 rounded-xl p-3.5 border border-gray-700/30"
               >
                 <div className="flex items-center gap-2.5 mb-2.5">
                   <div className="w-8 h-8 rounded-full bg-gray-700" />
@@ -194,7 +194,7 @@ export default function ActiveStreamingRooms() {
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
                       transition={{ delay: index * 0.04 }}
-                      className="shrink-0 w-[260px] sm:w-[280px]"
+                      className="shrink-0 w-[260px] sm:w-[280px] snap-start snap-always"
                     >
                       <Link
                         href={`/streaming-lobby`}

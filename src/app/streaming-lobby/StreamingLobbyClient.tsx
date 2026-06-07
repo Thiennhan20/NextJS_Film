@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { Plus, Hash, ArrowRight, Radio, Copy, Check, LogIn, Film, Tv, Clock, Users, Trash2, RefreshCw, AlertTriangle, X, Info, Sparkles, Activity, TrendingUp, HelpCircle } from 'lucide-react';
+import { PlusIcon as Plus, HashtagIcon as Hash, ArrowRightIcon as ArrowRight, SignalIcon as Radio, ClipboardDocumentIcon as Copy, CheckIcon as Check, ArrowRightOnRectangleIcon as LogIn, FilmIcon as Film, TvIcon as Tv, ClockIcon as Clock, UsersIcon as Users, TrashIcon as Trash2, ArrowPathIcon as RefreshCw, ExclamationTriangleIcon as AlertTriangle, XMarkIcon as X, InformationCircleIcon as Info, SparklesIcon as Sparkles, BoltIcon as Activity, ArrowTrendingUpIcon as TrendingUp, QuestionMarkCircleIcon as HelpCircle } from '@heroicons/react/24/outline';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
@@ -690,7 +690,7 @@ function StreamingLobbyContent() {
                   key={room.room_id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white/[0.03] backdrop-blur-md rounded-xl p-3 sm:p-4 border border-white/[0.08] hover:border-yellow-500/40 hover:shadow-[0_0_20px_rgba(234,179,8,0.12)] transition-all duration-300 hover:-translate-y-0.5 group flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
+                  className="bg-white/[0.03] backdrop-blur-md rounded-xl p-3 sm:p-4 border border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-grow">
                     {/* Host Avatar */}

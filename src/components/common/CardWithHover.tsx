@@ -70,6 +70,10 @@ function getHorizontalScrollParent(element: HTMLElement | null) {
 const CLIENT_CACHE_TTL = 8 * 60 * 60 * 1000 // 8 tiếng
 const MAX_CACHE_SIZE = 200 // Tăng lên để chứa batch prefetch từ các frame
 
+function supportsHoverPreview() {
+  return typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+}
+
 // Prefetch function - fetch ngay khi hover vào, tận dụng hoverDelay
 function prefetchDetails(type: 'movie' | 'tv', id: number) {
   const cacheKey = `${type}-${id}`
@@ -99,6 +103,8 @@ function prefetchDetails(type: 'movie' | 'tv', id: number) {
  * Kết quả được cache cả ở client (Map) và server (Redis/Upstash).
  */
 export async function batchPrefetchDetails(items: Array<{ type: 'movie' | 'tv'; id: number }>) {
+  if (!supportsHoverPreview()) return
+
   // Lọc bỏ các item đã có trong client cache
   const uncached = items.filter(item => {
     const cacheKey = `${item.type}-${item.id}`
@@ -662,17 +668,19 @@ export default function CardWithHover({
       onMouseLeave={handleMouseLeave}
     >
       {children}
-      <HoverCard
-        id={id}
-        type={type}
-        title={title}
-        posterPath={posterPath}
-        anchorRect={anchorRect}
-        isVisible={showCard}
-        onWatchClick={onWatchClick}
-        onLikeClick={onLikeClick}
-        isLiked={isLiked}
-      />
+      {isHoverDevice && showCard ? (
+        <HoverCard
+          id={id}
+          type={type}
+          title={title}
+          posterPath={posterPath}
+          anchorRect={anchorRect}
+          isVisible={showCard}
+          onWatchClick={onWatchClick}
+          onLikeClick={onLikeClick}
+          isLiked={isLiked}
+        />
+      ) : null}
     </div>
   )
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, User, Send, Smile, Image as LucideImage } from 'lucide-react';
+import { ChatBubbleLeftEllipsisIcon as MessageCircle, UserIcon as User, PaperAirplaneIcon as Send, FaceSmileIcon as Smile, PhotoIcon as LucideImage } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import { useChatSocket, emojiCategories, quickEmojis } from '@/hooks/useChatSocket';
 

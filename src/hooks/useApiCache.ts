@@ -6,11 +6,56 @@ interface CacheEntry<T> {
   expiry: number;
 }
 
+const DEFAULT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const BROWSER_CACHE_PREFIX = 'api-cache:';
+
+function readBrowserCache<T>(key: string): T | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(`${BROWSER_CACHE_PREFIX}${key}`);
+    if (!raw) return null;
+
+    const entry = JSON.parse(raw) as CacheEntry<T>;
+    if (!entry || Date.now() > entry.expiry) {
+      window.sessionStorage.removeItem(`${BROWSER_CACHE_PREFIX}${key}`);
+      return null;
+    }
+
+    return entry.data;
+  } catch {
+    return null;
+  }
+}
+
+function writeBrowserCache<T>(key: string, data: T, ttl: number): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.sessionStorage.setItem(`${BROWSER_CACHE_PREFIX}${key}`, JSON.stringify({
+      data,
+      timestamp: Date.now(),
+      expiry: Date.now() + ttl,
+    }));
+  } catch {
+    // Storage can fail in private mode or when quota is full.
+  }
+}
+
+function removeBrowserCache(key: string): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.sessionStorage.removeItem(`${BROWSER_CACHE_PREFIX}${key}`);
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
 class ApiCache {
   private cache = new Map<string, CacheEntry<unknown>>();
-  private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
 
-  set<T>(key: string, data: T, ttl: number = this.DEFAULT_TTL): void {
+  set<T>(key: string, data: T, ttl: number = DEFAULT_CACHE_TTL): void {
     this.cache.set(key, {
       data,
       timestamp: Date.now(),
@@ -44,12 +89,16 @@ const apiCache = new ApiCache();
 export function useApiCache<T>(
   key: string,
   fetcher: () => Promise<T>,
-  ttl?: number
+  ttl?: number,
+  initialData?: T | null
 ): { data: T | null; loading: boolean; error: Error | null; refetch: () => void } {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
+  const initialCachedData = initialData ?? readBrowserCache<T>(key);
+  const effectiveTtl = ttl ?? DEFAULT_CACHE_TTL;
+  const [data, setData] = useState<T | null>(initialCachedData);
+  const [loading, setLoading] = useState(!initialCachedData);
   const [error, setError] = useState<Error | null>(null);
   const fetcherRef = useRef(fetcher);
+  const initialDataRef = useRef<T | null>(initialData ?? null);
 
   // Update fetcher ref when it changes
   useEffect(() => {
@@ -61,6 +110,16 @@ export function useApiCache<T>(
       setLoading(true);
       setError(null);
 
+      if (initialDataRef.current !== null) {
+        const serverData = initialDataRef.current;
+        initialDataRef.current = null;
+        apiCache.set(key, serverData, effectiveTtl);
+        writeBrowserCache(key, serverData, effectiveTtl);
+        setData(serverData);
+        setLoading(false);
+        return;
+      }
+
       // Check cache first
       const cachedData = apiCache.get<T>(key);
       if (cachedData) {
@@ -69,16 +128,25 @@ export function useApiCache<T>(
         return;
       }
 
+      const browserCachedData = readBrowserCache<T>(key);
+      if (browserCachedData) {
+        apiCache.set(key, browserCachedData, effectiveTtl);
+        setData(browserCachedData);
+        setLoading(false);
+        return;
+      }
+
       // Fetch new data
       const newData = await fetcherRef.current();
-      apiCache.set(key, newData, ttl);
+      apiCache.set(key, newData, effectiveTtl);
+      writeBrowserCache(key, newData, effectiveTtl);
       setData(newData);
     } catch (err) {
       setError(err as Error);
     } finally {
       setLoading(false);
     }
-  }, [key, ttl]);
+  }, [key, effectiveTtl]);
 
   useEffect(() => {
     fetchData();
@@ -86,6 +154,7 @@ export function useApiCache<T>(
 
   const refetch = () => {
     apiCache.clear(); // Clear cache for this key
+    removeBrowserCache(key);
     fetchData();
   };
 

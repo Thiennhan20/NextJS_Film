@@ -35,6 +35,7 @@ const NEW_COMMENT_ROW_HEIGHT = 90
 const NEW_COMMENT_ROW_GAP = 10
 const NEW_COMMENT_SCROLL_INTERVAL = 3600
 const NEW_COMMENT_SCROLL_DURATION = 1.35
+const MOBILE_NEW_COMMENTS_VISIBLE_COUNT = 4
 
 // Custom avatar generator function
 const generateAvatar = (name: string) => {
@@ -73,6 +74,7 @@ export default function TopComments() {
   const { comments: newComments, isLoading: newCommentsLoading } = useRecentComments(10)
   const t = useTranslations('Comments')
   const firstNewCommentId = newComments[0]?.id
+  const enableHoverEffects = !isMobile
 
   // Fetch trending and top rated movies from TMDB
   useEffect(() => {
@@ -141,6 +143,12 @@ export default function TopComments() {
   }, [])
 
   useEffect(() => {
+    if (isMobile) {
+      setNewCommentsInView(false)
+      setNewCommentStartIndex(0)
+      return
+    }
+
     const target = newCommentsRef.current
     if (!target) return
 
@@ -160,16 +168,19 @@ export default function TopComments() {
 
     observer.observe(target)
     return () => observer.disconnect()
-  }, [newCommentsLoading, newComments.length])
+  }, [isMobile, newCommentsLoading, newComments.length])
 
   useEffect(() => {
+    if (isMobile) return
+
     setNewCommentsTransitionEnabled(false)
     setNewCommentStartIndex(0)
     const timer = window.setTimeout(() => setNewCommentsTransitionEnabled(true), 50)
     return () => window.clearTimeout(timer)
-  }, [newComments.length, firstNewCommentId])
+  }, [isMobile, newComments.length, firstNewCommentId])
 
-  const shouldCycleNewComments = newComments.length > NEW_COMMENTS_VISIBLE_COUNT
+  const shouldCycleNewComments = !isMobile && newComments.length > NEW_COMMENTS_VISIBLE_COUNT
+  const shouldManualScrollNewComments = isMobile && newComments.length > MOBILE_NEW_COMMENTS_VISIBLE_COUNT
 
   useEffect(() => {
     if (!shouldCycleNewComments || !newCommentsInView) return
@@ -220,6 +231,8 @@ export default function TopComments() {
 
   const newCommentsTrack = shouldCycleNewComments
     ? [...newComments, ...newComments.slice(0, NEW_COMMENTS_VISIBLE_COUNT)]
+    : shouldManualScrollNewComments
+      ? newComments
     : newComments.slice(0, NEW_COMMENTS_VISIBLE_COUNT)
 
   const getTrendIcon = (trend: 'up' | 'down' | 'same') => {
@@ -277,7 +290,7 @@ export default function TopComments() {
               </div>
               <div className="flex items-center gap-1 sm:gap-2">
                 <motion.button
-                  whileHover={{ scale: 1.05, backgroundColor: "rgba(55, 65, 81, 0.7)" }}
+                  whileHover={enableHoverEffects ? { scale: 1.05, backgroundColor: "rgba(55, 65, 81, 0.7)" } : undefined}
                   whileTap={{ scale: 0.95 }}
                   onClick={prevSlide}
                   className="p-1.5 sm:p-2 bg-gray-800/50 rounded-full transition-colors border border-gray-700/50"
@@ -286,7 +299,7 @@ export default function TopComments() {
                   <ChevronLeftIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </motion.button>
                 <motion.button
-                  whileHover={{ scale: 1.05, backgroundColor: "rgba(55, 65, 81, 0.7)" }}
+                  whileHover={enableHoverEffects ? { scale: 1.05, backgroundColor: "rgba(55, 65, 81, 0.7)" } : undefined}
                   whileTap={{ scale: 0.95 }}
                   onClick={nextSlide}
                   className="p-1.5 sm:p-2 bg-gray-800/50 rounded-full transition-colors border border-gray-700/50"
@@ -324,7 +337,7 @@ export default function TopComments() {
                 <p className="text-red-400 mb-2">{error}</p>
                 <button
                   onClick={() => window.location.reload()}
-                  className="text-sm text-blue-400 hover:text-blue-300 underline"
+                  className="text-sm text-blue-400 md:hover:text-blue-300 underline"
                 >
                   {t('retry')}
                 </button>
@@ -347,11 +360,11 @@ export default function TopComments() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: index * 0.1 }}
-                    whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                    className="bg-gradient-to-br from-white/[0.03] to-white/[0.01] backdrop-blur-xl rounded-xl p-4 sm:p-5 border border-white/[0.06] hover:border-white/[0.15] hover:shadow-[0_0_30px_rgba(255,255,255,0.02)] hover:bg-white/[0.04] transition-all duration-500 flex flex-col h-full group cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative overflow-hidden"
+                    whileHover={enableHoverEffects ? { y: -4, transition: { duration: 0.2 } } : undefined}
+                    className="bg-gradient-to-br from-white/[0.03] to-white/[0.01] md:backdrop-blur-xl rounded-xl p-4 sm:p-5 border border-white/[0.06] md:hover:border-white/[0.15] md:hover:shadow-[0_0_30px_rgba(255,255,255,0.02)] md:hover:bg-white/[0.04] transition-all duration-500 flex flex-col h-full group cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative overflow-hidden"
                   >
                     {/* Subtle Top Shiny Border */}
-                    <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 md:group-hover:opacity-100 transition-opacity duration-500" />
 
                     {/* User Info */}
                     <div className="flex items-center gap-2 sm:gap-3 mb-3">
@@ -385,7 +398,7 @@ export default function TopComments() {
                             alt={comment.movie.title}
                             width={40}
                             height={56}
-                            className="w-10 h-14 sm:w-12 sm:h-16 object-cover rounded-lg shadow-lg border border-white/10 transition-transform duration-300 group-hover:scale-105"
+                            className="w-10 h-14 sm:w-12 sm:h-16 object-cover rounded-lg shadow-lg border border-white/10 transition-transform duration-300 md:group-hover:scale-105"
                           />
                         ) : (
                           <div className="w-10 h-14 sm:w-12 sm:h-16 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-lg flex items-center justify-center shadow-inner">
@@ -394,7 +407,7 @@ export default function TopComments() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="text-white font-semibold text-xs sm:text-sm truncate group-hover:text-blue-400 transition-colors">
+                        <h4 className="text-white font-semibold text-xs sm:text-sm truncate md:group-hover:text-blue-400 transition-colors">
                            {comment.movie.title}
                         </h4>
                         <p className="text-gray-300 text-xs sm:text-sm leading-relaxed mt-1 line-clamp-2">
@@ -407,29 +420,29 @@ export default function TopComments() {
                     <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-700/50">
                       <div className="flex items-center gap-4 text-xs text-gray-400">
                         <motion.span
-                          whileHover={{ scale: 1.15 }}
+                          whileHover={enableHoverEffects ? { scale: 1.15 } : undefined}
                           whileTap={{ scale: 0.85 }}
-                          className="flex items-center gap-1.5 hover:text-red-400 transition-colors cursor-pointer group/like"
+                          className="flex items-center gap-1.5 md:hover:text-red-400 transition-colors cursor-pointer group/like"
                         >
-                          <HeartIcon className="w-4 h-4 group-hover/like:fill-red-400 group-hover/like:scale-110 transition-all duration-300" />
+                          <HeartIcon className="w-4 h-4 md:group-hover/like:fill-red-400 md:group-hover/like:scale-110 transition-all duration-300" />
                           <span>{comment.likes}</span>
                         </motion.span>
                         <motion.span
-                          whileHover={{ scale: 1.15 }}
+                          whileHover={enableHoverEffects ? { scale: 1.15 } : undefined}
                           whileTap={{ scale: 0.85 }}
-                          className="flex items-center gap-1.5 hover:text-blue-400 transition-colors cursor-pointer group/reply"
+                          className="flex items-center gap-1.5 md:hover:text-blue-400 transition-colors cursor-pointer group/reply"
                         >
-                          <ChatBubbleLeftIcon className="w-4 h-4 group-hover/reply:fill-blue-400 group-hover/reply:scale-110 transition-all duration-300" />
+                          <ChatBubbleLeftIcon className="w-4 h-4 md:group-hover/reply:fill-blue-400 md:group-hover/reply:scale-110 transition-all duration-300" />
                           <span>{comment.replies}</span>
                         </motion.span>
                       </div>
                       <motion.button
-                        whileHover={{ 
+                        whileHover={enableHoverEffects ? {
                           scale: 1.05,
                           boxShadow: "0 0 12px rgba(96, 165, 250, 0.4)" 
-                        }}
+                        } : undefined}
                         whileTap={{ scale: 0.95 }}
-                        className="text-xs text-blue-400 hover:text-blue-300 transition-all duration-300 font-semibold bg-blue-400/10 hover:bg-blue-400/20 px-3.5 py-1.5 rounded-full border border-blue-400/20 hover:border-blue-400/40 relative overflow-hidden"
+                        className="text-xs text-blue-400 md:hover:text-blue-300 transition-all duration-300 font-semibold bg-blue-400/10 md:hover:bg-blue-400/20 px-3.5 py-1.5 rounded-full border border-blue-400/20 md:hover:border-blue-400/40 relative overflow-hidden"
                       >
                         {t('reply')}
                       </motion.button>
@@ -451,7 +464,7 @@ export default function TopComments() {
         >
           <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
             {/* Trending Now */}
-            <div className="p-3 sm:p-4 lg:p-6 flex flex-col h-full hover:bg-white/[0.02] transition-colors">
+            <div className="p-3 sm:p-4 lg:p-6 flex flex-col h-full md:hover:bg-white/[0.02] transition-colors">
               <div className="flex items-center gap-2 mb-3">
                 <div className="p-1.5 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg shadow-md flex-shrink-0">
                   <FireIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
@@ -467,7 +480,7 @@ export default function TopComments() {
                   trendingMovies.map((movie, index) => (
                     <Link key={movie.id} href={`/movies/${movie.id}`} className={index >= 5 ? "hidden lg:block" : "block"}>
                       <motion.div
-                        whileHover={{ x: 4, backgroundColor: "rgba(55, 65, 81, 0.4)" }}
+                        whileHover={enableHoverEffects ? { x: 4, backgroundColor: "rgba(55, 65, 81, 0.4)" } : undefined}
                         className="flex items-center gap-2 p-1.5 sm:p-2 rounded-lg transition-all cursor-pointer group/trending"
                       >
                         <span className={`text-base font-bold w-5 text-center ${index === 0 ? "text-yellow-400" :
@@ -483,7 +496,7 @@ export default function TopComments() {
                             alt={movie.title}
                             width={32}
                             height={48}
-                            className="w-8 h-12 object-cover rounded-md shadow-md border border-white/5 flex-shrink-0 group-hover/trending:scale-105 transition-transform duration-300"
+                            className="w-8 h-12 object-cover rounded-md shadow-md border border-white/5 flex-shrink-0 md:group-hover/trending:scale-105 transition-transform duration-300"
                           />
                         ) : (
                           <div className="w-8 h-12 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded flex items-center justify-center shadow-inner flex-shrink-0">
@@ -491,7 +504,7 @@ export default function TopComments() {
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <span className="text-white text-xs sm:text-sm font-medium truncate block group-hover/trending:text-orange-400 transition-colors">
+                          <span className="text-white text-xs sm:text-sm font-medium truncate block md:group-hover/trending:text-orange-400 transition-colors">
                             {movie.title}
                           </span>
                           <div className="flex items-center gap-2 mt-0.5 sm:mt-1">
@@ -509,7 +522,7 @@ export default function TopComments() {
             </div>
 
             {/* Most Liked */}
-            <div className="p-3 sm:p-4 lg:p-6 flex flex-col h-full hover:bg-white/[0.02] transition-colors">
+            <div className="p-3 sm:p-4 lg:p-6 flex flex-col h-full md:hover:bg-white/[0.02] transition-colors">
               <div className="flex items-center gap-2 mb-3">
                 <div className="p-1.5 bg-gradient-to-br from-red-500 to-pink-500 rounded-lg shadow-md flex-shrink-0">
                   <HeartIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
@@ -525,7 +538,7 @@ export default function TopComments() {
                   mostLikedMovies.map((movie, index) => (
                     <Link key={movie.id} href={`/movies/${movie.id}`} className={index >= 5 ? "hidden lg:block" : "block"}>
                       <motion.div
-                        whileHover={{ x: 4, backgroundColor: "rgba(55, 65, 81, 0.4)" }}
+                        whileHover={enableHoverEffects ? { x: 4, backgroundColor: "rgba(55, 65, 81, 0.4)" } : undefined}
                         className="flex items-center gap-2 p-1.5 sm:p-2 rounded-lg transition-all cursor-pointer group/liked"
                       >
                         <span className={`text-base font-bold w-5 text-center ${index === 0 ? "text-yellow-400" :
@@ -541,7 +554,7 @@ export default function TopComments() {
                             alt={movie.title}
                             width={32}
                             height={48}
-                            className="w-8 h-12 object-cover rounded-md shadow-md border border-white/5 flex-shrink-0 group-hover/liked:scale-105 transition-transform duration-300"
+                            className="w-8 h-12 object-cover rounded-md shadow-md border border-white/5 flex-shrink-0 md:group-hover/liked:scale-105 transition-transform duration-300"
                           />
                         ) : (
                           <div className="w-8 h-12 bg-gradient-to-br from-red-500/20 to-pink-500/20 rounded flex items-center justify-center shadow-inner flex-shrink-0">
@@ -549,7 +562,7 @@ export default function TopComments() {
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <span className="text-white text-xs sm:text-sm font-medium truncate block group-hover/liked:text-pink-400 transition-colors">
+                          <span className="text-white text-xs sm:text-sm font-medium truncate block md:group-hover/liked:text-pink-400 transition-colors">
                             {movie.title}
                           </span>
                           <div className="flex items-center gap-1.5 mt-0.5 sm:mt-1">
@@ -568,7 +581,7 @@ export default function TopComments() {
             </div>
 
             {/* New Comments */}
-            <div className="p-3 sm:p-4 lg:p-6 flex flex-col h-full hover:bg-white/[0.02] transition-colors">
+            <div className="p-3 sm:p-4 lg:p-6 flex flex-col h-full md:hover:bg-white/[0.02] transition-colors">
               <div className="flex items-center gap-2 mb-3">
                 <div className="p-1.5 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg shadow-md flex-shrink-0">
                   <SparklesIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
@@ -606,7 +619,7 @@ export default function TopComments() {
                         'inset 0 1px 8px rgba(6, 182, 212, 0.05), 0 0 0 rgba(34, 211, 238, 0)'
                       ]
                     } : undefined}
-                    transition={{ duration: NEW_COMMENT_SCROLL_INTERVAL / 1000, repeat: Infinity, ease: 'easeInOut' }}
+                    transition={shouldCycleNewComments ? { duration: NEW_COMMENT_SCROLL_INTERVAL / 1000, repeat: Infinity, ease: 'easeInOut' } : undefined}
                   >
                     {shouldCycleNewComments && (
                       <div className="pointer-events-none absolute left-1 top-2 bottom-2 z-30 w-px bg-cyan-300/15">
@@ -623,40 +636,38 @@ export default function TopComments() {
                       </div>
                     )}
                     <div
-                      className="overflow-hidden"
+                      className={shouldManualScrollNewComments ? "overflow-y-auto overscroll-contain pr-1 chat-scrollbar" : "overflow-hidden"}
                       style={{
                         height: shouldCycleNewComments
                           ? NEW_COMMENTS_VISIBLE_COUNT * NEW_COMMENT_ROW_HEIGHT + (NEW_COMMENTS_VISIBLE_COUNT - 1) * NEW_COMMENT_ROW_GAP
+                          : shouldManualScrollNewComments
+                            ? MOBILE_NEW_COMMENTS_VISIBLE_COUNT * NEW_COMMENT_ROW_HEIGHT + (MOBILE_NEW_COMMENTS_VISIBLE_COUNT - 1) * NEW_COMMENT_ROW_GAP
                           : undefined
                       }}
                     >
                     <div
                       className="relative z-10 flex flex-col gap-2.5"
-                      style={{
-                        transform: `translateY(${
-                          shouldCycleNewComments
-                            ? -newCommentStartIndex * (NEW_COMMENT_ROW_HEIGHT + NEW_COMMENT_ROW_GAP)
-                            : 0
-                        }px)`,
+                      style={shouldCycleNewComments ? {
+                        transform: `translateY(${-newCommentStartIndex * (NEW_COMMENT_ROW_HEIGHT + NEW_COMMENT_ROW_GAP)}px)`,
                         transition: newCommentsTransitionEnabled
                           ? `transform ${NEW_COMMENT_SCROLL_DURATION}s cubic-bezier(0.22, 1, 0.36, 1)`
                           : 'none',
                         willChange: 'transform'
-                      }}
+                      } : undefined}
                     >
                       {newCommentsTrack.map((comment, index) => (
                     <Link
                       key={`${comment.id}-${index}`}
                       href={getCommentUrl(comment.movieId, comment.type, comment.id)}
                       className="block shrink-0"
-                      style={{ height: NEW_COMMENT_ROW_HEIGHT }}
+                      style={shouldCycleNewComments || shouldManualScrollNewComments ? { height: NEW_COMMENT_ROW_HEIGHT } : undefined}
                     >
                       <motion.div
-                        whileHover={{ scale: 1.01 }}
+                        whileHover={enableHoverEffects ? { scale: 1.01 } : undefined}
                         className={`h-full p-1.5 sm:p-2 rounded-lg transition-all border group/comment cursor-pointer ${
                           index % 2 === 0
-                            ? 'bg-white/[0.035] border-white/10 hover:bg-cyan-400/[0.08] hover:border-cyan-300/25'
-                            : 'bg-blue-950/20 border-blue-300/10 hover:bg-blue-500/[0.08] hover:border-blue-300/25'
+                            ? 'bg-white/[0.035] border-white/10 md:hover:bg-cyan-400/[0.08] md:hover:border-cyan-300/25'
+                            : 'bg-blue-950/20 border-blue-300/10 md:hover:bg-blue-500/[0.08] md:hover:border-blue-300/25'
                         }`}
                       >
                         <div className="flex items-start gap-2 h-full">
@@ -675,7 +686,7 @@ export default function TopComments() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
-                              <span className="font-semibold text-white text-xs sm:text-sm group-hover/comment:text-blue-400 transition-colors">
+                              <span className="font-semibold text-white text-xs sm:text-sm md:group-hover/comment:text-blue-400 transition-colors">
                                 {comment.user.name}
                               </span>
                             </div>

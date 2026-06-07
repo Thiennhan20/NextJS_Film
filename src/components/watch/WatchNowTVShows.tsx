@@ -15,12 +15,12 @@ import {
   type AudioNodes,
   type AudioSettings,
 } from '@/lib/audioUtils'
-import { extractOriginalUrl } from '@/lib/hlsProxy'
+import { extractOriginalUrl, prepareHlsPlayerSource } from '@/lib/hlsProxy'
 
 import WatchNowTVShowsServer1 from './WatchNowTVShowsServer1'
 import WatchNowTVShowsServer2 from './WatchNowTVShowsServer2'
 import WatchNowTVShowsServer3 from './WatchNowTVShowsServer3'
-import { Radio, SkipForward, Loader2 } from 'lucide-react'
+import { SignalIcon as Radio, ForwardIcon as SkipForward, ArrowPathIcon as Loader2 } from '@heroicons/react/24/outline'
 import { useTranslations } from 'next-intl'
 import api from '@/lib/axios'
 
@@ -866,13 +866,13 @@ export default function WatchNowTVShows({
 
             return playUrl ? (
               (() => {
-                const rawPlayUrl = extractOriginalUrl(playUrl);
+                const preparedPlaySource = prepareHlsPlayerSource(playUrl);
 
                 return (
               <EnhancedMoviePlayer
                 key={`${selectedSeason}-${selectedEpisode}`}
                 ref={handlePlayerRef}
-                src={rawPlayUrl}
+                src={preparedPlaySource.src}
                 poster={tvShow.poster}
                 autoPlay={false}
                 movieId={tvShow.id}
@@ -884,8 +884,8 @@ export default function WatchNowTVShows({
                 isTVShow={true}
                 userId={typeof userId === 'string' ? userId : undefined}
                 onVideoEnded={handleVideoEnded}
-                watchUrl={rawPlayUrl}
-                cleanHlsInBrowser={true}
+                watchUrl={preparedPlaySource.watchUrl}
+                cleanHlsInBrowser={preparedPlaySource.cleanHlsInBrowser}
                 latestWatchUrl={apiSearchCompleted ? extractOriginalUrl(videoSrc) : undefined}
                 savedTime={savedProgress?.currentTime}
                 savedWatchUrl={savedProgress?.watchUrl}

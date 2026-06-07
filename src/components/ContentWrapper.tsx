@@ -13,6 +13,8 @@ export default function ContentWrapper({ children }: ContentWrapperProps) {
   return (
     <motion.div
       className="flex-grow"
+      initial={false}
+      style={{ paddingTop: isCollapsed ? '0px' : '64px' }}
       animate={{
         paddingTop: isCollapsed ? '0px' : '64px', // 64px = 4rem = pt-16
       }}

@@ -13,6 +13,7 @@ import { useWatchlistStore } from '@/store/store'
 import useAuthStore from '@/store/useAuthStore'
 import { toast } from 'react-hot-toast'
 import api from '@/lib/axios'
+import FrameLoadingPlaceholder from './FrameLoadingPlaceholder'
 
 interface MovieItem {
   id: number;
@@ -154,7 +155,7 @@ export default function AnimeFrame() {
   };
 
   if (error) return null;
-  if (loading && !items) return null;
+  if (loading && !items) return <FrameLoadingPlaceholder variant="hero" />;
   if (!items || items.length === 0) return null;
 
   const selectedItem = items[selectedIndex] || items[0];

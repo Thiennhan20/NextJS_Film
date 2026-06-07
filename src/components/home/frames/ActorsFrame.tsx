@@ -148,13 +148,13 @@ export default function ActorsFrame() {
         <div
           ref={scrollRef}
           {...dragScrollProps}
-          className="horizontal-scroll-container flex snap-x snap-proximity gap-3 overflow-x-auto px-1 pb-4 pt-2 sm:gap-4"
+          className="horizontal-scroll-container flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-4 pt-2 sm:gap-4"
           style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {actors.map((actor) => (
             <article
               key={actor.id}
-              className="group/actor w-[132px] min-w-[132px] snap-start sm:w-[152px] sm:min-w-[152px] md:w-[174px] md:min-w-[174px]"
+              className="group/actor w-[132px] min-w-[132px] snap-start snap-always sm:w-[152px] sm:min-w-[152px] md:w-[174px] md:min-w-[174px]"
             >
               <div className="relative aspect-[2/3] overflow-hidden rounded-2xl border border-white/10 bg-zinc-900 shadow-xl transition duration-300 ease-out group-hover/actor:-translate-y-1 group-hover/actor:border-fuchsia-300/35 group-hover/actor:shadow-[0_14px_35px_rgba(217,70,239,0.15)]">
                 <Image

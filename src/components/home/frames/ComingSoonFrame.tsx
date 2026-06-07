@@ -10,6 +10,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import CardWithHover, { batchPrefetchDetails } from '@/components/common/CardWithHover'
 import { useTranslations } from 'next-intl'
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
+import FrameLoadingPlaceholder from './FrameLoadingPlaceholder'
 
 interface Movie {
   id: number;
@@ -277,6 +278,8 @@ export default function ComingSoonFrame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [featuredContent, page, hasMore, isFetchingMore, checkComingSoonScrollPosition, MAX_ITEMS]);
 
+  if (loading) return <FrameLoadingPlaceholder variant="landscape-row" />;
+
   return (
     <section className="py-6 sm:py-8 md:py-10 px-2 sm:px-3 bg-gradient-to-b from-gray-900 to-black">
       <div className="max-w-7xl mx-auto">
@@ -315,7 +318,7 @@ export default function ComingSoonFrame() {
           <div
             ref={comingSoonScrollRef}
             {...dragScrollProps}
-            className="horizontal-scroll-container flex gap-3 sm:gap-4 overflow-x-auto overflow-y-visible pb-4 pt-2 scrollbar-none snap-x snap-proximity px-3"
+            className="horizontal-scroll-container flex gap-3 sm:gap-4 overflow-x-auto overflow-y-visible pb-4 pt-2 scrollbar-none snap-x snap-mandatory px-3"
             style={{ 
               WebkitOverflowScrolling: 'touch', 
               scrollbarWidth: 'none', 
@@ -330,7 +333,7 @@ export default function ComingSoonFrame() {
                 {featuredContent.map((item) => (
                   <div 
                     key={item.id}
-                    className="snap-start flex-shrink-0"
+                    className="snap-start snap-always flex-shrink-0"
                     style={{ width: 'clamp(280px, 30vw, 400px)' }}
                   >
                     <CardWithHover

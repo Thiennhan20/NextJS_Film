@@ -1,16 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, Suspense } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import {
-  Copy, Check, ArrowLeft, Users, Hash, Send, Smile,
-  Crown, Lock, Unlock, LogOut, Radio, Clock, AlertTriangle, Share2, ChevronDown
-} from 'lucide-react';
+  ClipboardDocumentIcon as Copy, CheckIcon as Check, ArrowLeftIcon as ArrowLeft, UsersIcon as Users, HashtagIcon as Hash, PaperAirplaneIcon as Send, FaceSmileIcon as Smile,
+  StarIcon as Crown, LockClosedIcon as Lock, LockOpenIcon as Unlock, ArrowRightOnRectangleIcon as LogOut, SignalIcon as Radio, ClockIcon as Clock, ExclamationTriangleIcon as AlertTriangle, ShareIcon as Share2, ChevronDownIcon as ChevronDown
+} from '@heroicons/react/24/outline';
 import useAuthStore from '@/store/useAuthStore';
 import EnhancedMoviePlayer from '@/components/common/video-player/EnhancedMoviePlayer';
-import { proxyHlsUrl } from '@/lib/hlsProxy';
+import { prepareHlsPlayerSource } from '@/lib/hlsProxy';
 import { useWatchPartySocket, type RoomStatus, type ChatMessage } from '@/hooks/useWatchPartySocket';
 import { useTranslations } from 'next-intl';
 
@@ -36,6 +36,7 @@ function StreamingRoomContent() {
   const [roomStatus, setRoomStatus] = useState<RoomStatus | null>(null);
   const [streamUrl, setStreamUrl] = useState(streamUrlFromParams);
   const [roomTitle, setRoomTitle] = useState(titleFromParams);
+  const preparedStreamSource = useMemo(() => prepareHlsPlayerSource(streamUrl), [streamUrl]);
   const [isHost, setIsHost] = useState(false);
   const [memberCount, setMemberCount] = useState(0);
   const [forceSync, setForceSync] = useState(true);
@@ -771,11 +772,13 @@ function StreamingRoomContent() {
               {streamUrl ? (
                 <EnhancedMoviePlayer
                   ref={videoRef}
-                  key={streamUrl}
-                  src={proxyHlsUrl(streamUrl)}
+                  key={preparedStreamSource.watchUrl || streamUrl}
+                  src={preparedStreamSource.src}
                   autoPlay={false}
                   title={roomTitle}
                   userId={userId}
+                  watchUrl={preparedStreamSource.watchUrl}
+                  cleanHlsInBrowser={preparedStreamSource.cleanHlsInBrowser}
                   viewerMode={!isHost && forceSync}
                   hostHasPlayed={hostHasPlayed}
                   waitingForHost={waitingForHost}

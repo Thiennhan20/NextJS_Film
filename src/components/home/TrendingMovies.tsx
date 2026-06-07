@@ -257,7 +257,7 @@ export default function TrendingMovies() {
           <div
             ref={scrollRef}
             {...dragScrollProps}
-            className="flex gap-4 overflow-x-auto overflow-y-visible pb-3 scrollbar-none snap-x snap-proximity relative horizontal-scroll-container"
+            className="flex gap-4 overflow-x-auto overflow-y-visible pb-3 scrollbar-none snap-x snap-mandatory relative horizontal-scroll-container"
             style={{ 
               WebkitOverflowScrolling: 'touch', 
               scrollbarWidth: 'none', 
@@ -271,7 +271,7 @@ export default function TrendingMovies() {
               <div className="text-red-400 text-center py-8">{t('error')}</div>
             ) : (
               trending?.map((item) => (
-                <div key={item.id} className="min-w-[150px] sm:min-w-[190px] md:min-w-[220px] max-w-[220px]">
+                <div key={item.id} className="min-w-[150px] sm:min-w-[190px] md:min-w-[220px] max-w-[220px] snap-center snap-always">
                   <CardWithHover
                     id={item.id}
                     type={item.type}
@@ -283,7 +283,7 @@ export default function TrendingMovies() {
                     <Link href={getRoute(item)}>
                       <motion.div
                         whileHover={{ scale: 1.06 }}
-                        className="bg-gray-800 rounded-xl overflow-hidden shadow-lg snap-center cursor-pointer group relative"
+                        className="bg-gray-800 rounded-xl overflow-hidden shadow-lg cursor-pointer group relative"
                       >
                         <div className="w-full h-48 sm:h-60 bg-black flex items-center justify-center overflow-hidden">
                           {item.image ? (

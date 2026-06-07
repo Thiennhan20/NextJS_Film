@@ -39,28 +39,25 @@ export default function LazySection({
     <div 
       ref={targetRef} 
       className={className}
-      style={{ minHeight: hasIntersected ? 'auto' : minHeight }}
+      style={{ minHeight }}
     >
       {hasIntersected ? children : (fallback || <SectionSkeleton />)}
     </div>
   )
 }
 
-// Default skeleton loader
+// Default static reserve for sections that have not intersected yet.
 function SectionSkeleton() {
   return (
     <div className="py-8 px-4">
       <div className="max-w-7xl mx-auto">
-        {/* Title skeleton */}
-        <div className="h-8 w-64 bg-gray-800 rounded-lg mb-6 mx-auto animate-pulse" />
+        <div className="h-8 w-64 bg-gray-800 rounded-lg mb-6 mx-auto" />
         
-        {/* Content skeleton */}
         <div className="flex gap-4 overflow-hidden">
           {[1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className="min-w-[200px] h-64 bg-gray-800 rounded-xl animate-pulse"
-              style={{ animationDelay: `${i * 100}ms` }}
+              className="min-w-[200px] h-64 bg-gray-800 rounded-xl"
             />
           ))}
         </div>

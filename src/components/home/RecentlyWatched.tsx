@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Play, Clock, Trash2, AlertCircle } from 'lucide-react'
+import { PlayIcon as Play, ClockIcon as Clock, TrashIcon as Trash2, ExclamationCircleIcon as AlertCircle } from '@heroicons/react/24/outline'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import useAuthStore from '@/store/useAuthStore'
 import { useRecentlyWatchedStore } from '@/store/useRecentlyWatchedStore'
@@ -101,7 +101,7 @@ const ContentCard = memo(({ item, index, onContinue, onRemove }: {
         ease: [0.25, 0.1, 0.25, 1]
       }}
       onClick={() => onContinue(item)}
-      className="group relative bg-gray-900/50 backdrop-blur-sm rounded-2xl overflow-hidden border border-gray-800/50 hover:border-red-500/50 transition-all duration-300 flex-shrink-0 snap-center cursor-pointer [&:hover_img]:scale-105"
+      className="group relative bg-gray-900/50 backdrop-blur-sm rounded-2xl overflow-hidden border border-gray-800/50 hover:border-red-500/50 transition-all duration-300 flex-shrink-0 snap-center snap-always cursor-pointer [&:hover_img]:scale-105"
       style={{
         width: 'clamp(180px, 25vw, 260px)',
         minWidth: '180px'
@@ -402,7 +402,7 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
     return (
       <section className={`py-16 px-4 sm:px-6 lg:px-8 ${className}`}>
         <div className="max-w-7xl mx-auto">
-          <div className="animate-pulse">
+          <div>
             <div className="h-8 bg-gray-800 rounded-lg w-64 mb-8"></div>
             <div className="flex gap-4 overflow-x-hidden">
               {[...Array(4)].map((_, i) => (
@@ -457,7 +457,7 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
           <div
             ref={scrollContainerRef}
             {...dragScrollProps}
-            className="horizontal-scroll-container flex gap-4 overflow-x-auto pb-4 snap-x snap-proximity scrollbar-hide"
+            className="horizontal-scroll-container flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide"
             style={{
               scrollbarWidth: 'none',
               msOverflowStyle: 'none',
