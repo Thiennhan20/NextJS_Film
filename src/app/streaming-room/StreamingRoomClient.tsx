@@ -546,7 +546,7 @@ function StreamingRoomContent() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center px-4">
+      <div className="mobile-static-effects min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center px-4">
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-md">
           <div className="mb-6 mx-auto w-20 h-20 rounded-full bg-yellow-500/20 border border-yellow-500/30 flex items-center justify-center">
             <AlertTriangle className="h-9 w-9 text-yellow-400" />
@@ -564,7 +564,7 @@ function StreamingRoomContent() {
 
   if (!roomId) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center px-4">
+      <div className="mobile-static-effects min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center px-4">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center max-w-md">
           <Hash className="h-12 w-12 text-gray-500 mx-auto mb-4" />
           <h1 className="text-xl font-bold mb-2">{t('noRoomId')}</h1>
@@ -579,7 +579,7 @@ function StreamingRoomContent() {
 
   if (roomClosed) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center px-4">
+      <div className="mobile-static-effects min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center px-4">
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center max-w-md">
           <div className="mb-6 mx-auto w-20 h-20 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
             <LogOut className="h-9 w-9 text-red-400" />
@@ -594,7 +594,7 @@ function StreamingRoomContent() {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex flex-col">
+    <div className="mobile-static-effects min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex flex-col">
       {/* ─── Top HUD Bar (Floating in non-fullscreen) ─── */}
       <div className={`z-40 w-full ${isPlayerFullscreen ? 'bg-black/60 border-b border-gray-800' : 'max-w-7xl mx-auto px-2 sm:px-6 pt-3 shrink-0'}`}>
         <div className={isPlayerFullscreen ? 'px-3 sm:px-6 py-2.5' : 'bg-black/40 backdrop-blur-xl border border-white/[0.05] rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 shadow-2xl'}>
@@ -1032,7 +1032,7 @@ export default function StreamingRoomPage() {
 
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center">
+      <div className="mobile-static-effects min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
           <span className="text-sm text-gray-400">{t('joiningRoom')}</span>

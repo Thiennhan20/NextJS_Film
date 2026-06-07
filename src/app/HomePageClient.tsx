@@ -107,7 +107,7 @@ export default function Home({ initialHeroItems = null }: HomePageClientProps) {
   }, [particles.length]);
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-black text-white">
+    <main className="mobile-static-effects min-h-screen overflow-x-hidden bg-black text-white">
       {/* Background Particles - Only on desktop for better performance */}
       {!isMobile && particles.length > 0 && (
         <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">

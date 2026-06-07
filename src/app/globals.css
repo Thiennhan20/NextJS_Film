@@ -112,6 +112,42 @@
   }
 }
 
+/* Keep mobile/touch devices light: no hover-only transforms or glass blur. */
+@media (max-width: 768px), (hover: none), (pointer: coarse) {
+  .performance-particle,
+  .mobile-decorative-motion {
+    display: none !important;
+  }
+
+  [class*="backdrop-blur"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  [class*="blur-"],
+  [class*="blur["] {
+    filter: none !important;
+  }
+
+  [class*="hover:scale"],
+  [class*="group-hover:scale"],
+  [class*="hover:-translate"],
+  [class*="group-hover:-translate"],
+  [class*="group-hover:translate"],
+  [class*="hover_img"] img {
+    transform: none !important;
+  }
+
+  [class*="transition-transform"] {
+    transition-property: none !important;
+  }
+
+  [class*="transition-all"] {
+    transition-property: color, background-color, border-color, opacity !important;
+    transition-duration: 120ms !important;
+  }
+}
+
 /* Prevent translation for logo and brand elements */
 [translate="no"],
 .no-translate {
@@ -827,4 +863,3 @@ select {
 .player-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.45);
 }
-

@@ -48,6 +48,7 @@ function StreamingLobbyContent() {
     audio: string;
   } | null>(null);
   const [particles, setParticles] = useState<Particle[]>([]);
+  const [isMobile, setIsMobile] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
@@ -85,16 +86,33 @@ function StreamingLobbyContent() {
   const [maxRooms, setMaxRooms] = useState(30);
 
   useEffect(() => {
-    const newParticles = Array.from({ length: 25 }).map(() => ({
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: Math.random() * 6 + 4, // 4px to 10px
-      duration: Math.random() * 20 + 15,
-      xOffset: Math.random() * 60 - 30,
-      yOffset: Math.random() * -100 - 40,
-      scale: Math.random() * 0.8 + 1.2,
-    }));
-    setParticles(newParticles);
+    const mediaQuery = window.matchMedia('(max-width: 767px), (hover: none), (pointer: coarse)');
+
+    const syncParticles = () => {
+      const shouldDisableMotion = mediaQuery.matches;
+      setIsMobile(shouldDisableMotion);
+
+      if (shouldDisableMotion) {
+        setParticles([]);
+        return;
+      }
+
+      const newParticles = Array.from({ length: 25 }).map(() => ({
+        x: Math.random() * 100,
+        y: Math.random() * 100,
+        size: Math.random() * 6 + 4, // 4px to 10px
+        duration: Math.random() * 20 + 15,
+        xOffset: Math.random() * 60 - 30,
+        yOffset: Math.random() * -100 - 40,
+        scale: Math.random() * 0.8 + 1.2,
+      }));
+      setParticles(newParticles);
+    };
+
+    syncParticles();
+    mediaQuery.addEventListener('change', syncParticles);
+
+    return () => mediaQuery.removeEventListener('change', syncParticles);
   }, []);
 
   // Auth check helper — shows popup if not authenticated, returns false
@@ -280,10 +298,10 @@ function StreamingLobbyContent() {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex justify-center px-4 py-6 relative overflow-y-auto">
+    <div className="mobile-static-effects min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex justify-center px-4 py-6 relative overflow-y-auto">
       {/* Background Particles */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        {particles.map((p, i) => (
+        {!isMobile && particles.map((p, i) => (
           <motion.div
             key={i}
             className={`absolute rounded-full blur-[2px] ${
@@ -316,7 +334,7 @@ function StreamingLobbyContent() {
       </div>
 
       {/* Glow Effects */}
-      <div className="absolute inset-0 overflow-hidden">
+      <div className="mobile-decorative-motion absolute inset-0 overflow-hidden">
         <div className="absolute -top-20 -right-20 w-32 h-32 bg-yellow-500/10 rounded-full blur-3xl animate-pulse" />
         <div className="absolute -bottom-20 -left-20 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
       </div>
@@ -1012,7 +1030,7 @@ export default function StreamingLobby() {
   const t = useTranslations('StreamingLobby');
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center">
+      <div className="mobile-static-effects min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
           <span className="text-sm text-gray-400">{t('loading')}</span>

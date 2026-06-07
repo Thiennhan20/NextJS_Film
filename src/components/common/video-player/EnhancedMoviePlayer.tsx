@@ -87,6 +87,23 @@ const HLS_CONFIG = {
   progressive: true,
 };
 
+const RESUME_SKIP_DELAY_MS = 5000;
+const RESUME_STUCK_NOTICE_DELAY_MS = 10000;
+const RESUME_HARD_TIMEOUT_MS = 15000;
+const RESUME_PLAY_RETRY_INTERVAL_MS = 1000;
+const RESUME_HLS_RELOAD_INTERVAL_MS = 2500;
+const RESUME_HLS_RELOAD_MAX_ATTEMPTS = 3;
+const SEEK_UI_UPDATE_INTERVAL_MS = 120;
+const PLAYER_ANTI_COPY_STYLE: React.CSSProperties & {
+  WebkitTouchCallout?: string;
+  WebkitTapHighlightColor?: string;
+} = {
+  userSelect: 'none',
+  WebkitUserSelect: 'none',
+  WebkitTouchCallout: 'none',
+  WebkitTapHighlightColor: 'transparent',
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────
 function formatTime(seconds: number): string {
   if (!isFinite(seconds) || seconds < 0) return "00:00";
@@ -200,6 +217,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     const [isSeeking, setIsSeeking] = useState(false);
     const userSeekingRef = useRef(false);
     const seekPositionRef = useRef(0);
+    const lastSeekUiUpdateRef = useRef(0);
     // HLS discontinuity correction: track offset between intended position and video.currentTime
     const timeOffsetRef = useRef(0);
     const pendingSeekRef = useRef<number | null>(null);
@@ -748,6 +766,8 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       let stagnantRetries = 0;
       let lastNudgedTarget: number | null = null;
       let timeAtResumeStart = 0;
+      let hlsReloadAttempts = 0;
+      let lastHlsReloadAt = 0;
 
       const requestPlay = () => {
         video.play().catch(() => {});
@@ -783,7 +803,16 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
           }
 
           const loadPosition = rawTime > 0 ? rawTime : target;
-          startHlsLoadAt(loadPosition);
+          const now = Date.now();
+          const canReloadHls = stagnantRetries >= 2 &&
+            hlsReloadAttempts < RESUME_HLS_RELOAD_MAX_ATTEMPTS &&
+            now - lastHlsReloadAt >= RESUME_HLS_RELOAD_INTERVAL_MS;
+
+          if (canReloadHls) {
+            hlsReloadAttempts += 1;
+            lastHlsReloadAt = now;
+            startHlsLoadAt(loadPosition);
+          }
 
           if (stagnantRetries >= 2 && video.readyState >= 1) {
             const nudgedTarget = Math.min(
@@ -797,7 +826,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
 
           requestPlay();
           retryPlayAfterSeek();
-        }, 700);
+        }, RESUME_PLAY_RETRY_INTERVAL_MS);
       };
 
       function finish() {
@@ -894,9 +923,9 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       video.addEventListener('loadeddata', onCanPlay);
 
       // Show "skip" option after 5s
-      resumeSkipTimerRef.current = setTimeout(() => setShowResumeSkip(true), 5000);
+      resumeSkipTimerRef.current = setTimeout(() => setShowResumeSkip(true), RESUME_SKIP_DELAY_MS);
       // Hard timeout 15s — play from wherever we are
-      resumeTimeoutRef.current = setTimeout(() => finish(), 15000);
+      resumeTimeoutRef.current = setTimeout(() => finish(), RESUME_HARD_TIMEOUT_MS);
 
       // Fail-safe: Khởi tạo đếm ngược 5 giây. Nếu sau 5 giây video chưa tiến triển hoặc chưa được seek thành công, kích hoạt stuck notice.
       resumeStuckTimerRef.current = setTimeout(() => {
@@ -912,7 +941,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
           finish();
           setResumeStuckNotice(true);
         }
-      }, 5000);
+      }, RESUME_STUCK_NOTICE_DELAY_MS);
 
       if (video.readyState >= 1) {
         doSeek();
@@ -939,6 +968,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       if (resumeTimeoutRef.current) { clearTimeout(resumeTimeoutRef.current); resumeTimeoutRef.current = null; }
       if (resumeSkipTimerRef.current) { clearTimeout(resumeSkipTimerRef.current); resumeSkipTimerRef.current = null; }
       if (resumeCheckIntervalRef.current) { clearInterval(resumeCheckIntervalRef.current); resumeCheckIntervalRef.current = null; }
+      if (resumeStuckTimerRef.current) { clearTimeout(resumeStuckTimerRef.current); resumeStuckTimerRef.current = null; }
       saveProgressAtStart();
 
       const video = getVideo(ref, innerRef);
@@ -953,6 +983,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       if (resumeTimeoutRef.current) { clearTimeout(resumeTimeoutRef.current); resumeTimeoutRef.current = null; }
       if (resumeSkipTimerRef.current) { clearTimeout(resumeSkipTimerRef.current); resumeSkipTimerRef.current = null; }
       if (resumeCheckIntervalRef.current) { clearInterval(resumeCheckIntervalRef.current); resumeCheckIntervalRef.current = null; }
+      if (resumeStuckTimerRef.current) { clearTimeout(resumeStuckTimerRef.current); resumeStuckTimerRef.current = null; }
       saveProgressAtStart();
       const video = getVideo(ref, innerRef);
       if (video) {
@@ -1242,6 +1273,15 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       return () => window.removeEventListener("keydown", handler);
     }, [togglePlay, toggleFullscreen, toggleMute, ref, viewerMode, controlsReady, resumeSeekPending, duration, hasEndOverlay, showUpdatePopup]);
 
+    const updateSeekPreview = useCallback((time: number, force = false) => {
+      seekPositionRef.current = time;
+      const now = performance.now();
+      if (force || now - lastSeekUiUpdateRef.current >= SEEK_UI_UPDATE_INTERVAL_MS) {
+        lastSeekUiUpdateRef.current = now;
+        setCurrentTime(time);
+      }
+    }, []);
+
     // ─── Seek helper (guard duration) ───────────────────────
     const seekTo = useCallback((pct: number) => {
       if (!duration || !isFinite(duration) || duration === 0) return;
@@ -1251,8 +1291,8 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       pendingSeekRef.current = time; // Calibrate offset after seek
       userSeekingRef.current = true;
       v.currentTime = time;
-      setCurrentTime(time);
-    }, [duration, ref]);
+      updateSeekPreview(time, true);
+    }, [duration, ref, updateSeekPreview]);
 
     // ─── Track whether controls were visible when pointer went down ──
     const controlsVisibleOnPointerDownRef = useRef(false);
@@ -1335,10 +1375,16 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     return (
       <div
         ref={innerContainerRef}
-        className={`relative w-full h-full bg-black overflow-hidden transition-all duration-300 ${showControls ? 'cursor-default' : 'cursor-none'}`}
+        className={`relative w-full h-full bg-black overflow-hidden select-none transition-all duration-300 ${showControls ? 'cursor-default' : 'cursor-none'}`}
+        style={PLAYER_ANTI_COPY_STYLE}
         onMouseDown={handlePointerDown}
         onMouseMove={handleUserInteraction}
         onTouchStart={() => { handlePointerDown(); handleUserInteraction(); }}
+        onContextMenu={(e) => e.preventDefault()}
+        onCopy={(e) => e.preventDefault()}
+        onCut={(e) => e.preventDefault()}
+        onSelect={(e) => e.preventDefault()}
+        onDragStart={(e) => e.preventDefault()}
         onClick={handleVideoAreaClick}
         onMouseLeave={() => {
           handleMouseLeave();
@@ -1351,13 +1397,18 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
             if (typeof ref === "function") ref(node);
             else if (ref && typeof ref === "object") (ref as React.MutableRefObject<HTMLVideoElement | null>).current = node;
           }}
-          className="w-full h-full object-contain"
+          className="w-full h-full object-contain select-none"
           poster={poster}
           playsInline
           preload="auto"
           controls={false}
+          controlsList="nodownload noplaybackrate noremoteplayback"
           disableRemotePlayback
-          style={{ WebkitAppearance: 'none', WebkitOverflowScrolling: 'touch', objectFit: 'contain', backgroundColor: '#000' }}
+          draggable={false}
+          onContextMenu={(e) => e.preventDefault()}
+          onSelect={(e) => e.preventDefault()}
+          onDragStart={(e) => e.preventDefault()}
+          style={{ ...PLAYER_ANTI_COPY_STYLE, WebkitAppearance: 'none', WebkitOverflowScrolling: 'touch', objectFit: 'contain', backgroundColor: '#000' }}
         />
 
         {/* Edge-hold 2x speed zones — invisible, left/right 20% of player */}
@@ -1638,14 +1689,14 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
                 const rect = bar.getBoundingClientRect();
                 const x = Math.max(0, Math.min(ev.clientX - rect.left, rect.width));
                 const pct = x / rect.width;
-                seekPositionRef.current = pct * duration;
-                setCurrentTime(pct * duration);
+                updateSeekPreview(pct * duration);
               };
               const onUp = () => {
                 const v = getVideo(ref, innerRef);
                 if (v && duration > 0) {
                   pendingSeekRef.current = seekPositionRef.current;
                   v.currentTime = seekPositionRef.current;
+                  updateSeekPreview(seekPositionRef.current, true);
                 }
                 userSeekingRef.current = false;
                 document.removeEventListener('mousemove', onMove);
@@ -1665,14 +1716,14 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
                 const rect = bar.getBoundingClientRect();
                 const x = Math.max(0, Math.min(touch.clientX - rect.left, rect.width));
                 const pct = x / rect.width;
-                seekPositionRef.current = pct * duration;
-                setCurrentTime(pct * duration);
+                updateSeekPreview(pct * duration);
               };
               const onTouchEnd = () => {
                 const v = getVideo(ref, innerRef);
                 if (v && duration > 0) {
                   pendingSeekRef.current = seekPositionRef.current;
                   v.currentTime = seekPositionRef.current;
+                  updateSeekPreview(seekPositionRef.current, true);
                 }
                 userSeekingRef.current = false;
                 document.removeEventListener('touchmove', onTouchMove);
