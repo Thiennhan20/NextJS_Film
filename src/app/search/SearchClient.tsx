@@ -13,6 +13,14 @@ import Pagination from '@/components/Pagination'
 import FilterIcon from '@/components/FilterIcon'
 import CardWithHover from '@/components/common/CardWithHover'
 import { useRouter as useNavRouter } from 'next/navigation'
+import {
+  CONTENT_COUNTRY_OPTIONS,
+  MOVIE_GENRE_FILTERS,
+  TV_GENRE_FILTERS,
+  getCountryCode,
+  getCountryLanguage,
+  getGenreId,
+} from '@/lib/contentFilters'
 
 const DEBOUNCE_DELAY = 600
 
@@ -23,6 +31,8 @@ interface Movie {
   release_date?: string
   vote_average?: number
   overview?: string
+  genre_ids?: number[]
+  original_language?: string
 }
 
 interface TVShow {
@@ -32,6 +42,9 @@ interface TVShow {
   first_air_date?: string
   vote_average?: number
   overview?: string
+  genre_ids?: number[]
+  original_language?: string
+  origin_country?: string[]
 }
 
 type SearchResult = (Movie & { type: 'movie' }) | (TVShow & { type: 'tv' })
@@ -43,6 +56,8 @@ interface TMDBMovieResponse {
   release_date?: string
   vote_average?: number
   overview?: string
+  genre_ids?: number[]
+  original_language?: string
 }
 
 interface TMDBTVResponse {
@@ -52,6 +67,9 @@ interface TMDBTVResponse {
   first_air_date?: string
   vote_average?: number
   overview?: string
+  genre_ids?: number[]
+  original_language?: string
+  origin_country?: string[]
 }
 
 type ContentType = 'all' | 'movie' | 'tv'
@@ -117,84 +135,19 @@ function SearchPageContent() {
   }, [])
   
   // Countries list
-  const countries = useMemo(() => [
-    'All',
-    'USA',
-    'Japan',
-    'Korea',
-    'China',
-    'India',
-    'France',
-    'Germany',
-    'Spain',
-    'Italy',
-    'Brazil',
-    'Russia',
-    'Egypt',
-    'Thailand',
-    'Vietnam',
-    'Indonesia',
-    'Malaysia',
-    'Philippines',
-    'Myanmar',
-    'Cambodia',
-    'Laos'
-  ], [])
+  const countries = useMemo(() => CONTENT_COUNTRY_OPTIONS, [])
   
   // Movie genres
-  const movieGenres = useMemo(() => [
-    { id: 28, name: 'Action' },
-    { id: 12, name: 'Adventure' },
-    { id: 16, name: 'Animation' },
-    { id: 35, name: 'Comedy' },
-    { id: 80, name: 'Crime' },
-    { id: 99, name: 'Documentary' },
-    { id: 18, name: 'Drama' },
-    { id: 10751, name: 'Family' },
-    { id: 14, name: 'Fantasy' },
-    { id: 36, name: 'History' },
-    { id: 27, name: 'Horror' },
-    { id: 10402, name: 'Music' },
-    { id: 9648, name: 'Mystery' },
-    { id: 10749, name: 'Romance' },
-    { id: 878, name: 'Science Fiction' },
-    { id: 10770, name: 'TV Movie' },
-    { id: 53, name: 'Thriller' },
-    { id: 10752, name: 'War' },
-    { id: 37, name: 'Western' }
-  ], [])
+  const movieGenres = useMemo(() => MOVIE_GENRE_FILTERS, [])
   
   // TV genres
-  const tvGenres = useMemo(() => [
-    { id: 10759, name: 'Action & Adventure' },
-    { id: 16, name: 'Animation' },
-    { id: 35, name: 'Comedy' },
-    { id: 80, name: 'Crime' },
-    { id: 99, name: 'Documentary' },
-    { id: 18, name: 'Drama' },
-    { id: 10751, name: 'Family' },
-    { id: 10762, name: 'Kids' },
-    { id: 9648, name: 'Mystery' },
-    { id: 10763, name: 'News' },
-    { id: 10764, name: 'Reality' },
-    { id: 10765, name: 'Sci-Fi & Fantasy' },
-    { id: 10766, name: 'Soap' },
-    { id: 10767, name: 'Talk' },
-    { id: 10768, name: 'War & Politics' },
-    { id: 37, name: 'Western' }
-  ], [])
+  const tvGenres = useMemo(() => TV_GENRE_FILTERS, [])
   
   const genres = useMemo(() => {
     if (contentType === 'movie') return movieGenres.map(g => g.name)
     if (contentType === 'tv') return tvGenres.map(g => g.name)
-    const combined = [...movieGenres, ...tvGenres.filter(tg => !movieGenres.find(mg => mg.id === tg.id))]
+    const combined = [...movieGenres, ...tvGenres.filter(tg => !movieGenres.find(mg => mg.name === tg.name))]
     return combined.map(g => g.name)
-  }, [contentType, movieGenres, tvGenres])
-  
-  const genreObjects = useMemo(() => {
-    if (contentType === 'movie') return movieGenres
-    if (contentType === 'tv') return tvGenres
-    return [...movieGenres, ...tvGenres.filter(tg => !movieGenres.find(mg => mg.id === tg.id))]
   }, [contentType, movieGenres, tvGenres])
   
   // Helper functions để làm việc với cache theo filter
@@ -297,36 +250,14 @@ function SearchPageContent() {
           }
           let movieUrl = `${API_BASE}?endpoint=/search/movie&${movieParams.toString()}`;
           if (genre !== 'All') {
-            const genreId = genreObjects.find(g => g.name === genre)?.id
+            const genreId = getGenreId(MOVIE_GENRE_FILTERS, genre)
             if (genreId) {
               movieUrl += `&with_genres=${genreId}`
             }
           }
           // Country filter for movies (using language)
           if (country !== 'All') {
-            const countryToLanguageMap: { [key: string]: string } = {
-              'USA': 'en',
-              'Japan': 'ja',
-              'Korea': 'ko',
-              'China': 'zh',
-              'India': 'hi',
-              'France': 'fr',
-              'Germany': 'de',
-              'Spain': 'es',
-              'Italy': 'it',
-              'Brazil': 'pt',
-              'Russia': 'ru',
-              'Egypt': 'ar',
-              'Thailand': 'th',
-              'Vietnam': 'vi',
-              'Indonesia': 'id',
-              'Malaysia': 'ms',
-              'Philippines': 'tl',
-              'Myanmar': 'my',
-              'Cambodia': 'km',
-              'Laos': 'lo'
-            }
-            const languageCode = countryToLanguageMap[country]
+            const languageCode = getCountryLanguage(country)
             if (languageCode) {
               movieUrl += `&with_original_language=${languageCode}`
             }
@@ -347,36 +278,14 @@ function SearchPageContent() {
           }
           let tvUrl = `${API_BASE}?endpoint=/search/tv&${tvParams.toString()}`;
           if (genre !== 'All') {
-            const genreId = genreObjects.find(g => g.name === genre)?.id
+            const genreId = getGenreId(TV_GENRE_FILTERS, genre)
             if (genreId) {
               tvUrl += `&with_genres=${genreId}`
             }
           }
           // Country filter for TV shows
           if (country !== 'All') {
-            const countryToCodeMap: { [key: string]: string } = {
-              'USA': 'US',
-              'Japan': 'JP',
-              'Korea': 'KR',
-              'China': 'CN',
-              'India': 'IN',
-              'France': 'FR',
-              'Germany': 'DE',
-              'Spain': 'ES',
-              'Italy': 'IT',
-              'Brazil': 'BR',
-              'Russia': 'RU',
-              'Egypt': 'EG',
-              'Thailand': 'TH',
-              'Vietnam': 'VN',
-              'Indonesia': 'ID',
-              'Malaysia': 'MY',
-              'Philippines': 'PH',
-              'Myanmar': 'MM',
-              'Cambodia': 'KH',
-              'Laos': 'LA'
-            }
-            const countryCode = countryToCodeMap[country]
+            const countryCode = getCountryCode(country)
             if (countryCode) {
               tvUrl += `&with_origin_country=${countryCode}`
             }
@@ -468,7 +377,7 @@ function SearchPageContent() {
     requestCache.current.set(cacheKey, fetchPromise)
     
     return fetchPromise
-  }, [genreObjects])
+  }, [])
   
   // Hàm load thêm 10 trang tiếp theo (khi bấm vào 1 trong 2 trang kế tiếp)
   const loadNext10Pages = useCallback(async (startPage: number) => {

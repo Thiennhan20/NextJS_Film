@@ -12,6 +12,7 @@
     "downloadAppShort": "Tải app",
     "mobileAppDownload": "Tải ứng dụng di động",
     "viewInstructions": "Xem Hướng Dẫn Tải & Cập Nhật",
+    "loginRequiredGame": "Bạn cần đăng nhập để chơi game!",
     "items": {
       "home": "Trang chủ",
       "movies": "Phim Lẻ",
@@ -20,7 +21,8 @@
       "about": "Giới thiệu",
       "faq": "Hỏi đáp",
       "contact": "Liên hệ",
-      "streaming": "Xem chung"
+      "streaming": "Xem chung",
+      "game": "Đoán số"
     }
   },
   "Notifications": {

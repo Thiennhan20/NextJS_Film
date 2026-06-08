@@ -12,6 +12,7 @@
     "downloadAppShort": "Download",
     "mobileAppDownload": "Mobile App Download",
     "viewInstructions": "View Download & Update Guide",
+    "loginRequiredGame": "You need to log in to play the game!",
     "items": {
       "home": "Home",
       "movies": "Movies",
@@ -20,7 +21,8 @@
       "about": "About",
       "faq": "FAQ",
       "contact": "Contact",
-      "streaming": "Streaming"
+      "streaming": "Streaming",
+      "game": "Number Guessing"
     }
   },
   "Notifications": {

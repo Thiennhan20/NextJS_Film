@@ -12,6 +12,14 @@ import { Suspense } from 'react'
 import CardWithHover from '@/components/common/CardWithHover'
 import { useTranslations } from 'next-intl'
 import apiCache from '@/hooks/useApiCache'
+import {
+  CONTENT_COUNTRY_OPTIONS,
+  TV_CATEGORY_OPTIONS,
+  TV_GENRE_FILTERS,
+  appendCountryCodeFilter,
+  appendGenreFilter,
+  getCountryDisplayName,
+} from '@/lib/contentFilters'
 
 // Định nghĩa kiểu TVShow rõ ràng
 interface TVShow {
@@ -35,6 +43,7 @@ interface TMDBTV {
   vote_average: number;
   first_air_date?: string;
   original_language?: string;
+  origin_country?: string[];
   number_of_seasons?: number;
   number_of_episodes?: number;
   genre_ids?: number[];
@@ -256,77 +265,10 @@ function TVShowsPageContent({ initialTVShows }: { initialTVShows: TVShow[] }) {
   }, [currentYear]);
 
   // Categories for TV shows
-  const categories = useMemo(() => [
-    'All',
-    'Action & Adventure',
-    'Animation',
-    'Comedy',
-    'Crime',
-    'Documentary',
-    'Drama',
-    'Family',
-    'Kids',
-    'Mystery',
-    'News',
-    'Reality',
-    'Sci-Fi & Fantasy',
-    'Soap',
-    'Talk',
-    'War & Politics',
-    'Western'
-  ], []);
+  const categories = useMemo(() => TV_CATEGORY_OPTIONS, []);
 
   // Countries for TV shows
-  const countries = useMemo(() => [
-    'All',
-    'USA',
-    'Japan',
-    'Korea',
-    'China',
-    'India',
-    'France',
-    'Germany',
-    'Spain',
-    'Italy',
-    'Brazil',
-    'Russia',
-    'Egypt',
-    'Thailand',
-    'Vietnam',
-    'Indonesia',
-    'Malaysia',
-    'Philippines',
-    'Myanmar',
-    'Cambodia',
-    'Laos'
-  ], []);
-
-  // Hàm chuyển đổi language code thành tên quốc gia
-  const getCountryName = (languageCode?: string): string => {
-    const countryMap: { [key: string]: string } = {
-      'en': 'USA',
-      'ja': 'Japan',
-      'ko': 'Korea',
-      'zh': 'China',
-      'hi': 'India',
-      'fr': 'France',
-      'de': 'Germany',
-      'es': 'Spain',
-      'it': 'Italy',
-      'pt': 'Brazil',
-      'ru': 'Russia',
-      'ar': 'Egypt',
-      'th': 'Thailand',
-      'vi': 'Vietnam',
-      'id': 'Indonesia',
-      'ms': 'Malaysia',
-      'tl': 'Philippines',
-      'my': 'Myanmar',
-      'km': 'Cambodia',
-      'lo': 'Laos'
-    };
-    return countryMap[languageCode || 'en'] || 'USA';
-  };
+  const countries = useMemo(() => CONTENT_COUNTRY_OPTIONS, []);
 
   // Hàm fetch 1 trang TV shows
   const fetchTVShowsPage = async (pageToFetch: number) => {
@@ -339,58 +281,10 @@ function TVShowsPageContent({ initialTVShows }: { initialTVShows: TVShow[] }) {
       params.append('first_air_date_year', String(selectedYear));
     }
     if (selectedCategory !== 'All') {
-      // Sử dụng genre ID thay vì tên genre
-      const genreMap: { [key: string]: number } = {
-        'Action & Adventure': 10759,
-        'Animation': 16,
-        'Comedy': 35,
-        'Crime': 80,
-        'Documentary': 99,
-        'Drama': 18,
-        'Family': 10751,
-        'Kids': 10762,
-        'Mystery': 9648,
-        'News': 10763,
-        'Reality': 10764,
-        'Sci-Fi & Fantasy': 10765,
-        'Soap': 10766,
-        'Talk': 10767,
-        'War & Politics': 10768,
-        'Western': 37
-      };
-      const genreId = genreMap[selectedCategory];
-      if (genreId) {
-        params.append('with_genres', genreId.toString());
-      }
+      appendGenreFilter(params, TV_GENRE_FILTERS, selectedCategory);
     }
     if (selectedCountry !== 'All') {
-      // Sử dụng country code thay vì tên quốc gia
-      const countryToCodeMap: { [key: string]: string } = {
-        'USA': 'US',
-        'Japan': 'JP',
-        'Korea': 'KR',
-        'China': 'CN',
-        'India': 'IN',
-        'France': 'FR',
-        'Germany': 'DE',
-        'Spain': 'ES',
-        'Italy': 'IT',
-        'Brazil': 'BR',
-        'Russia': 'RU',
-        'Egypt': 'EG',
-        'Thailand': 'TH',
-        'Vietnam': 'VN',
-        'Indonesia': 'ID',
-        'Malaysia': 'MY',
-        'Philippines': 'PH',
-        'Myanmar': 'MM',
-        'Cambodia': 'KH',
-        'Laos': 'LA'
-      };
-      const countryCode = countryToCodeMap[selectedCountry];
-      if (countryCode) {
-        params.append('with_origin_country', countryCode);
-      }
+      appendCountryCodeFilter(params, selectedCountry);
     }
     const response = await axios.get(`/api/tmdb-proxy?endpoint=/discover/tv&${params.toString()}`);
     const fetchedTVShows = response.data.results;
@@ -402,7 +296,7 @@ function TVShowsPageContent({ initialTVShows }: { initialTVShows: TVShow[] }) {
       image: tvShow.poster_path ? `https://image.tmdb.org/t/p/w500${tvShow.poster_path}` : '',
       genre: [],
       first_air_date: tvShow.first_air_date,
-      country: getCountryName(tvShow.original_language),
+      country: getCountryDisplayName(tvShow.original_language, tvShow.origin_country?.[0]),
       totalSeasons: tvShow.number_of_seasons || 0,
       totalEpisodes: tvShow.number_of_episodes || 0
     }));

@@ -12,6 +12,14 @@ import { Suspense } from 'react'
 import CardWithHover from '@/components/common/CardWithHover'
 import { useTranslations } from 'next-intl'
 import apiCache from '@/hooks/useApiCache'
+import {
+  CONTENT_COUNTRY_OPTIONS,
+  MOVIE_CATEGORY_OPTIONS,
+  MOVIE_GENRE_FILTERS,
+  appendCountryCodeFilter,
+  appendGenreFilter,
+  getCountryDisplayName,
+} from '@/lib/contentFilters'
 
 // Định nghĩa kiểu Movie rõ ràng
 interface Movie {
@@ -33,6 +41,7 @@ interface TMDBMovie {
   vote_average: number;
   release_date?: string;
   original_language?: string;
+  origin_country?: string[];
   genre_ids?: number[];
 }
 
@@ -254,80 +263,10 @@ function MoviesPageContent({ initialMovies }: { initialMovies: Movie[] }) {
   }, [currentYear]);
 
   // Categories for movies
-  const categories = useMemo(() => [
-    'All',
-    'Action',
-    'Adventure',
-    'Animation',
-    'Comedy',
-    'Crime',
-    'Documentary',
-    'Drama',
-    'Family',
-    'Fantasy',
-    'History',
-    'Horror',
-    'Music',
-    'Mystery',
-    'Romance',
-    'Science Fiction',
-    'TV Movie',
-    'Thriller',
-    'War',
-    'Western'
-  ], []);
+  const categories = useMemo(() => MOVIE_CATEGORY_OPTIONS, []);
 
   // Countries for movies
-  const countries = useMemo(() => [
-    'All',
-    'USA',
-    'Japan',
-    'Korea',
-    'China',
-    'India',
-    'France',
-    'Germany',
-    'Spain',
-    'Italy',
-    'Brazil',
-    'Russia',
-    'Egypt',
-    'Thailand',
-    'Vietnam',
-    'Indonesia',
-    'Malaysia',
-    'Philippines',
-    'Myanmar',
-    'Cambodia',
-    'Laos'
-  ], []);
-
-  // Hàm chuyển đổi language code thành tên quốc gia
-  const getCountryName = (languageCode?: string): string => {
-    const countryMap: { [key: string]: string } = {
-      'en': 'USA',
-      'ja': 'Japan',
-      'ko': 'Korea',
-      'zh': 'China',
-      'hi': 'India',
-      'fr': 'France',
-      'de': 'Germany',
-      'es': 'Spain',
-      'it': 'Italy',
-      'pt': 'Brazil',
-      'ru': 'Russia',
-      'ar': 'Egypt',
-      'th': 'Thailand',
-      'vi': 'Vietnam',
-      'id': 'Indonesia',
-      'ms': 'Malaysia',
-      'tl': 'Philippines',
-      'my': 'Myanmar',
-      'km': 'Cambodia',
-      'lo': 'Laos'
-    };
-    return countryMap[languageCode || 'en'] || 'USA';
-  };
+  const countries = useMemo(() => CONTENT_COUNTRY_OPTIONS, []);
 
   // Hàm fetch 1 trang phim
   const fetchMoviesPage = async (pageToFetch: number) => {
@@ -340,61 +279,10 @@ function MoviesPageContent({ initialMovies }: { initialMovies: Movie[] }) {
       params.append('primary_release_year', String(selectedYear));
     }
     if (selectedCategory !== 'All') {
-      // Sử dụng genre ID thay vì tên genre
-      const genreMap: { [key: string]: number } = {
-        'Action': 28,
-        'Adventure': 12,
-        'Animation': 16,
-        'Comedy': 35,
-        'Crime': 80,
-        'Documentary': 99,
-        'Drama': 18,
-        'Family': 10751,
-        'Fantasy': 14,
-        'History': 36,
-        'Horror': 27,
-        'Music': 10402,
-        'Mystery': 9648,
-        'Romance': 10749,
-        'Science Fiction': 878,
-        'TV Movie': 10770,
-        'Thriller': 53,
-        'War': 10752,
-        'Western': 37
-      };
-      const genreId = genreMap[selectedCategory];
-      if (genreId) {
-        params.append('with_genres', genreId.toString());
-      }
+      appendGenreFilter(params, MOVIE_GENRE_FILTERS, selectedCategory);
     }
     if (selectedCountry !== 'All') {
-      // Sử dụng language code thay vì tên quốc gia
-      const countryToLanguageMap: { [key: string]: string } = {
-        'USA': 'en',
-        'Japan': 'ja',
-        'Korea': 'ko',
-        'China': 'zh',
-        'India': 'hi',
-        'France': 'fr',
-        'Germany': 'de',
-        'Spain': 'es',
-        'Italy': 'it',
-        'Brazil': 'pt',
-        'Russia': 'ru',
-        'Egypt': 'ar',
-        'Thailand': 'th',
-        'Vietnam': 'vi',
-        'Indonesia': 'id',
-        'Malaysia': 'ms',
-        'Philippines': 'tl',
-        'Myanmar': 'my',
-        'Cambodia': 'km',
-        'Laos': 'lo'
-      };
-      const languageCode = countryToLanguageMap[selectedCountry];
-      if (languageCode) {
-        params.append('with_original_language', languageCode);
-      }
+      appendCountryCodeFilter(params, selectedCountry);
     }
     const response = await axios.get(`/api/tmdb-proxy?endpoint=/discover/movie&${params.toString()}`);
     let fetchedMovies = response.data.results
@@ -406,7 +294,7 @@ function MoviesPageContent({ initialMovies }: { initialMovies: Movie[] }) {
       image: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : '',
       genre: [],
       release_date: movie.release_date,
-      country: getCountryName(movie.original_language),
+      country: getCountryDisplayName(movie.original_language, movie.origin_country?.[0]),
     }))
     return fetchedMovies
   }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   MagnifyingGlassIcon, 
@@ -17,7 +17,8 @@ import {
   BookmarkIcon,
   UserIcon,
   QueueListIcon,
-  PlayCircleIcon
+  PlayCircleIcon,
+  PuzzlePieceIcon
 } from '@heroicons/react/24/outline'
 import useAuthStore from '@/store/useAuthStore'
 import { Menu, Transition } from '@headlessui/react'
@@ -30,7 +31,7 @@ import useAuthHydrated from '@/store/useAuthHydrated';
 import Logo from '@/components/common/Logo';
 import dynamic from 'next/dynamic';
 import UserAvatar from '@/components/UserAvatar';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import NotificationBell from '@/components/notifications/NotificationBell';
 
 // Lazy load heavy search component
@@ -56,6 +57,7 @@ const moreNavItems = [
   { key: 'faq', href: '/faq', icon: QuestionMarkCircleIcon },
   { key: 'contact', href: '/contact', icon: EnvelopeIcon },
   { key: 'streaming', href: '/streaming-lobby', icon: PlayCircleIcon },
+  { key: 'game', href: '/game-realtime', icon: PuzzlePieceIcon },
 ]
 
 const desktopOverflowNavItems = mainNavItems.filter((item) => item.key !== 'home')
@@ -111,11 +113,26 @@ function HeaderDropdownAutoClose({
 export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
   const { user, isAuthenticated, logout, isLoading } = useAuthStore()
   const { setNavDropdownOpen, setAppModalOpen, isAppModalOpen } = useUIStore();
   const { watchlist } = useWatchlistStore();
   const hydrated = useAuthHydrated();
   const t = useTranslations('Navigation');
+  const locale = useLocale();
+
+  const handleGameClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!isAuthenticated) {
+      toast.error(t('loginRequiredGame'));
+      router.push('/login');
+      setIsOpen(false);
+      return;
+    }
+    const token = localStorage.getItem('token');
+    window.open(`http://localhost:3002?token=${token}&locale=${locale}`, '_blank');
+    setIsOpen(false);
+  };
 
   const [isMoreDropdownActive, setIsMoreDropdownActive] = useState(false);
   const [isProfileDropdownActive, setIsProfileDropdownActive] = useState(false);
@@ -262,15 +279,27 @@ export default function Navigation() {
                     {moreNavItems.map((item) => (
                       <Menu.Item key={item.key}>
                         {({ active }) => (
-                          <Link
-                            href={item.href}
-                            className={`flex items-center space-x-2 px-4 py-2 rounded-md ${
-                              active ? 'bg-red-500 text-white' : 'text-gray-300'
-                            }`}
-                          >
-                            <item.icon className="h-5 w-5" />
-                            <span>{t(`items.${item.key}`)}</span>
-                          </Link>
+                          item.key === 'game' ? (
+                            <button
+                              onClick={handleGameClick}
+                              className={`w-full flex items-center space-x-2 px-4 py-2 rounded-md text-left cursor-pointer ${
+                                active ? 'bg-red-500 text-white' : 'text-gray-300'
+                              }`}
+                            >
+                              <item.icon className="h-5 w-5" />
+                              <span>{t(`items.${item.key}`)}</span>
+                            </button>
+                          ) : (
+                            <Link
+                              href={item.href}
+                              className={`flex items-center space-x-2 px-4 py-2 rounded-md ${
+                                active ? 'bg-red-500 text-white' : 'text-gray-300'
+                              }`}
+                            >
+                              <item.icon className="h-5 w-5" />
+                              <span>{t(`items.${item.key}`)}</span>
+                            </Link>
+                          )
                         )}
                       </Menu.Item>
                     ))}
@@ -612,7 +641,16 @@ export default function Navigation() {
               <div className="pl-6 space-y-1">
                 {moreNavItems.map((item) => {
                   const isActive = pathname === item.href;
-                  return (
+                  return item.key === 'game' ? (
+                    <button
+                      key={item.key}
+                      onClick={handleGameClick}
+                      className="w-full flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-200 hover:text-gray-900 text-left cursor-pointer"
+                    >
+                      <item.icon className="h-5 w-5" />
+                      <span>{t(`items.${item.key}`)}</span>
+                    </button>
+                  ) : (
                     <Link
                       key={item.key}
                       href={item.href}
