@@ -130,7 +130,9 @@ export default function Navigation() {
       return;
     }
     const token = localStorage.getItem('token');
-    window.open(`http://localhost:3002?token=${token}&locale=${locale}`, '_blank');
+    const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+    const gameUrl = isDevelopment ? 'http://localhost:3002' : 'https://ntngame.fly.dev';
+    window.open(`${gameUrl}?token=${token}&locale=${locale}`, '_blank');
     setIsOpen(false);
   };
 
