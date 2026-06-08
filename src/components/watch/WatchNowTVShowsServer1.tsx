@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
+import { extractOriginalUrl } from '@/lib/hlsProxy'
 
 interface TVShow {
   id: number;
@@ -22,6 +23,14 @@ interface EpisodeServer {
   name?: string;
 }
 
+export interface EpisodePlaylistItem {
+  episode_number: number;
+  title?: string;
+  vietsub?: string;
+  dubbed?: string;
+  m3u8?: string;
+}
+
 interface WatchNowTVShowsServer1Props {
   tvShow: TVShow;
   selectedSeason: number;
@@ -30,6 +39,7 @@ interface WatchNowTVShowsServer1Props {
   onLoadingChange: (loading: boolean) => void;
   onSearchComplete: (completed: boolean) => void;
   onDataReadyChange: (ready: boolean) => void;
+  onEpisodeStreamsChange?: (episodes: EpisodePlaylistItem[]) => void;
 }
 
 const normalizeForCompare = (value?: string) => {
@@ -74,7 +84,8 @@ const episodesContainSelectedEpisode = (episodes: EpisodeServer[] | undefined, e
 };
 
 const getEpisodeUrl = (episode?: EpisodeStream) => {
-  return episode?.link_m3u8 || episode?.link_embed?.split('?url=')[1] || '';
+  const rawUrl = episode?.link_m3u8 || episode?.link_embed || '';
+  return extractOriginalUrl(rawUrl);
 };
 
 const isVietsubServer = (serverName?: string) => {
@@ -88,6 +99,47 @@ const isDubbedServer = (serverName?: string) => {
     normalized.includes('dubbed');
 };
 
+const buildEpisodePlaylist = (episodesData: EpisodeServer[] | undefined): EpisodePlaylistItem[] => {
+  if (!episodesData || episodesData.length === 0) return [];
+
+  const episodeMap = new Map<number, EpisodePlaylistItem>();
+
+  for (const episodeServer of episodesData) {
+    const serverData = episodeServer.server_data || [];
+    const isVietsub = isVietsubServer(episodeServer.server_name);
+    const isDubbed = isDubbedServer(episodeServer.server_name);
+
+    for (const stream of serverData) {
+      const episodeNumber = getEpisodeNumberFromName(stream.name);
+      const episodeUrl = getEpisodeUrl(stream);
+
+      if (!episodeNumber || !episodeUrl) continue;
+
+      const current = episodeMap.get(episodeNumber) || {
+        episode_number: episodeNumber,
+        title: stream.name,
+      };
+
+      if (isVietsub && !current.vietsub) {
+        current.vietsub = episodeUrl;
+      } else if (isDubbed && !current.dubbed) {
+        current.dubbed = episodeUrl;
+      } else if (!current.m3u8) {
+        current.m3u8 = episodeUrl;
+      }
+
+      if (!current.title && stream.name) {
+        current.title = stream.name;
+      }
+
+      episodeMap.set(episodeNumber, current);
+    }
+  }
+
+  return Array.from(episodeMap.values())
+    .sort((a, b) => a.episode_number - b.episode_number);
+};
+
 export default function WatchNowTVShowsServer1({
   tvShow,
   selectedSeason,
@@ -95,7 +147,8 @@ export default function WatchNowTVShowsServer1({
   onLinksChange,
   onLoadingChange,
   onSearchComplete,
-  onDataReadyChange
+  onDataReadyChange,
+  onEpisodeStreamsChange
 }: WatchNowTVShowsServer1Props) {
   const { id } = useParams();
 
@@ -188,6 +241,7 @@ export default function WatchNowTVShowsServer1({
         onLoadingChange(false);
         onSearchComplete(true);
         onDataReadyChange(true);
+        onEpisodeStreamsChange?.(buildEpisodePlaylist(episodesData || undefined));
         return;
       }
 
@@ -202,6 +256,7 @@ export default function WatchNowTVShowsServer1({
           currentSeason: 0
         }));
         setEpisodesData(null);
+        onEpisodeStreamsChange?.([]);
         onDataReadyChange(false);
         return;
       }
@@ -481,6 +536,7 @@ export default function WatchNowTVShowsServer1({
         }
 
         if (!slug) {
+          onEpisodeStreamsChange?.([]);
           return;
         }
 
@@ -624,7 +680,9 @@ export default function WatchNowTVShowsServer1({
 
         // Lưu episodes data để tái sử dụng khi đổi episode
         if (cancelled) return;
-        setEpisodesData(Array.isArray(finalDetailData.episodes) ? finalDetailData.episodes : null);
+        const finalEpisodesData = Array.isArray(finalDetailData.episodes) ? finalDetailData.episodes : null;
+        setEpisodesData(finalEpisodesData);
+        onEpisodeStreamsChange?.(buildEpisodePlaylist(finalEpisodesData || undefined));
 
         // Cập nhật tvShowLinks với tất cả audio options
 

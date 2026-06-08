@@ -59,6 +59,10 @@ export interface EnhancedMoviePlayerProps {
   audioSettings?: AudioSettings;
   /** Callback to update audio enhancement settings */
   onAudioSettingsChange?: Dispatch<SetStateAction<AudioSettings>>;
+  /** Callback to toggle playlist panel visibility (used in streaming room) */
+  onTogglePlaylist?: () => void;
+  /** When true, indicates that the playlist panel is currently visible */
+  showPlaylist?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -192,7 +196,7 @@ function parseQualities(levels: Level[]): Array<{ index: number; label: string }
 
 // ─── Component ────────────────────────────────────────────────────
 const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProps>(
-  ({ src, poster, autoPlay = false, onError, movieId, server, audio, title, season, episode, isTVShow = false, userId, viewerMode = false, onToggleChat, isStreamingRoom = false, fullscreenTarget, hostHasPlayed = false, chatUnreadCount = 0, waitingForHost = false, onVideoEnded, endOverlay, watchUrl, cleanHlsInBrowser = false, latestWatchUrl, savedTime, savedWatchUrl, onUpdateSource, onSkipUpdateSource, hasLoadedSavedProgress, audioSettings, onAudioSettingsChange }, ref) => {
+  ({ src, poster, autoPlay = false, onError, movieId, server, audio, title, season, episode, isTVShow = false, userId, viewerMode = false, onToggleChat, isStreamingRoom = false, fullscreenTarget, hostHasPlayed = false, chatUnreadCount = 0, waitingForHost = false, onVideoEnded, endOverlay, watchUrl, cleanHlsInBrowser = false, latestWatchUrl, savedTime, savedWatchUrl, onUpdateSource, onSkipUpdateSource, hasLoadedSavedProgress, audioSettings, onAudioSettingsChange, onTogglePlaylist, showPlaylist = false }, ref) => {
     const innerRef = useRef<HTMLVideoElement>(null);
     const hlsRef = useRef<Hls | null>(null);
     const innerContainerRef = useRef<HTMLDivElement>(null);
@@ -1466,7 +1470,24 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
           </div>
         )}
         {src && controlsReady && isStreamingRoom && (
-          <div className={`absolute top-3 right-3 sm:top-4 sm:right-4 z-[8] transition-all duration-500 ease-in-out ${showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
+          <div className={`absolute top-3 right-3 sm:top-4 sm:right-4 z-[8] flex items-center gap-2 transition-all duration-500 ease-in-out ${showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
+            {isTVShow && isFullscreen && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onTogglePlaylist?.(); }}
+                className={`relative flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 shadow-lg hover:scale-105 ${
+                  showPlaylist
+                    ? 'bg-blue-600 hover:bg-blue-500 text-white hover:shadow-blue-500/50'
+                    : 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-400 hover:to-indigo-400 text-white hover:shadow-blue-500/50'
+                }`}
+                aria-label="Toggle Episode List" title="Toggle Episode List"
+              >
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+                <span className="hidden sm:inline">Episodes</span>
+              </button>
+            )}
+
             <button
               onClick={(e) => { e.stopPropagation(); onToggleChat?.(); }}
               className="relative flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black text-xs sm:text-sm font-semibold transition-all duration-200 shadow-lg hover:shadow-yellow-500/50 hover:scale-105"

@@ -11,8 +11,9 @@ import {
 import useAuthStore from '@/store/useAuthStore';
 import EnhancedMoviePlayer from '@/components/common/video-player/EnhancedMoviePlayer';
 import { prepareHlsPlayerSource } from '@/lib/hlsProxy';
-import { useWatchPartySocket, type RoomStatus, type ChatMessage } from '@/hooks/useWatchPartySocket';
+import { useWatchPartySocket, type RoomStatus, type ChatMessage, type EpisodePlaylistItem } from '@/hooks/useWatchPartySocket';
 import { useTranslations } from 'next-intl';
+import api from '@/lib/axios';
 
 // ─── Streaming Room Content ─────────────────────────────────
 
@@ -26,6 +27,7 @@ function StreamingRoomContent() {
   const roomId = searchParams.get('room');
   const streamUrlFromParams = searchParams.get('streamUrl') || '';
   const titleFromParams = searchParams.get('title') || '';
+  const playlistKeyFromParams = searchParams.get('playlistKey') || '';
   const t = useTranslations('StreamingRoom');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,6 +51,7 @@ function StreamingRoomContent() {
   const [showEmojis, setShowEmojis] = useState(false);
   const [floatingEmojis, setFloatingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([]);
   const [showChat, setShowChat] = useState(true);
+  const [showPlaylist, setShowPlaylist] = useState(false);
   const [hostHasPlayed, setHostHasPlayed] = useState(false);
   const [waitingForHost, setWaitingForHost] = useState(false);
   const [waitReason, setWaitReason] = useState<'host_paused' | 'syncing' | 'host_buffering' | null>(null);
@@ -57,6 +60,12 @@ function StreamingRoomContent() {
   const [hasNewMessage, setHasNewMessage] = useState(false);
   const [roomMembers, setRoomMembers] = useState<{ user_id: string; username: string; avatar?: string; is_host: boolean }[]>([]);
   const [showMembers, setShowMembers] = useState(false);
+  const [roomAudio, setRoomAudio] = useState<'vietsub' | 'dubbed' | ''>('');
+  const [roomContentType, setRoomContentType] = useState<RoomStatus['content_type']>('');
+  const [roomSeason, setRoomSeason] = useState<number | null>(null);
+  const [currentEpisode, setCurrentEpisode] = useState<number | null>(null);
+  const [episodePlaylist, setEpisodePlaylist] = useState<EpisodePlaylistItem[]>([]);
+  const [changingEpisode, setChangingEpisode] = useState<number | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const syncLockRef = useRef(false); // Prevents feedback loops
@@ -66,6 +75,7 @@ function StreamingRoomContent() {
   const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(false);
   const hostPausePositionRef = useRef<number | null>(null);
   const showChatRef = useRef(showChat);
+  const playlistBackfillRef = useRef(false);
 
   const EMOJIS = [
     '👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '🎉',
@@ -110,6 +120,55 @@ function StreamingRoomContent() {
     }
   };
 
+  const getEpisodeSource = useCallback((episode: EpisodePlaylistItem) => {
+    if (roomAudio === 'dubbed') {
+      return episode.dubbed || episode.vietsub || episode.m3u8 || '';
+    }
+
+    if (roomAudio === 'vietsub') {
+      return episode.vietsub || episode.dubbed || episode.m3u8 || '';
+    }
+
+    return episode.vietsub || episode.dubbed || episode.m3u8 || '';
+  }, [roomAudio]);
+
+  const getEpisodeRoomTitle = useCallback((episode: EpisodePlaylistItem) => {
+    const baseTitle = (roomTitle || t('watchParty'))
+      .replace(/\s+-\s+S\d+\s+E\d+\s*$/i, '')
+      .trim();
+    const seasonNumber = roomSeason || episode.season_number;
+
+    return seasonNumber
+      ? `${baseTitle} - S${seasonNumber} E${episode.episode_number}`
+      : `${baseTitle} - E${episode.episode_number}`;
+  }, [roomSeason, roomTitle, t]);
+
+  const applyRoomMetadata = useCallback((metadata: Partial<RoomStatus>) => {
+    if (metadata.title) {
+      setRoomTitle(metadata.title);
+    }
+    if (metadata.stream_url) {
+      setStreamUrl(metadata.stream_url);
+    }
+    if (metadata.audio === 'vietsub' || metadata.audio === 'dubbed') {
+      setRoomAudio(metadata.audio);
+    } else if (metadata.audio === '') {
+      setRoomAudio('');
+    }
+    if (metadata.content_type) {
+      setRoomContentType(metadata.content_type);
+    }
+    if (metadata.season) {
+      setRoomSeason(metadata.season);
+    }
+    if (metadata.current_episode) {
+      setCurrentEpisode(metadata.current_episode);
+    }
+    if (Array.isArray(metadata.episode_playlist) && metadata.episode_playlist.length > 0) {
+      setEpisodePlaylist(metadata.episode_playlist);
+    }
+  }, []);
+
   // ─── WebSocket ──────────────────────────────────────────
 
   const {
@@ -123,6 +182,7 @@ function StreamingRoomContent() {
     emitSyncPosition,
     emitHostBuffering,
     emitHostBufferEnd,
+    emitChange,
     emitLeaveRoom,
   } = useWatchPartySocket({
     roomId,
@@ -133,7 +193,13 @@ function StreamingRoomContent() {
       setIsHost(status.is_host);
       setMemberCount(status.member_count);
       setForceSync(status.force_sync);
-      setRoomTitle(status.title || titleFromParams);
+      applyRoomMetadata(status);
+      if (!status.title) {
+        setRoomTitle(titleFromParams);
+      }
+      if (!status.content_type) {
+        setRoomContentType('');
+      }
 
       if (status.stream_url) {
         setStreamUrl(status.stream_url);
@@ -230,10 +296,28 @@ function StreamingRoomContent() {
       }]);
     },
 
-    onChange: ({ stream_url, title }) => {
+    onChange: ({ stream_url, title, current_episode }) => {
       setStreamUrl(stream_url);
       if (title) setRoomTitle(title);
-      showNotification(`🎬 ${t('streamChanged')}`);
+      if (current_episode) setCurrentEpisode(current_episode);
+      setChangingEpisode(null);
+      setHostHasPlayed(false);
+      setWaitingForHost(false);
+      setWaitReason(null);
+      hostPausePositionRef.current = null;
+      setRoomStatus(prev => prev ? {
+        ...prev,
+        title: title || prev.title,
+        stream_url,
+        current_episode: current_episode || prev.current_episode,
+        position_sec: 0,
+        status: 'WAITING',
+      } : prev);
+      showNotification(`🎬 ${current_episode ? t('episodeChanged', { episode: current_episode }) : t('streamChanged')}`);
+    },
+
+    onEpisodePlaylist: (metadata) => {
+      applyRoomMetadata(metadata);
     },
 
     onUserJoined: ({ username, user_id, avatar, member_count, is_host: joinedIsHost }) => {
@@ -366,6 +450,124 @@ function StreamingRoomContent() {
       showNotification(`⚠️ ${message}`);
     },
   });
+
+  useEffect(() => {
+    if (!roomId || !playlistKeyFromParams || typeof window === 'undefined') return;
+    sessionStorage.setItem(`watch-party-room-playlist:${roomId}`, playlistKeyFromParams);
+  }, [playlistKeyFromParams, roomId]);
+
+  useEffect(() => {
+    if (episodePlaylist.length > 0 || typeof window === 'undefined') return;
+
+    try {
+      const mappedPlaylistKey = roomId
+        ? sessionStorage.getItem(`watch-party-room-playlist:${roomId}`) || ''
+        : '';
+      let effectivePlaylistKey = playlistKeyFromParams || mappedPlaylistKey;
+
+      if (!effectivePlaylistKey) {
+        const titleMatch = roomTitle.match(/\bS(\d+)\s*E(\d+)\b/i);
+        const targetSeason = roomSeason || (titleMatch ? Number(titleMatch[1]) : null);
+        const targetEpisode = currentEpisode || (titleMatch ? Number(titleMatch[2]) : null);
+        let newestMatchedKey = '';
+        let newestMatchedTime = 0;
+
+        for (let i = 0; i < sessionStorage.length; i += 1) {
+          const key = sessionStorage.key(i) || '';
+          if (!key.startsWith('watch-party-tvshow-')) continue;
+
+          try {
+            const parsed = JSON.parse(sessionStorage.getItem(key) || '{}');
+            const storedEpisodes = Array.isArray(parsed?.episodes) ? parsed.episodes : [];
+            if (storedEpisodes.length === 0) continue;
+
+            const storedSeason = Number(parsed?.season) || null;
+            const storedCurrentEpisode = Number(parsed?.currentEpisode) || null;
+            const hasTargetEpisode = targetEpisode
+              ? storedEpisodes.some((episode: EpisodePlaylistItem) => episode.episode_number === targetEpisode)
+              : true;
+            const seasonMatches = targetSeason ? storedSeason === targetSeason : true;
+            const episodeMatches = targetEpisode ? (storedCurrentEpisode === targetEpisode || hasTargetEpisode) : true;
+
+            if (!seasonMatches || !episodeMatches) continue;
+
+            const timestamp = Number(key.split('-').pop()) || 0;
+            if (timestamp >= newestMatchedTime) {
+              newestMatchedTime = timestamp;
+              newestMatchedKey = key;
+            }
+          } catch {
+            // Ignore stale or malformed sessionStorage entries.
+          }
+        }
+
+        effectivePlaylistKey = newestMatchedKey;
+        if (roomId && effectivePlaylistKey) {
+          sessionStorage.setItem(`watch-party-room-playlist:${roomId}`, effectivePlaylistKey);
+        }
+      }
+
+      if (!effectivePlaylistKey) return;
+
+      const storedPlaylist = sessionStorage.getItem(effectivePlaylistKey);
+      if (!storedPlaylist) return;
+
+      const parsed = JSON.parse(storedPlaylist);
+      const storedEpisodes = Array.isArray(parsed?.episodes) ? parsed.episodes : [];
+      if (storedEpisodes.length === 0) return;
+
+      setRoomContentType('tvshow');
+      setRoomSeason(Number(parsed?.season) || null);
+      setCurrentEpisode(Number(parsed?.currentEpisode) || null);
+      setEpisodePlaylist(storedEpisodes);
+      if (!roomTitle && parsed?.title) {
+        setRoomTitle(
+          Number(parsed?.season) && Number(parsed?.currentEpisode)
+            ? `${parsed.title} - S${Number(parsed.season)} E${Number(parsed.currentEpisode)}`
+            : parsed.title
+        );
+      }
+    } catch (error) {
+      console.warn('Unable to load local TV episode playlist:', error);
+    }
+  }, [currentEpisode, episodePlaylist.length, playlistKeyFromParams, roomId, roomSeason, roomTitle]);
+
+  useEffect(() => {
+    const isTVRoom = roomContentType === 'tvshow' || /\bS\d+\s*E\d+\b/i.test(roomTitle);
+
+    if (!roomId || !isHost || !isTVRoom || episodePlaylist.length === 0 || playlistBackfillRef.current) return;
+
+    playlistBackfillRef.current = true;
+    api.patch(`/rooms/${encodeURIComponent(roomId)}/episode-playlist`, {
+      content_type: 'tvshow',
+      season: roomSeason,
+      current_episode: currentEpisode,
+      episode_playlist: episodePlaylist,
+    }).catch((error) => {
+      playlistBackfillRef.current = false;
+      console.warn('Unable to persist TV episode playlist for room:', error);
+    });
+  }, [currentEpisode, episodePlaylist, isHost, roomContentType, roomId, roomSeason, roomTitle]);
+
+  useEffect(() => {
+    if (!roomId || !isAuthenticated) return;
+
+    let cancelled = false;
+
+    api.get(`/rooms/${encodeURIComponent(roomId)}`)
+      .then((response) => {
+        if (cancelled) return;
+        applyRoomMetadata(response.data || {});
+        if (typeof response.data?.is_host === 'boolean') {
+          setIsHost(response.data.is_host);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyRoomMetadata, isAuthenticated, roomId]);
 
   // ─── Video event handlers (host broadcasts) ─────────────
 
@@ -502,6 +704,13 @@ function StreamingRoomContent() {
     };
   }, []);
 
+  // Auto-close playlist sidebar when exiting fullscreen
+  useEffect(() => {
+    if (!isPlayerFullscreen) {
+      setShowPlaylist(false);
+    }
+  }, [isPlayerFullscreen]);
+
   // ─── Handlers ───────────────────────────────────────────
 
   const handleSendChat = () => {
@@ -540,6 +749,35 @@ function StreamingRoomContent() {
 
   const handleToggleSync = () => {
     emitSyncToggle(!forceSync);
+  };
+
+  const handleEpisodeSelect = (episode: EpisodePlaylistItem) => {
+    if (!isHost) return;
+    if (changingEpisode || currentEpisode === episode.episode_number) return;
+
+    const nextStreamUrl = getEpisodeSource(episode);
+    if (!nextStreamUrl) {
+      showNotification(`⚠️ ${t('episodeSourceUnavailable')}`);
+      return;
+    }
+
+    setChangingEpisode(episode.episode_number);
+    setHostHasPlayed(false);
+    setWaitingForHost(false);
+    setWaitReason(null);
+    hostPausePositionRef.current = null;
+
+    if (videoRef.current) {
+      syncLockRef.current = true;
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+      setTimeout(() => { syncLockRef.current = false; }, 500);
+    }
+
+    emitChange(nextStreamUrl, getEpisodeRoomTitle(episode), episode.episode_number);
+    setTimeout(() => {
+      setChangingEpisode(prev => prev === episode.episode_number ? null : prev);
+    }, 3000);
   };
 
   // ─── Auth Gate ──────────────────────────────────────────
@@ -783,7 +1021,10 @@ function StreamingRoomContent() {
                   hostHasPlayed={hostHasPlayed}
                   waitingForHost={waitingForHost}
                   chatUnreadCount={unreadCount}
-                  onToggleChat={() => setShowChat(prev => !prev)}
+                  isTVShow={roomContentType === 'tvshow' || /\bS\d+\s*E\d+\b/i.test(roomTitle)}
+                  onToggleChat={() => { setShowChat(prev => !prev); setShowPlaylist(false); }}
+                  onTogglePlaylist={() => { setShowPlaylist(prev => !prev); setShowChat(false); }}
+                  showPlaylist={showPlaylist}
                   isStreamingRoom={true}
                   fullscreenTarget={playerContainerRef as React.RefObject<HTMLDivElement>}
                 />
@@ -1008,7 +1249,131 @@ function StreamingRoomContent() {
               </div>
             </div>
           )}
+
+          {/* ─── Playlist Panel (Ultra Glassmorphism Sidebar) ─── */}
+          {showPlaylist && (
+            <div
+              className={`flex flex-col shrink-0 overflow-hidden relative ${
+                isPlayerFullscreen
+                  ? 'w-[260px] max-sm:w-[180px] h-full bg-gray-950/95 backdrop-blur-md border-l border-gray-700/50'
+                  : 'w-full h-[40vh] sm:h-full sm:flex-grow-0 sm:w-[280px] md:w-[300px] lg:w-[320px] xl:w-[340px] bg-white/[0.02] backdrop-blur-md border border-white/[0.08] rounded-xl shadow-2xl'
+              }`}
+            >
+              {/* Playlist Header */}
+              <div className="px-3 sm:px-4 py-2 sm:py-2.5 border-b border-white/[0.05] flex items-center justify-between shrink-0">
+                <span className="text-xs sm:text-sm font-semibold text-gray-200">
+                  {t('seasonEpisodes', { season: roomSeason || '-' })}
+                </span>
+                <button
+                  onClick={() => setShowPlaylist(false)}
+                  className="text-gray-400 hover:text-white transition-colors p-1 rounded-md hover:bg-gray-700/50"
+                  title="Close Playlist"
+                >
+                  <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Episodes List */}
+              <div className="flex-grow overflow-y-auto px-3 py-2 space-y-2 chat-scrollbar">
+                {episodePlaylist.length === 0 ? (
+                  <div className="text-center py-4 text-xs text-gray-600">
+                    {t('episodePlaylistMissing')}
+                  </div>
+                ) : (
+                  episodePlaylist.map((episode) => {
+                    const isActiveEpisode = currentEpisode === episode.episode_number;
+                    const hasEpisodeSource = !!getEpisodeSource(episode);
+                    const isChangingThisEpisode = changingEpisode === episode.episode_number;
+
+                    return (
+                      <button
+                        key={`${episode.season_number || roomSeason || 'season'}-${episode.episode_number}`}
+                        type="button"
+                        onClick={() => handleEpisodeSelect(episode)}
+                        disabled={!isHost || !hasEpisodeSource || isActiveEpisode || !!changingEpisode}
+                        title={!isHost ? t('hostOnlyEpisodeSelect') : !hasEpisodeSource ? t('episodeSourceUnavailable') : episode.name || `Episode ${episode.episode_number}`}
+                        className={`w-full rounded-lg border px-3 py-2 text-left transition-all ${
+                          isActiveEpisode
+                            ? 'border-yellow-500/50 bg-yellow-500/15 text-yellow-200'
+                            : hasEpisodeSource && isHost
+                              ? 'border-gray-700 bg-gray-900/60 text-gray-200 hover:border-yellow-500/40 hover:bg-yellow-500/10'
+                              : 'border-gray-800 bg-gray-900/30 text-gray-500 opacity-70'
+                        }`}
+                      >
+                        <span className="block text-[10px] font-bold uppercase tracking-wide">
+                          {isChangingThisEpisode ? t('changingEpisode') : `E${episode.episode_number}`}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs">
+                          {episode.name || t('episodeLabel', { episode: episode.episode_number })}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
         </div>
+
+        {!isPlayerFullscreen && (roomContentType === 'tvshow' || /\bS\d+\s*E\d+\b/i.test(roomTitle)) && (
+          episodePlaylist.length > 0 ? (
+            <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2 sm:px-4 sm:py-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-yellow-300">
+                    {t('seasonEpisodes', { season: roomSeason || '-' })}
+                  </p>
+                  {!isHost && (
+                    <p className="text-[11px] text-gray-500">{t('hostOnlyEpisodeSelect')}</p>
+                  )}
+                </div>
+                {currentEpisode && (
+                  <span className="shrink-0 rounded-full bg-yellow-500/10 px-2 py-1 text-[11px] font-semibold text-yellow-300">
+                    S{roomSeason || '-'} E{currentEpisode}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex gap-2 overflow-x-auto pb-1 chat-scrollbar">
+                {episodePlaylist.map((episode) => {
+                  const isActiveEpisode = currentEpisode === episode.episode_number;
+                  const hasEpisodeSource = !!getEpisodeSource(episode);
+                  const isChangingThisEpisode = changingEpisode === episode.episode_number;
+
+                  return (
+                    <button
+                      key={`${episode.season_number || roomSeason || 'season'}-${episode.episode_number}`}
+                      type="button"
+                      onClick={() => handleEpisodeSelect(episode)}
+                      disabled={!isHost || !hasEpisodeSource || isActiveEpisode || !!changingEpisode}
+                      title={!isHost ? t('hostOnlyEpisodeSelect') : !hasEpisodeSource ? t('episodeSourceUnavailable') : episode.name || `Episode ${episode.episode_number}`}
+                      className={`min-w-[88px] max-w-[160px] rounded-lg border px-3 py-2 text-left transition-all ${
+                        isActiveEpisode
+                          ? 'border-yellow-500/50 bg-yellow-500/15 text-yellow-200'
+                          : hasEpisodeSource && isHost
+                            ? 'border-gray-700 bg-gray-900/60 text-gray-200 hover:border-yellow-500/40 hover:bg-yellow-500/10'
+                            : 'border-gray-800 bg-gray-900/30 text-gray-500 opacity-70'
+                      }`}
+                    >
+                      <span className="block text-[11px] font-bold uppercase tracking-wide">
+                        {isChangingThisEpisode ? t('changingEpisode') : `E${episode.episode_number}`}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs">
+                        {episode.name || t('episodeLabel', { episode: episode.episode_number })}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-yellow-500/15 bg-yellow-500/5 px-3 py-2 text-xs text-yellow-200 sm:px-4">
+              {t('episodePlaylistMissing')}
+            </div>
+          )
+        )}
 
         {/* Host info bar (hidden in fullscreen) */}
         {!isPlayerFullscreen && roomStatus && (

@@ -36,6 +36,7 @@ function StreamingLobbyContent() {
   const seasonFromParams = searchParams.get('season') || '';
   const episodeFromParams = searchParams.get('episode') || '';
   const audioFromParams = searchParams.get('audio') || '';
+  const playlistKeyFromParams = searchParams.get('playlistKey') || '';
 
   // State
   const [joinRoomId, setJoinRoomId] = useState('');
@@ -59,6 +60,7 @@ function StreamingLobbyContent() {
     streamUrl: string;
     hostName: string;
     expiresAt: string;
+    playlistKey?: string;
   } | null>(null);
 
   // Has stream info from player
@@ -206,11 +208,31 @@ function StreamingLobbyContent() {
     setError('');
     setDuplicateInfo(null);
     try {
+      let episodePlaylist: unknown[] = [];
+
+      if (typeFromParams === 'tvshow' && playlistKeyFromParams && typeof window !== 'undefined') {
+        try {
+          const storedPlaylist = sessionStorage.getItem(playlistKeyFromParams);
+          if (storedPlaylist) {
+            const parsed = JSON.parse(storedPlaylist);
+            if (Array.isArray(parsed?.episodes)) {
+              episodePlaylist = parsed.episodes;
+            }
+          }
+        } catch (playlistError) {
+          console.warn('Unable to read TV show watch-party playlist:', playlistError);
+        }
+      }
+
       const response = await api.post('/rooms', {
         title: titleFromParams,
         stream_url: streamUrlFromParams,
         movie_id: movieIdFromParams,
         audio: audioFromParams,
+        content_type: typeFromParams,
+        season: seasonFromParams ? Number(seasonFromParams) : null,
+        episode: episodeFromParams ? Number(episodeFromParams) : null,
+        episode_playlist: episodePlaylist,
       });
 
       const { room_id, expires_at } = response.data;
@@ -221,6 +243,7 @@ function StreamingLobbyContent() {
         streamUrl: streamUrlFromParams,
         hostName: user?.name || 'Host',
         expiresAt: new Date(expires_at).toISOString(),
+        playlistKey: playlistKeyFromParams || undefined,
       });
     } catch (err: unknown) {
       console.error('Error creating room:', err);
@@ -281,6 +304,9 @@ function StreamingLobbyContent() {
         streamUrl: createdRoom.streamUrl,
         title: createdRoom.title,
       });
+      if (createdRoom.playlistKey) {
+        params.set('playlistKey', createdRoom.playlistKey);
+      }
       router.push(`/streaming-room?${params.toString()}`);
     }
   };

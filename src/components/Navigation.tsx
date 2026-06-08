@@ -10,10 +10,6 @@ import {
   XMarkIcon,
   HomeIcon,
   FilmIcon,
-  NewspaperIcon,
-  UserGroupIcon,
-  QuestionMarkCircleIcon,
-  EnvelopeIcon,
   BookmarkIcon,
   UserIcon,
   QueueListIcon,
@@ -52,10 +48,6 @@ const mainNavItems = [
 ]
 
 const moreNavItems = [
-  { key: 'news', href: '/news', icon: NewspaperIcon },
-  { key: 'about', href: '/about', icon: UserGroupIcon },
-  { key: 'faq', href: '/faq', icon: QuestionMarkCircleIcon },
-  { key: 'contact', href: '/contact', icon: EnvelopeIcon },
   { key: 'streaming', href: '/streaming-lobby', icon: PlayCircleIcon },
   { key: 'game', href: '/game-realtime', icon: PuzzlePieceIcon },
 ]
@@ -390,7 +382,7 @@ export default function Navigation() {
                           {({ active }) => (
                             <Link
                               href="/profile"
-                              className={`w-full flex items-center space-x-2 text-left px-3 py-2 rounded-md text-sm text-gray-300 ${
+                              className={`w-full flex items-center space-x-2 text-left px-4 py-2 rounded-md text-gray-300 ${
                                 active ? 'bg-gray-700 text-white' : 'hover:bg-gray-800 hover:text-white'
                               }`}
                             >
@@ -403,7 +395,7 @@ export default function Navigation() {
                           {({ active }) => (
                             <Link
                               href="/watchlist"
-                              className={`w-full flex items-center space-x-2 text-left px-3 py-2 rounded-md text-sm text-gray-300 ${
+                              className={`w-full flex items-center space-x-2 text-left px-4 py-2 rounded-md text-gray-300 ${
                                 active ? 'bg-gray-700 text-white' : 'hover:bg-gray-800 hover:text-white'
                               }`}
                             >
@@ -416,7 +408,7 @@ export default function Navigation() {
                           {({ active }) => (
                             <Link
                               href="/settings"
-                              className={`w-full flex items-center space-x-2 text-left px-3 py-2 rounded-md text-sm text-gray-300 ${
+                              className={`w-full flex items-center space-x-2 text-left px-4 py-2 rounded-md text-gray-300 ${
                                 active ? 'bg-gray-700 text-white' : 'hover:bg-gray-800 hover:text-white'
                               }`}
                             >
@@ -432,7 +424,7 @@ export default function Navigation() {
                                 await logout();
                                 toast.success(t('loggedOut'));
                               }}
-                              className={`w-full text-left px-3 py-2 rounded-md text-sm text-gray-300 ${
+                              className={`w-full text-left px-4 py-2 rounded-md text-gray-300 ${
                                 active ? 'bg-red-500 text-white' : 'hover:bg-gray-800 hover:text-white'
                               }`}
                             >
@@ -484,7 +476,7 @@ export default function Navigation() {
                           {({ active }) => (
                             <Link
                               href="/login"
-                              className={`flex items-center space-x-2 rounded-md px-3 py-2 text-sm ${
+                              className={`flex items-center space-x-2 rounded-md px-4 py-2 ${
                                 active ? 'bg-red-500 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                               }`}
                             >
@@ -497,7 +489,7 @@ export default function Navigation() {
                           {({ active }) => (
                             <Link
                               href="/settings"
-                              className={`flex items-center space-x-2 rounded-md px-3 py-2 text-sm ${
+                              className={`flex items-center space-x-2 rounded-md px-4 py-2 ${
                                 active ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                               }`}
                             >

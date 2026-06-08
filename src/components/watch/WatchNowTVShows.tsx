@@ -72,8 +72,6 @@ export default function WatchNowTVShows({
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const [streamPopup, setStreamPopup] = useState<{ type: 'auth' } | { type: 'duplicate', roomId: string } | null>(null)
   const [isCheckingStream, setIsCheckingStream] = useState(false)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const episodes = _episodes;
   const searchParams = useSearchParams();
   const router = useRouter();
   const t = useTranslations('Watch');

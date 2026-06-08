@@ -16,12 +16,29 @@ export interface RoomStatus {
   host_name: string;
   is_host: boolean;
   stream_url: string;
+  audio?: 'vietsub' | 'dubbed' | '';
+  content_type?: 'movie' | 'tvshow' | '';
+  season?: number | null;
+  current_episode?: number | null;
+  episode_playlist?: EpisodePlaylistItem[];
   members?: {
     user_id: string;
     username: string;
     avatar?: string;
     is_host: boolean;
   }[];
+}
+
+export interface EpisodePlaylistItem {
+  id?: string;
+  name?: string;
+  episode_number: number;
+  season_number?: number | null;
+  still_path?: string;
+  air_date?: string;
+  vietsub?: string;
+  dubbed?: string;
+  m3u8?: string;
 }
 
 export interface ChatMessage {
@@ -56,7 +73,13 @@ interface UseWatchPartySocketOptions {
   onPause?: (data: { position_sec: number }) => void;
   onSeek?: (data: { position_sec: number }) => void;
   onSyncToggle?: (data: { force_sync: boolean }) => void;
-  onChange?: (data: { stream_url: string; title: string }) => void;
+  onChange?: (data: { stream_url: string; title: string; current_episode?: number | null }) => void;
+  onEpisodePlaylist?: (data: {
+    content_type?: 'movie' | 'tvshow' | '';
+    season?: number | null;
+    current_episode?: number | null;
+    episode_playlist?: EpisodePlaylistItem[];
+  }) => void;
   onUserJoined?: (data: UserEvent) => void;
   onUserLeft?: (data: UserEvent) => void;
   onKick?: (data: { user_id: string; message: string }) => void;
@@ -79,6 +102,7 @@ export function useWatchPartySocket({
   onSeek,
   onSyncToggle,
   onChange,
+  onEpisodePlaylist,
   onUserJoined,
   onUserLeft,
   onKick,
@@ -99,7 +123,7 @@ export function useWatchPartySocket({
   // Store latest callbacks in refs to avoid reconnection on callback changes
   const callbacksRef = useRef({
     onRoomStatus, onPlay, onPause, onSeek, onSyncToggle,
-    onChange, onUserJoined, onUserLeft, onKick, onRoomClosed,
+    onChange, onEpisodePlaylist, onUserJoined, onUserLeft, onKick, onRoomClosed,
     onRoomExpired, onChat, onEmojiReaction, onSyncPosition,
     onHostBuffering, onHostBufferEnd, onError,
   });
@@ -107,7 +131,7 @@ export function useWatchPartySocket({
   useEffect(() => {
     callbacksRef.current = {
       onRoomStatus, onPlay, onPause, onSeek, onSyncToggle,
-      onChange, onUserJoined, onUserLeft, onKick, onRoomClosed,
+      onChange, onEpisodePlaylist, onUserJoined, onUserLeft, onKick, onRoomClosed,
       onRoomExpired, onChat, onEmojiReaction, onSyncPosition,
       onHostBuffering, onHostBufferEnd, onError,
     };
@@ -182,8 +206,17 @@ export function useWatchPartySocket({
       callbacksRef.current.onSyncToggle?.(data);
     });
 
-    socket.on('CHANGE', (data: { stream_url: string; title: string }) => {
+    socket.on('CHANGE', (data: { stream_url: string; title: string; current_episode?: number | null }) => {
       callbacksRef.current.onChange?.(data);
+    });
+
+    socket.on('EPISODE_PLAYLIST', (data: {
+      content_type?: 'movie' | 'tvshow' | '';
+      season?: number | null;
+      current_episode?: number | null;
+      episode_playlist?: EpisodePlaylistItem[];
+    }) => {
+      callbacksRef.current.onEpisodePlaylist?.(data);
     });
 
     socket.on('USER_JOINED', (data: UserEvent) => {
@@ -259,8 +292,12 @@ export function useWatchPartySocket({
     socketRef.current?.emit('SYNC_TOGGLE', { force_sync: forceSync });
   }, []);
 
-  const emitChange = useCallback((streamUrl: string, title: string) => {
-    socketRef.current?.emit('CHANGE', { stream_url: streamUrl, title });
+  const emitChange = useCallback((streamUrl: string, title: string, currentEpisode?: number | null) => {
+    socketRef.current?.emit('CHANGE', {
+      stream_url: streamUrl,
+      title,
+      current_episode: currentEpisode || null,
+    });
   }, []);
 
   const emitKick = useCallback((targetUserId: string) => {
