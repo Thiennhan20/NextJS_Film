@@ -132,7 +132,7 @@ export default function Navigation() {
     const token = localStorage.getItem('token');
     const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
     const gameUrl = isDevelopment ? 'http://localhost:3002' : 'https://ntngame.fly.dev';
-    window.open(`${gameUrl}?token=${token}&locale=${locale}`, '_blank');
+    window.location.href = `${gameUrl}?token=${token}&locale=${locale}`;
     setIsOpen(false);
   };
 
