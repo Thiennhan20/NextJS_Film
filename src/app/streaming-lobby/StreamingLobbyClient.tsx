@@ -30,8 +30,7 @@ function StreamingLobbyContent() {
   const streamUrlFromParams = searchParams.get('streamUrl') || '';
   const titleFromParams = searchParams.get('title') || '';
   const movieIdFromParams = searchParams.get('movieId') || '';
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _posterFromParams = searchParams.get('poster') || '';
+  const posterFromParams = searchParams.get('poster') || '';
   const typeFromParams = searchParams.get('type') || 'movie'; // 'movie' | 'tvshow'
   const seasonFromParams = searchParams.get('season') || '';
   const episodeFromParams = searchParams.get('episode') || '';
@@ -87,6 +86,8 @@ function StreamingLobbyContent() {
   const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
   const [maxRooms, setMaxRooms] = useState(30);
 
+
+
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px), (hover: none), (pointer: coarse)');
 
@@ -140,11 +141,15 @@ function StreamingLobbyContent() {
     }
   };
 
+
+
   useEffect(() => {
     fetchRooms();
     const interval = setInterval(fetchRooms, 30000); // Refresh every 30s
     return () => clearInterval(interval);
   }, []);
+
+
 
   const handleDeleteRoom = async () => {
     const roomId = deleteConfirmRoomId;
@@ -169,6 +174,8 @@ function StreamingLobbyContent() {
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m`;
   };
+
+
 
   const getRoomStatusLabel = (status: string) => {
     switch (status) {
@@ -233,6 +240,7 @@ function StreamingLobbyContent() {
         season: seasonFromParams ? Number(seasonFromParams) : null,
         episode: episodeFromParams ? Number(episodeFromParams) : null,
         episode_playlist: episodePlaylist,
+        poster: posterFromParams,
       });
 
       const { room_id, expires_at } = response.data;
@@ -245,6 +253,7 @@ function StreamingLobbyContent() {
         expiresAt: new Date(expires_at).toISOString(),
         playlistKey: playlistKeyFromParams || undefined,
       });
+      void fetchRooms();
     } catch (err: unknown) {
       console.error('Error creating room:', err);
       const axiosErr = err as { response?: { data?: { error?: string; code?: string; existing_room_id?: string } } };
@@ -263,6 +272,8 @@ function StreamingLobbyContent() {
       setLoading(false);
     }
   };
+
+
 
   const handleJoinById = async () => {
     if (!requireAuth()) return;
@@ -686,6 +697,8 @@ function StreamingLobbyContent() {
             </span>
           </div>
         </motion.div>
+
+
 
         {/* ─── Active Rooms List ──────────────────────────── */}
         <motion.div

@@ -520,6 +520,23 @@ export default function WatchNowTVShows({
     }
     setIsCheckingStream(false);
 
+    // Find playlistKey from sessionStorage if it exists
+    let playlistKey = '';
+    if (typeof window !== 'undefined') {
+      const prefix = `watch-party-tvshow-${tvShow.id}-${selectedSeason}-`;
+      let newestMatchedTime = 0;
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i) || '';
+        if (key.startsWith(prefix)) {
+          const timestamp = Number(key.split('-').pop()) || 0;
+          if (timestamp > newestMatchedTime) {
+            newestMatchedTime = timestamp;
+            playlistKey = key;
+          }
+        }
+      }
+    }
+
     const params = new URLSearchParams({
       streamUrl: effectiveStreamUrl,
       title: `${tvShow.name} - S${selectedSeason} E${selectedEpisode}`,
@@ -530,6 +547,9 @@ export default function WatchNowTVShows({
       episode: String(selectedEpisode),
       audio: streamAudio,
     });
+    if (playlistKey) {
+      params.set('playlistKey', playlistKey);
+    }
     router.push(`/streaming-lobby?${params.toString()}`);
   };
 
@@ -553,6 +573,17 @@ export default function WatchNowTVShows({
         }}
         onDataReadyChange={(ready) => {
           setDataReady(ready)
+        }}
+        onEpisodeStreamsChange={(episodes) => {
+          if (typeof window !== 'undefined' && Array.isArray(episodes) && episodes.length > 0) {
+            const key = `watch-party-tvshow-${tvShow.id}-${selectedSeason}-${Date.now()}`;
+            sessionStorage.setItem(key, JSON.stringify({
+              season: selectedSeason,
+              currentEpisode: selectedEpisode,
+              episodes: episodes,
+              title: tvShow.name,
+            }));
+          }
         }}
       />
 
