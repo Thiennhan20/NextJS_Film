@@ -27,7 +27,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   referrer: "origin",
-  title: "Entertainment Galaxy – Explore Movies, Games & Beyond",
+  title: "ENTN - Explore Movies, Games & Beyon",
   description: "Dive into a universe of entertainment: stream movies, play games, and enjoy AI-powered recommendations in one seamless platform.",
   other: {
     'translate': 'no',

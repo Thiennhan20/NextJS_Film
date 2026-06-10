@@ -203,6 +203,14 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'https://server-nextjs-firm.onrender.com/api/:path*',
+      },
+    ];
+  },
 };
 
 export default withNextIntl(nextConfig);
