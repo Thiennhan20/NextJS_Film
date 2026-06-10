@@ -22,7 +22,7 @@ function StreamingRoomContent() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const token = useAuthStore((s) => s.token);
 
   const roomId = searchParams.get('room');
   const streamUrlFromParams = searchParams.get('streamUrl') || '';

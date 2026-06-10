@@ -153,8 +153,7 @@ export function useSearchHistory(): UseSearchHistoryReturn {
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (!dirtyRef.current || !isAuthRef.current) return;
-      // Use sendBeacon for reliability during page unload
-      const token = localStorage.getItem('token');
+      const token = useAuthStore.getState().token;
       const baseURL =
         typeof window !== 'undefined' &&
         (window.location.hostname === 'localhost' ||
@@ -162,17 +161,17 @@ export function useSearchHistory(): UseSearchHistoryReturn {
           ? 'http://localhost:3001/api'
           : process.env.NEXT_PUBLIC_API_URL || '';
       const url = `${baseURL}/search-history`;
-      if (token) {
-        // Use sync XHR as sendBeacon doesn't support custom auth headers
-        try {
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', url, false); // sync
-          xhr.setRequestHeader('Content-Type', 'application/json');
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url, false); // sync
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.withCredentials = true;
+        if (token) {
           xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-          xhr.send(JSON.stringify({ history: historyRef.current }));
-        } catch {
-          // Best effort — data might be lost but that's acceptable
         }
+        xhr.send(JSON.stringify({ history: historyRef.current }));
+      } catch {
+        // Best effort — data might be lost but that's acceptable
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);

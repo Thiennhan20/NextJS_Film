@@ -11,19 +11,25 @@ if (typeof window !== 'undefined') {
   }
 }
 
+let inMemoryToken: string | null = null;
+
+export function setInMemoryToken(token: string | null) {
+  inMemoryToken = token;
+}
+
 const api = axios.create({
   baseURL,
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
 // Add a request interceptor
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (inMemoryToken) {
+      config.headers.Authorization = `Bearer ${inMemoryToken}`;
     }
     
     // Đọc ngôn ngữ từ cookies và gửi lên Server
@@ -45,12 +51,16 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Thay vì redirect ngay lập tức, chỉ clear token và để component tự xử lý
-      localStorage.removeItem('token');
-      // Không redirect tự động, để component tự xử lý logout
+      setInMemoryToken(null);
+      // Dynamically load auth store to clear state on 401 without circular import issues
+      if (typeof window !== 'undefined') {
+        import('@/store/useAuthStore').then((mod) => {
+          mod.default.getState().clearAuthState();
+        }).catch((err) => console.warn('Failed to clear auth state:', err));
+      }
     }
     return Promise.reject(error);
   }
 );
 
-export default api; 
+export default api;

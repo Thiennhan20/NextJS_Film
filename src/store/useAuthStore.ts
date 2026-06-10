@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { AuthState, LoginCredentials, RegisterCredentials, User } from '@/types/auth';
-import api from '@/lib/axios';
+import api, { setInMemoryToken } from '@/lib/axios';
 import { isAxiosError } from 'axios';
 
 interface AuthStore extends AuthState {
@@ -11,6 +11,7 @@ interface AuthStore extends AuthState {
   clearError: () => void;
   checkAuth: () => Promise<void>;
   loginWithGoogle: (payload: { email: string; sub: string; name?: string; avatar?: string; email_verified?: boolean }) => Promise<void>;
+  clearAuthState: () => void;
 }
 
 // Guard to prevent duplicate checkAuth calls
@@ -30,7 +31,7 @@ function clearGuestWatchProgress() {
 
 const useAuthStore = create<AuthStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       isAuthenticated: false,
@@ -43,8 +44,7 @@ const useAuthStore = create<AuthStore>()(
           set({ isLoading: true, loginError: null });
           const response = await api.post('/auth/login', credentials);
           const { token, user } = response.data;
-          localStorage.setItem('token', token);
-          localStorage.setItem('cached_user_data', JSON.stringify(user));
+          setInMemoryToken(token);
           clearGuestWatchProgress();
           set({
             user: user as User,
@@ -79,8 +79,7 @@ const useAuthStore = create<AuthStore>()(
             email_verified,
           });
           const { token, user } = response.data;
-          localStorage.setItem('token', token);
-          localStorage.setItem('cached_user_data', JSON.stringify(user));
+          setInMemoryToken(token);
           clearGuestWatchProgress();
           set({
             user: user as User,
@@ -138,12 +137,8 @@ const useAuthStore = create<AuthStore>()(
       logout: async () => {
         // Flush pending search history sync before logout
         try {
-          // The hook exposes flushSync but we can't call hooks outside React.
-          // Instead, fire a beforeunload-like sync using direct API call
-          const token = localStorage.getItem('token');
+          const token = get().token;
           if (token) {
-            // The beforeunload handler in useSearchHistory will handle this,
-            // but we also flush here as a safety net via a custom event
             window.dispatchEvent(new Event('searchhistory:flush'));
           }
         } catch {
@@ -157,9 +152,14 @@ const useAuthStore = create<AuthStore>()(
           console.warn('Logout API call failed:', error);
         }
         
-        localStorage.removeItem('token');
-        localStorage.removeItem('cached_user_data');
-        // Clear watchlist & recently watched cache khi logout
+        get().clearAuthState();
+      },
+
+      clearError: () => set({ loginError: null, registerError: null }),
+
+      clearAuthState: () => {
+        setInMemoryToken(null);
+        // Clear watchlist & recently watched cache khi logout/clear auth
         try {
           import('./store').then(({ useWatchlistStore }) => {
             const { clearWatchlist } = useWatchlistStore.getState();
@@ -180,41 +180,17 @@ const useAuthStore = create<AuthStore>()(
         });
       },
 
-      clearError: () => set({ loginError: null, registerError: null }),
-
       checkAuth: async () => {
         // Deduplicate: if already checking, return existing promise
         if (_checkAuthPromise) return _checkAuthPromise;
 
         const doCheck = async () => {
-          const token = localStorage.getItem('token');
-          if (!token) {
-            set({ user: null, token: null, isAuthenticated: false });
-            return;
-          }
-          
-          // Load cached user data immediately for instant display
-          const cachedUserData = localStorage.getItem('cached_user_data');
-          if (cachedUserData) {
-            try {
-              const cachedUser = JSON.parse(cachedUserData) as User;
-              set({
-                user: cachedUser,
-                token,
-                isAuthenticated: true,
-                isLoading: true, // Still loading fresh data
-              });
-            } catch (error) {
-              console.warn('Failed to parse cached user data:', error);
-            }
-          }
-          
           try {
-            // Gửi Authorization header vì không có cookies
-            const response = await api.get('/auth/profile', {
-              headers: { Authorization: `Bearer ${token}` },
-            });
+            set({ isLoading: true });
+            const response = await api.get('/auth/profile');
             const prof = response.data.user;
+            const token = response.data.token || null;
+            
             const normalizedUser: User = {
               id: prof.id || prof._id,
               name: prof.name,
@@ -226,9 +202,7 @@ const useAuthStore = create<AuthStore>()(
               updatedAt: prof.updatedAt,
             };
             
-            // Cache user data for next time
-            localStorage.setItem('cached_user_data', JSON.stringify(normalizedUser));
-            
+            setInMemoryToken(token);
             set({
               user: normalizedUser,
               token,
@@ -236,8 +210,7 @@ const useAuthStore = create<AuthStore>()(
               isLoading: false,
             });
           } catch {
-            localStorage.removeItem('token');
-            localStorage.removeItem('cached_user_data');
+            setInMemoryToken(null);
             // Clear watchlist khi token không hợp lệ
             try {
               import('./store').then(({ useWatchlistStore }) => {
@@ -262,8 +235,9 @@ const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'auth-storage',
+      partialize: () => ({}), // Discard all auth persistence in localStorage
     }
   )
 );
 
-export default useAuthStore; 
+export default useAuthStore;

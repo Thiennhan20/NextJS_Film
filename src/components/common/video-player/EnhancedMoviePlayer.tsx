@@ -8,6 +8,7 @@ import PlayerSettings from "./PlayerSettings";
 import api from '@/lib/axios';
 import { createClientCleanPlaylistUrl } from '@/lib/hlsProxy';
 import { useRecentlyWatchedStore } from '@/store/useRecentlyWatchedStore';
+import useAuthStore from '@/store/useAuthStore';
 import { useTranslations } from 'next-intl';
 import type { AudioSettings } from '@/lib/audioUtils';
 
@@ -1094,12 +1095,13 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
               if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
                 fetchBaseURL = 'http://localhost:3001/api';
               }
-              const token = localStorage.getItem('token');
+              const token = useAuthStore.getState().token;
               fetch(`${fetchBaseURL}/recently-watched`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                 body: JSON.stringify(buildPayload(clampedCt, dur)),
                 keepalive: true,
+                credentials: 'include',
               }).catch(() => { });
             } else {
               api.post('/recently-watched', buildPayload(clampedCt, dur)).catch(() => { });

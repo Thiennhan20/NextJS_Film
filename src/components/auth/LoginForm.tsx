@@ -47,7 +47,8 @@ const GoogleLoginButton = () => {
       );
 
       const { token, user } = response.data;
-      localStorage.setItem('token', token);
+      const { setInMemoryToken } = await import('@/lib/axios');
+      setInMemoryToken(token);
       useAuthStore.setState({ user, token, isAuthenticated: true });
 
       if (token) await fetchWatchlistFromServer(token);

@@ -121,7 +121,7 @@ export default function Navigation() {
       setIsOpen(false);
       return;
     }
-    const token = localStorage.getItem('token');
+    const token = useAuthStore.getState().token;
     const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
     const gameUrl = isDevelopment ? 'http://localhost:3002' : 'https://ntngame.fly.dev';
     window.location.href = `${gameUrl}?token=${token}&locale=${locale}`;
