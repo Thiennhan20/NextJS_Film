@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useMemo, useRef } from 'react'
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   EnvelopeIcon,
@@ -49,9 +49,67 @@ export default function ProfilePage() {
   // Preview state
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
+  // Session states
+  interface Session {
+    _id: string
+    device: string
+    ip: string
+    lastActive: string
+    isCurrent: boolean
+  }
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false)
+  const [isRevokingAll, setIsRevokingAll] = useState(false)
+
+  const fetchSessions = useCallback(async () => {
+    if (!isAuthenticated) return
+    setIsLoadingSessions(true)
+    try {
+      const response = await api.get('/auth/sessions')
+      setSessions(response.data || [])
+    } catch {
+      // ignore
+    } finally {
+      setIsLoadingSessions(false)
+    }
+  }, [isAuthenticated])
+
+  const handleRevokeSession = async (id: string) => {
+    if (!window.confirm(t('revokeSessionConfirm'))) return
+    try {
+      await api.delete(`/auth/sessions/${id}`)
+      toast.success(t('revokeSuccess'))
+      fetchSessions()
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to revoke session')
+    }
+  }
+
+  const handleRevokeAllOtherSessions = async () => {
+    if (!window.confirm(t('revokeAllConfirm'))) return
+    setIsRevokingAll(true)
+    try {
+      await api.delete('/auth/sessions')
+      toast.success(t('revokeAllSuccess'))
+      fetchSessions()
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } }
+      toast.error(err.response?.data?.message || 'Failed to revoke other sessions')
+    } finally {
+      setIsRevokingAll(false)
+    }
+  }
+
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (mounted && isAuthenticated) {
+      fetchSessions()
+    }
+  }, [mounted, isAuthenticated, fetchSessions])
 
   // Reset avatar error when user changes
   useEffect(() => {
@@ -678,6 +736,88 @@ export default function ProfilePage() {
                   </motion.div>
                 </Link>
               </div>
+            </motion.div>
+
+            {/* Active Sessions Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
+              className="bg-gradient-to-br from-gray-900/90 to-gray-800/90 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-8 border border-gray-700/50 shadow-2xl mb-6 sm:mb-8 lg:mb-12"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3">
+                  <Cog6ToothIcon className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 text-blue-500" />
+                  <span>{t('activeSessions')}</span>
+                </h3>
+                {sessions.length > 1 && (
+                  <button
+                    onClick={handleRevokeAllOtherSessions}
+                    disabled={isRevokingAll}
+                    className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 hover:border-red-500/50 rounded-lg text-xs sm:text-sm font-semibold transition-all"
+                  >
+                    {t('logoutOtherDevices')}
+                  </button>
+                )}
+              </div>
+
+              {isLoadingSessions ? (
+                <div className="flex justify-center py-6">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                </div>
+              ) : sessions.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-4">{t('noActiveSessions')}</p>
+              ) : (
+                <div className="space-y-3">
+                  {sessions.map((session) => (
+                    <div
+                      key={session._id}
+                      className={`flex items-center justify-between p-3 sm:p-4 rounded-xl border transition-all ${
+                        session.isCurrent
+                          ? 'bg-blue-500/10 border-blue-500/30'
+                          : 'bg-gray-800/30 border-gray-700/50 hover:bg-gray-800/50'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1 flex items-start gap-3">
+                        <div className={`p-2 rounded-lg flex-shrink-0 ${session.isCurrent ? 'bg-blue-500/20' : 'bg-gray-700/40'}`}>
+                          {session.device.includes('iPhone') || session.device.includes('iOS') || session.device.includes('Android') ? (
+                            <span className="text-lg">📱</span>
+                          ) : (
+                            <span className="text-lg">💻</span>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-white text-sm sm:text-base break-words">
+                              {session.device}
+                            </span>
+                            {session.isCurrent && (
+                              <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[10px] sm:text-xs rounded-full font-medium">
+                                {t('currentDevice')}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+                            <span>{t('ipAddress', { ip: session.ip })}</span>
+                            <span>•</span>
+                            <span>{t('lastActiveTime', { time: new Date(session.lastActive).toLocaleString() })}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {!session.isCurrent && (
+                        <button
+                          onClick={() => handleRevokeSession(session._id)}
+                          className="ml-4 p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0"
+                          title="Revoke session"
+                        >
+                          <TrashIcon className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           </div>
         </section>
