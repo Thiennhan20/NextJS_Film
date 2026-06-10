@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
+import api from '@/lib/axios';
 import axios from 'axios';
 import { useWatchlistStore } from '@/store/store';
 import { useTranslations } from 'next-intl';
@@ -41,8 +42,8 @@ const GoogleLoginButton = () => {
     setLoading(true);
     try {
       // Send the credential (ID token) directly to server
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:3001/api' : '')}/auth/google-login`,
+      const response = await api.post(
+        '/auth/google-login',
         { credential: credentialResponse.credential }
       );
 
