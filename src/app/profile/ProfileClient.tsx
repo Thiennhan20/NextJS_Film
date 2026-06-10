@@ -54,6 +54,7 @@ export default function ProfilePage() {
     _id: string
     device: string
     ip: string
+    location?: string
     lastActive: string
     isCurrent: boolean
   }
@@ -830,6 +831,12 @@ export default function ProfilePage() {
                           </div>
                           <p className="text-xs text-gray-400 mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
                             <span>{t('ipAddress', { ip: session.ip })}</span>
+                            {session.location && session.location !== 'Unknown Location' && (
+                              <>
+                                <span>•</span>
+                                <span className="text-gray-300 font-medium">{session.location}</span>
+                              </>
+                            )}
                             <span>•</span>
                             <span>{t('lastActiveTime', { time: new Date(session.lastActive).toLocaleString() })}</span>
                           </p>
