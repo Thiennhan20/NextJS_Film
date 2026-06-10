@@ -27,7 +27,7 @@ import useAuthHydrated from '@/store/useAuthHydrated';
 import Logo from '@/components/common/Logo';
 import dynamic from 'next/dynamic';
 import UserAvatar from '@/components/UserAvatar';
-import { useTranslations, useLocale } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import NotificationBell from '@/components/notifications/NotificationBell';
 
 // Lazy load heavy search component
@@ -111,7 +111,6 @@ export default function Navigation() {
   const { watchlist } = useWatchlistStore();
   const hydrated = useAuthHydrated();
   const t = useTranslations('Navigation');
-  const locale = useLocale();
 
   const handleGameClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -121,10 +120,7 @@ export default function Navigation() {
       setIsOpen(false);
       return;
     }
-    const token = useAuthStore.getState().token;
-    const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-    const gameUrl = isDevelopment ? 'http://localhost:3002' : 'https://ntngame.fly.dev';
-    window.location.href = `${gameUrl}?token=${token}&locale=${locale}`;
+    router.push('/game-realtime');
     setIsOpen(false);
   };
 

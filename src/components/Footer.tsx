@@ -5,10 +5,14 @@ import { useUIStore } from '@/store/store'
 import { FaApple, FaAndroid } from 'react-icons/fa'
 import { ArrowPathIcon } from '@heroicons/react/24/outline'
 import { useTranslations } from 'next-intl'
+import { usePathname } from 'next/navigation'
 
 export default function Footer() {
   const { setAppModalOpen } = useUIStore()
   const t = useTranslations('Footer')
+  const pathname = usePathname()
+
+  if (pathname === '/game-realtime') return null
 
   return (
     <footer className="bg-black text-gray-500 py-10 border-t border-gray-900 text-center text-sm relative overflow-hidden">
