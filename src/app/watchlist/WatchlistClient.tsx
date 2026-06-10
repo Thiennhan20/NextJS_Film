@@ -76,7 +76,7 @@ const WatchlistItem = memo(function WatchlistItem({
 export default function WatchlistPage() {
   const hydrated = useAuthHydrated();
   const { watchlist } = useWatchlistStore();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, isAuthChecked } = useAuthStore();
   const router = useRouter();
   const t = useTranslations('WatchlistPage');
 
@@ -88,7 +88,7 @@ export default function WatchlistPage() {
     };
   }, [router]);
 
-  if (!hydrated) {
+  if (!hydrated || !isAuthChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
         <div className="animate-pulse">

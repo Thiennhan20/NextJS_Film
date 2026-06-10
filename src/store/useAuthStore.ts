@@ -4,6 +4,7 @@ import api, { setInMemoryToken } from '@/lib/axios';
 import { isAxiosError } from 'axios';
 
 interface AuthStore extends AuthState {
+  isAuthChecked: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (credentials: RegisterCredentials) => Promise<void>;
   logout: () => Promise<void>;
@@ -34,6 +35,7 @@ const useAuthStore = create<AuthStore>()(
       token: null,
       isAuthenticated: false,
       isLoading: false,
+      isAuthChecked: false,
       loginError: null,
       registerError: null,
 
@@ -49,6 +51,7 @@ const useAuthStore = create<AuthStore>()(
             token,
             isAuthenticated: true,
             isLoading: false,
+            isAuthChecked: true,
           });
         } catch (error: unknown) {
           if (isAxiosError(error)) {
@@ -84,6 +87,7 @@ const useAuthStore = create<AuthStore>()(
             token,
             isAuthenticated: true,
             isLoading: false,
+            isAuthChecked: true,
           });
         } catch (error: unknown) {
           if (isAxiosError(error)) {
@@ -173,6 +177,7 @@ const useAuthStore = create<AuthStore>()(
           user: null,
           token: null,
           isAuthenticated: false,
+          isAuthChecked: true,
           loginError: null,
           registerError: null,
         });
@@ -209,6 +214,7 @@ const useAuthStore = create<AuthStore>()(
               token,
               isAuthenticated: true,
               isLoading: false,
+              isAuthChecked: true,
             });
           } catch {
             setInMemoryToken(null);
@@ -226,6 +232,7 @@ const useAuthStore = create<AuthStore>()(
               token: null,
               isAuthenticated: false,
               isLoading: false,
+              isAuthChecked: true,
             });
           }
         };

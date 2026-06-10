@@ -26,7 +26,7 @@ import { useTranslations } from 'next-intl'
 
 export default function ProfilePage() {
   const t = useTranslations('Profile')
-  const { user, isAuthenticated, checkAuth } = useAuthStore()
+  const { user, isAuthenticated, checkAuth, isAuthChecked } = useAuthStore()
   const { watchlist } = useWatchlistStore()
   const hydrated = useAuthHydrated()
   const [mounted, setMounted] = useState(false)
@@ -61,6 +61,21 @@ export default function ProfilePage() {
   const [isLoadingSessions, setIsLoadingSessions] = useState(false)
   const [isRevokingAll, setIsRevokingAll] = useState(false)
 
+  // Confirm Modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDanger?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    isDanger: false
+  })
+
   const fetchSessions = useCallback(async () => {
     if (!isAuthenticated) return
     setIsLoadingSessions(true)
@@ -74,31 +89,47 @@ export default function ProfilePage() {
     }
   }, [isAuthenticated])
 
-  const handleRevokeSession = async (id: string) => {
-    if (!window.confirm(t('revokeSessionConfirm'))) return
-    try {
-      await api.delete(`/auth/sessions/${id}`)
-      toast.success(t('revokeSuccess'))
-      fetchSessions()
-    } catch (error: unknown) {
-      const err = error as { response?: { data?: { message?: string } } }
-      toast.error(err.response?.data?.message || 'Failed to revoke session')
-    }
+  const handleRevokeSession = (id: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: t('confirmTitle') || 'Confirm Device Logout',
+      message: t('revokeSessionConfirm'),
+      isDanger: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        try {
+          await api.delete(`/auth/sessions/${id}`)
+          toast.success(t('revokeSuccess'))
+          fetchSessions()
+        } catch (error: unknown) {
+          const err = error as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || 'Failed to revoke session')
+        }
+      }
+    })
   }
 
-  const handleRevokeAllOtherSessions = async () => {
-    if (!window.confirm(t('revokeAllConfirm'))) return
-    setIsRevokingAll(true)
-    try {
-      await api.delete('/auth/sessions')
-      toast.success(t('revokeAllSuccess'))
-      fetchSessions()
-    } catch (error: unknown) {
-      const err = error as { response?: { data?: { message?: string } } }
-      toast.error(err.response?.data?.message || 'Failed to revoke other sessions')
-    } finally {
-      setIsRevokingAll(false)
-    }
+  const handleRevokeAllOtherSessions = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: t('confirmAllTitle') || 'Confirm Logout from Other Devices',
+      message: t('revokeAllConfirm'),
+      isDanger: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        setIsRevokingAll(true)
+        try {
+          await api.delete('/auth/sessions')
+          toast.success(t('revokeAllSuccess'))
+          fetchSessions()
+        } catch (error: unknown) {
+          const err = error as { response?: { data?: { message?: string } } }
+          toast.error(err.response?.data?.message || 'Failed to revoke other sessions')
+        } finally {
+          setIsRevokingAll(false)
+        }
+      }
+    })
   }
 
   useEffect(() => {
@@ -428,7 +459,7 @@ export default function ProfilePage() {
     setShowAvatarMenu(!showAvatarMenu)
   }
 
-  if (!mounted || !hydrated) {
+  if (!mounted || !hydrated || !isAuthChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500"></div>
@@ -939,6 +970,52 @@ export default function ProfilePage() {
               >
                 ✕
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Confirmation Modal */}
+      <AnimatePresence>
+        {confirmModal.isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[9999] px-4"
+            onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-gray-900 border border-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-xl font-bold text-white mb-3 text-center">
+                {confirmModal.title}
+              </h3>
+              <p className="text-gray-300 text-sm text-center mb-6 leading-relaxed">
+                {confirmModal.message}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                  className="flex-1 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-medium transition-colors"
+                >
+                  {t('cancelBtn') || 'Cancel'}
+                </button>
+                <button
+                  onClick={confirmModal.onConfirm}
+                  className={`flex-1 py-3 rounded-xl font-medium transition-colors text-white ${
+                    confirmModal.isDanger 
+                      ? 'bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/20' 
+                      : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20'
+                  }`}
+                >
+                  {t('confirmBtn') || 'Confirm'}
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

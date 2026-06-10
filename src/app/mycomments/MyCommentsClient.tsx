@@ -11,7 +11,7 @@ import { useTranslations } from 'next-intl'
 
 export default function MyCommentsClient() {
   const t = useTranslations('Profile')
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, isAuthChecked } = useAuthStore()
   const hydrated = useAuthHydrated()
   const [mounted, setMounted] = useState(false)
 
@@ -19,7 +19,7 @@ export default function MyCommentsClient() {
     setMounted(true)
   }, [])
 
-  if (!mounted || !hydrated) {
+  if (!mounted || !hydrated || !isAuthChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500"></div>

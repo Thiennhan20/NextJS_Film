@@ -30,7 +30,7 @@ interface Friend {
 
 export default function FriendsClient() {
   const t = useTranslations('Friends')
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, isAuthChecked } = useAuthStore()
   const hydrated = useAuthHydrated()
   const searchParams = useSearchParams()
   const [mounted, setMounted] = useState(false)
@@ -70,6 +70,12 @@ export default function FriendsClient() {
       fetchFriendsData()
     }
   }, [hydrated, isAuthenticated, fetchFriendsData])
+
+  useEffect(() => {
+    if (hydrated && isAuthChecked && !isAuthenticated) {
+      setLoading(false)
+    }
+  }, [hydrated, isAuthChecked, isAuthenticated])
 
   // Re-fetch when user returns to this tab (e.g. after unfriending from profile page)
   useEffect(() => {
@@ -148,7 +154,7 @@ export default function FriendsClient() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   }
 
-  if (!mounted || !hydrated || loading) {
+  if (!mounted || !hydrated || !isAuthChecked || (isAuthenticated && loading)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500"></div>

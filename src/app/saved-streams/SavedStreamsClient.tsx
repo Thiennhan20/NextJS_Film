@@ -40,6 +40,7 @@ export default function SavedStreamsClient() {
   const router = useRouter();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
+  const isAuthChecked = useAuthStore((s) => s.isAuthChecked);
   const hydrated = useAuthHydrated();
   
   const tLobby = useTranslations('StreamingLobby');
@@ -149,7 +150,7 @@ export default function SavedStreamsClient() {
     });
   };
 
-  if (!hydrated) {
+  if (!hydrated || !isAuthChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
