@@ -22,6 +22,7 @@ function StreamingRoomContent() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isAuthChecked = useAuthStore((s) => s.isAuthChecked);
   const token = useAuthStore((s) => s.token);
 
   const roomId = searchParams.get('room');
@@ -780,7 +781,16 @@ function StreamingRoomContent() {
     }, 3000);
   };
 
-  // ─── Auth Gate ──────────────────────────────────────────
+  if (!isAuthChecked) {
+    return (
+      <div className="mobile-static-effects min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-gray-400">{t('joiningRoom')}</span>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (

@@ -23,7 +23,7 @@ const languages = [
 ]
 
 export default function SettingsClient() {
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated, isAuthChecked } = useAuthStore()
   const hydrated = useAuthHydrated()
   const [mounted, setMounted] = useState(false)
   const t = useTranslations('Profile')
@@ -75,7 +75,7 @@ export default function SettingsClient() {
     window.location.href = query ? `${pathname}?${query}` : pathname
   }
 
-  if (!mounted || !hydrated) {
+  if (!mounted || !hydrated || !isAuthChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500"></div>
