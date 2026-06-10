@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import api from '@/lib/axios';
 import useAuthStore from './useAuthStore';
 
@@ -63,6 +63,25 @@ export const useWatchlistStore = create<WatchlistState & {
     }),
     {
       name: 'watchlist-storage',
+      storage: createJSONStorage(() => ({
+        getItem: (name) => {
+          if (typeof window === 'undefined') return null;
+          return localStorage.getItem(name);
+        },
+        setItem: (name, value) => {
+          if (typeof window === 'undefined') return;
+          const isAuthenticated = useAuthStore.getState().isAuthenticated;
+          if (isAuthenticated) {
+            localStorage.removeItem(name);
+          } else {
+            localStorage.setItem(name, value);
+          }
+        },
+        removeItem: (name) => {
+          if (typeof window === 'undefined') return;
+          localStorage.removeItem(name);
+        },
+      })),
       partialize: (state) => {
         const isAuthenticated = useAuthStore.getState().isAuthenticated;
         if (isAuthenticated) {

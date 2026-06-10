@@ -16,9 +16,9 @@ interface AuthStore extends AuthState {
 // Guard to prevent duplicate checkAuth calls
 let _checkAuthPromise: Promise<void> | null = null;
 
-// Clear guest watch progress from localStorage on login
+// Clear guest watch progress and watchlist from localStorage on login
 function clearGuestWatchProgress() {
-  const keysToRemove: string[] = [];
+  const keysToRemove: string[] = ['watchlist-storage'];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (key && (key.startsWith('movie-progress-') || key.startsWith('tvshow-progress-'))) {
@@ -201,6 +201,9 @@ const useAuthStore = create<AuthStore>()(
             };
             
             setInMemoryToken(token);
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('watchlist-storage');
+            }
             set({
               user: normalizedUser,
               token,
