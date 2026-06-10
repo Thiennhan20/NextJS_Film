@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { AuthState, LoginCredentials, RegisterCredentials, User } from '@/types/auth';
 import api, { setInMemoryToken } from '@/lib/axios';
 import { isAxiosError } from 'axios';
@@ -30,8 +29,7 @@ function clearGuestWatchProgress() {
 }
 
 const useAuthStore = create<AuthStore>()(
-  persist(
-    (set, get) => ({
+  (set, get) => ({
       user: null,
       token: null,
       isAuthenticated: false,
@@ -232,12 +230,11 @@ const useAuthStore = create<AuthStore>()(
         _checkAuthPromise = doCheck().finally(() => { _checkAuthPromise = null; });
         return _checkAuthPromise;
       },
-    }),
-    {
-      name: 'auth-storage',
-      partialize: () => ({}), // Discard all auth persistence in localStorage
-    }
-  )
+    })
 );
+
+if (typeof window !== 'undefined') {
+  localStorage.removeItem('auth-storage');
+}
 
 export default useAuthStore;

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import api from '@/lib/axios';
+import useAuthStore from './useAuthStore';
 
 interface Movie {
   id: number;
@@ -62,6 +63,13 @@ export const useWatchlistStore = create<WatchlistState & {
     }),
     {
       name: 'watchlist-storage',
+      partialize: (state) => {
+        const isAuthenticated = useAuthStore.getState().isAuthenticated;
+        if (isAuthenticated) {
+          return { watchlist: [] };
+        }
+        return { watchlist: state.watchlist };
+      }
     }
   )
 );
