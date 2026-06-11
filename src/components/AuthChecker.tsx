@@ -14,28 +14,29 @@ export default function AuthChecker() {
     
     hasCheckedRef.current = true;
     
-    // Nếu chưa xác thực, chỉ gọi checkAuth một lần khi mount
+    // Khi mount, gọi checkAuth. Nếu access token hết hạn, axios interceptor sẽ
+    // tự động refresh token bằng refreshToken cookie. Chỉ khi refresh thất bại
+    // (refreshToken hết hạn hoặc bị revoke), interceptor mới clear auth state.
+    // KHÔNG gọi logout() ở đây vì sẽ race condition với interceptor refresh flow.
     if (!isAuthenticated) {
       useAuthStore.getState().checkAuth().catch(() => {
-        // Nếu checkAuth thất bại, logout để clear state
-        useAuthStore.getState().logout().catch(console.error);
+        // Interceptor đã xử lý logout nếu refresh thất bại.
+        // Nếu checkAuth fail sau khi refresh cũng fail → auth state đã bị clear bởi interceptor.
+        // Không cần làm gì thêm.
       });
     }
 
     let timeout: NodeJS.Timeout | null = null;
     function handleVisibilityChange() {
-      // Chỉ gọi checkAuth khi đã đăng nhập và chuyển sang tab này
+      // Khi chuyển sang tab này và đã đăng nhập → checkAuth để đảm bảo session còn hợp lệ
       if (document.visibilityState === 'visible' && useAuthStore.getState().isAuthenticated) {
-        useAuthStore.getState().checkAuth().catch(() => {
-          // Nếu checkAuth thất bại, logout để clear state
-          useAuthStore.getState().logout().catch(console.error);
-        });
+        // Debounce: chỉ check 1 lần khi visibility change
         if (timeout) clearTimeout(timeout);
         timeout = setTimeout(() => {
           useAuthStore.getState().checkAuth().catch(() => {
-            useAuthStore.getState().logout().catch(console.error);
+            // Interceptor đã xử lý refresh/logout
           });
-        }, 2000);
+        }, 500);
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange);

@@ -84,7 +84,11 @@ api.interceptors.response.use(
     ) {
       const errCode = error.response?.data?.code;
       
-      // Check if it's explicitly a token expired error (or if the status is 401 and we have an active in-memory token, meaning it expired)
+      // Thử refresh khi:
+      // 1. Server trả code TOKEN_EXPIRED (có refreshToken cookie, access token hết hạn/mất)
+      // 2. Hoặc khi còn inMemoryToken (token có thể bị invalid do lý do khác)
+      // Quan trọng: Sau khi đóng browser, inMemoryToken = null nhưng server sẽ trả TOKEN_EXPIRED
+      // nếu refreshToken cookie vẫn còn → interceptor phải thử refresh
       if (errCode === 'TOKEN_EXPIRED' || inMemoryToken) {
         originalRequest._retry = true;
         
