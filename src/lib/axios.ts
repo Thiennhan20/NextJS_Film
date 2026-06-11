@@ -12,9 +12,46 @@ if (typeof window !== 'undefined') {
 }
 
 let inMemoryToken: string | null = null;
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Proactive refresh: tự động refresh token trước khi hết hạn 15 phút
+// Giúp Safari hoạt động mượt hơn — không cần chờ đến lúc bị 401
+const PROACTIVE_REFRESH_MS = 13 * 60 * 1000; // Refresh sau 13 phút (trước 15p expiry)
+
+function scheduleProactiveRefresh() {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  if (typeof window === 'undefined') return;
+  
+  refreshTimer = setTimeout(async () => {
+    try {
+      const response = await api.post('/auth/refresh');
+      const { token } = response.data;
+      setInMemoryToken(token);
+      
+      // Sync with Zustand store
+      const authStoreMod = await import('@/store/useAuthStore');
+      const state = authStoreMod.default.getState();
+      if (state.isAuthenticated) {
+        authStoreMod.default.setState({ token });
+      }
+    } catch {
+      // Refresh thất bại → không làm gì, để reactive interceptor xử lý khi request tiếp theo bị 401
+    }
+  }, PROACTIVE_REFRESH_MS);
+}
 
 export function setInMemoryToken(token: string | null) {
   inMemoryToken = token;
+  if (token) {
+    // Có token mới → lên lịch refresh trước khi hết hạn
+    scheduleProactiveRefresh();
+  } else {
+    // Token bị clear → hủy timer
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+  }
 }
 
 const api = axios.create({
