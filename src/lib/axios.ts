@@ -14,9 +14,9 @@ if (typeof window !== 'undefined') {
 let inMemoryToken: string | null = null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-// Proactive refresh: tự động refresh token trước khi hết hạn 15 phút
-// Giúp Safari hoạt động mượt hơn — không cần chờ đến lúc bị 401
-const PROACTIVE_REFRESH_MS = 13 * 60 * 1000; // Refresh sau 13 phút (trước 15p expiry)
+// Proactive refresh: tự động refresh token trước khi hết hạn 7 ngày
+// Giúp Safari và các trình duyệt hoạt động mượt hơn — không cần chờ đến lúc bị 401
+const PROACTIVE_REFRESH_MS = 6 * 24 * 60 * 60 * 1000; // Refresh sau 6 ngày (trước 7 ngày expiry)
 
 function scheduleProactiveRefresh() {
   if (refreshTimer) clearTimeout(refreshTimer);
