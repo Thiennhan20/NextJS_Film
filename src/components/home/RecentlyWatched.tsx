@@ -194,6 +194,7 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
   const t = useTranslations('RecentlyWatched')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userId = useAuthStore((s) => (s.user as any)?.id || (s.user as any)?._id)
+  const isAuthChecked = useAuthStore((s) => s.isAuthChecked)
 
   // Check scroll position to show/hide buttons
   const checkScrollPosition = useCallback(() => {
@@ -226,6 +227,8 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
 
   // ✅ OPTIMIZATION 3: Cached localStorage parsing
   const fetchRecentItems = useCallback(async () => {
+    if (!isAuthChecked) return
+    setLoading(true)
     try {
       const now = Date.now()
       // Logged-in: fetch from server and return
@@ -339,16 +342,22 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
     } finally {
       setLoading(false)
     }
-  }, [userId])
+  }, [isAuthChecked, userId])
 
   useEffect(() => {
-    fetchRecentItems()
+    if (isAuthChecked) {
+      fetchRecentItems()
+    }
 
     let timeoutId: NodeJS.Timeout
     const handleStorageChange = () => {
       cachedData = null // Invalidate cache
       clearTimeout(timeoutId)
-      timeoutId = setTimeout(fetchRecentItems, 500) // Tăng từ 300ms lên 500ms
+      timeoutId = setTimeout(() => {
+        if (isAuthChecked) {
+          fetchRecentItems()
+        }
+      }, 500) // Tăng từ 300ms lên 500ms
     }
 
     window.addEventListener('storage', handleStorageChange)
@@ -356,7 +365,7 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
       clearTimeout(timeoutId)
       window.removeEventListener('storage', handleStorageChange)
     }
-  }, [fetchRecentItems, userId])
+  }, [fetchRecentItems, isAuthChecked])
 
   const handleContinueWatching = useCallback((item: RecentlyWatchedItem) => {
     if (item.isTVShow && item.season && item.episode) {
@@ -398,17 +407,20 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
     }
   }, [userId, fetchRecentItems])
 
-  if (loading) {
+  if (loading || !isAuthChecked) {
     return (
       <section className={`py-16 px-4 sm:px-6 lg:px-8 ${className}`}>
         <div className="max-w-7xl mx-auto">
           <div>
-            <div className="h-8 bg-gray-800 rounded-lg w-64 mb-8"></div>
+            <div className="flex items-center gap-2 mb-8 animate-pulse">
+              <div className="h-8 bg-gray-800 rounded-lg w-40" />
+              <div className="h-5 bg-gray-800 rounded w-20 ml-3" />
+            </div>
             <div className="flex gap-4 overflow-x-hidden">
               {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
-                  className="bg-gray-800 rounded-xl flex-shrink-0"
+                  className="bg-gray-800 rounded-xl flex-shrink-0 animate-pulse"
                   style={{ width: 'clamp(180px, 25vw, 260px)', aspectRatio: '16/10' }}
                 />
               ))}

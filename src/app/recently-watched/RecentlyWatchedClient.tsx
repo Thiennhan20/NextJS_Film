@@ -40,6 +40,7 @@ export default function RecentlyWatchedClient() {
   const observerRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userId = useAuthStore((s) => (s.user as any)?.id || (s.user as any)?._id)
+  const isAuthChecked = useAuthStore((s) => s.isAuthChecked)
 
   // Format time helper
   const formatTime = useCallback((seconds: number) => {
@@ -159,6 +160,8 @@ export default function RecentlyWatchedClient() {
 
   // Initial load — use Zustand cache if available, then prefetch page 2
   useEffect(() => {
+    if (!isAuthChecked) return
+
     const loadInitial = async () => {
       try {
         setLoading(true)
@@ -200,7 +203,7 @@ export default function RecentlyWatchedClient() {
     }
 
     loadInitial()
-  }, [userId, fetchServerItems, fetchLocalItems])
+  }, [userId, isAuthChecked, fetchServerItems, fetchLocalItems])
 
   // Load more
   const loadMore = useCallback(async () => {
@@ -286,7 +289,7 @@ export default function RecentlyWatchedClient() {
   // Compute the item count for display
   const itemCount = useMemo(() => items.length, [items])
 
-  if (loading) {
+  if (loading || !isAuthChecked) {
     return (
       <div className="min-h-screen bg-black text-white">
         <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
@@ -296,7 +299,14 @@ export default function RecentlyWatchedClient() {
         <div className="relative z-10 pt-6 sm:pt-10 lg:pt-14 px-3 sm:px-4 md:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto">
             <div className="animate-pulse space-y-4">
-              <div className="h-8 bg-gray-800 rounded-lg w-48 mb-8"></div>
+              <div className="flex items-center gap-3 mb-8">
+                <div className="p-2 rounded-lg bg-gray-800 w-9 h-9" />
+                <div className="space-y-2">
+                  <div className="h-8 bg-gray-800 rounded-lg w-40" />
+                  <div className="h-4 bg-gray-800 rounded-lg w-20" />
+                </div>
+                <div className="h-5 bg-gray-800 rounded w-20 ml-auto" />
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                 {[...Array(10)].map((_, i) => (
                   <div key={i} className="bg-gray-800 rounded-xl aspect-[2/3]" />
