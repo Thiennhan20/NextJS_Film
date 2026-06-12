@@ -160,6 +160,8 @@ export default function Navigation() {
   }, []);
 
 
+  if (pathname === '/game-realtime') return null;
+
   const HEADER_HEIGHT = 64
 
   return (
