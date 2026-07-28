@@ -32,7 +32,6 @@ export default function LanguageSelector({ isScrolled = false, className = '' }:
   const selectedLanguage = languages.find(l => l.code === locale) || languages[0]
 
   useEffect(() => {
-    // Detect mismatch between rendered locale and actual cookie
     const getCookie = (name: string) => {
       const value = `; ${document.cookie}`
       const parts = value.split(`; ${name}=`)
@@ -40,17 +39,49 @@ export default function LanguageSelector({ isScrolled = false, className = '' }:
       return null
     }
 
+    // 1. Cross-site sync: detect ?locale= param from game site navigation
+    const params = new URLSearchParams(window.location.search)
+    const urlLocaleParam = params.get('locale')
+
+    if (urlLocaleParam === 'vi' || urlLocaleParam === 'en') {
+      // Always persist the incoming locale to cookie
+      document.cookie = `locale=${urlLocaleParam};path=/;max-age=31536000;SameSite=Lax`
+
+      if (urlLocaleParam !== locale) {
+        // Locale mismatch with current render → clean URL and reload
+        params.delete('locale')
+        if (urlLocaleParam === 'en') {
+          params.delete('lang')
+        } else {
+          params.set('lang', urlLocaleParam === 'vi' ? 'vi-VN' : 'en-US')
+        }
+        const query = params.toString()
+        const newUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname
+        window.location.replace(newUrl)
+        return
+      } else {
+        // Locale matches rendering → just clean URL params silently
+        params.delete('locale')
+        const query = params.toString()
+        const cleanUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname
+        if (window.location.search !== (query ? `?${query}` : '')) {
+          window.history.replaceState(null, '', cleanUrl)
+        }
+      }
+      return
+    }
+
+    // 2. Existing: detect mismatch between rendered locale and cookie
     const cookieLocale = getCookie('locale')
     if (cookieLocale && cookieLocale !== locale) {
-      // Reload/redirect to match cookie preference when browser history traversal leaves them out of sync
-      const params = new URLSearchParams(window.location.search)
+      const p = new URLSearchParams(window.location.search)
       if (cookieLocale === 'en') {
-        params.delete('lang')
+        p.delete('lang')
       } else {
         const fullCode = cookieLocale === 'vi' ? 'vi-VN' : 'en-US'
-        params.set('lang', fullCode)
+        p.set('lang', fullCode)
       }
-      const query = params.toString()
+      const query = p.toString()
       const newUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname
       window.location.replace(newUrl)
     }
