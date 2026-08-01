@@ -120,7 +120,12 @@ export default function Navigation() {
       setIsOpen(false);
       return;
     }
-    router.push('/game-realtime');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    let targetUrl = '/game-realtime';
+    if (token) {
+      targetUrl += `?token=${encodeURIComponent(token)}`;
+    }
+    router.push(targetUrl);
     setIsOpen(false);
   };
 
