@@ -10,29 +10,33 @@ export default function GameRealtimePage() {
   const router = useRouter();
   const locale = useLocale();
   const hydrated = useAuthHydrated();
-  const { token, isAuthenticated, isAuthChecked } = useAuthStore();
+  const { token: storeToken, isAuthenticated, isAuthChecked } = useAuthStore();
   const [mounted, setMounted] = useState(false);
+  const [savedToken, setSavedToken] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
+    const localToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    setSavedToken(storeToken || localToken);
     // Hide body scrollbar when entering the page
     document.body.style.overflow = 'hidden';
     return () => {
       // Restore scrollbar when leaving the page
       document.body.style.overflow = 'unset';
     };
-  }, []);
+  }, [storeToken]);
+
+  const activeToken = storeToken || savedToken;
 
   useEffect(() => {
-    if (mounted && hydrated && isAuthChecked && !isAuthenticated) {
+    if (mounted && hydrated && isAuthChecked && !isAuthenticated && !activeToken) {
       router.push('/login');
     }
-  }, [mounted, hydrated, isAuthChecked, isAuthenticated, router]);
+  }, [mounted, hydrated, isAuthChecked, isAuthenticated, activeToken, router]);
 
-  if (!mounted || !hydrated || !isAuthChecked) {
+  if (!mounted) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-black z-[999] overflow-hidden">
-        {/* Background gradients for premium aesthetic */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
           <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
           <div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
@@ -45,13 +49,13 @@ export default function GameRealtimePage() {
     );
   }
 
-  if (!isAuthenticated || !token) {
+  if (!activeToken && isAuthChecked && !isAuthenticated) {
     return null; // Will redirect via useEffect
   }
 
   const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
   const gameBaseUrl = isDevelopment ? 'http://localhost:3002' : 'https://ntngame.fly.dev';
-  const iframeSrc = `${gameBaseUrl}?token=${token}&locale=${locale}`;
+  const iframeSrc = `${gameBaseUrl}?token=${encodeURIComponent(activeToken || '')}&locale=${locale}`;
 
   return (
     <div className="fixed inset-0 w-screen h-screen bg-black overflow-hidden z-[999]">
