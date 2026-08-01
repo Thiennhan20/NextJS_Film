@@ -53,21 +53,9 @@ export default function GameRealtimePage() {
     return null; // Will redirect via useEffect
   }
 
-  let preRoomsParam = '';
-  if (typeof window !== 'undefined') {
-    try {
-      const cached = sessionStorage.getItem('game_rooms_prefetch');
-      if (cached) {
-        preRoomsParam = `&preRooms=${encodeURIComponent(cached)}`;
-      }
-    } catch {
-      // Ignore storage error
-    }
-  }
-
   const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
   const gameBaseUrl = isDevelopment ? 'http://localhost:3002' : 'https://ntngame.fly.dev';
-  const iframeSrc = `${gameBaseUrl}?token=${encodeURIComponent(activeToken || '')}&locale=${locale}${preRoomsParam}`;
+  const iframeSrc = `${gameBaseUrl}?token=${encodeURIComponent(activeToken || '')}&locale=${locale}`;
 
   return (
     <div className="fixed inset-0 w-screen h-screen bg-black overflow-hidden z-[999]">

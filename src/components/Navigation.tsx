@@ -136,7 +136,6 @@ export default function Navigation() {
       setIsOpen(false);
       return;
     }
-    void prefetchGameRooms();
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     let targetUrl = '/game-realtime';
     if (token) {
