@@ -112,6 +112,22 @@ export default function Navigation() {
   const hydrated = useAuthHydrated();
   const t = useTranslations('Navigation');
 
+  const prefetchGameRooms = async () => {
+    try {
+      const isDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+      const gameApiUrl = isDev ? 'http://localhost:8080/api/rooms' : 'https://ntngame.fly.dev/api/rooms';
+      const res = await fetch(gameApiUrl, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.rooms && typeof window !== 'undefined') {
+          sessionStorage.setItem('game_rooms_prefetch', JSON.stringify(data.rooms));
+        }
+      }
+    } catch {
+      // Ignore prefetch errors
+    }
+  };
+
   const handleGameClick = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!isAuthenticated) {
@@ -120,6 +136,7 @@ export default function Navigation() {
       setIsOpen(false);
       return;
     }
+    void prefetchGameRooms();
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     let targetUrl = '/game-realtime';
     if (token) {
@@ -249,7 +266,10 @@ export default function Navigation() {
                 leave="transition ease-in duration-75"
                 leaveFrom="transform opacity-100 scale-100"
                 leaveTo="transform opacity-0 scale-95"
-                beforeEnter={() => setIsMoreDropdownActive(true)}
+                beforeEnter={() => {
+                  setIsMoreDropdownActive(true);
+                  void prefetchGameRooms();
+                }}
                 afterLeave={() => setIsMoreDropdownActive(false)}
               >
                 <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right bg-gray-900 backdrop-blur-md divide-y divide-gray-700 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-60">
