@@ -286,7 +286,7 @@ export default function TopComments() {
               <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-400">
                 <span>{currentSlide + 1}</span>
                 <span className="text-gray-600">/</span>
-                <span>{totalSlides}</span>
+                <span>{Math.max(1, totalSlides)}</span>
               </div>
               <div className="flex items-center gap-1 sm:gap-2">
                 <motion.button
@@ -316,8 +316,8 @@ export default function TopComments() {
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 transition-all duration-500"
           >
             {loading ? (
-              // Loading skeleton
-              Array.from({ length: 3 }).map((_, index) => (
+              // Loading skeleton matching itemsPerSlide (responsive)
+              Array.from({ length: itemsPerSlide }).map((_, index) => (
                 <div key={index} className="bg-gray-800/60 backdrop-blur-sm rounded-xl p-4 sm:p-5 border border-gray-700/50 animate-pulse">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-12 h-12 bg-gray-700 rounded-full" />

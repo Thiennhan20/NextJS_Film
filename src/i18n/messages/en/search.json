@@ -10,6 +10,7 @@
     "resultsFound": "{count} results found",
     "noResults": "No results found.",
     "recentSearches": "Recent Searches",
+    "closeSearch": "Close search",
     "clearAll": "Clear All",
     "pageOf": "Page {current} of {total}",
     "error": "Failed to load results. Please try again.",

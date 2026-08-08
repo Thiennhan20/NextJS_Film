@@ -194,9 +194,9 @@ export function useTopComments(limit = 9) {
     `/comments/top?limit=${limit}&sortBy=likes`,
     fetchTopComments,
     {
-      revalidateOnFocus: false,
-      dedupingInterval: 60000, // 1 minute
-      refreshInterval: 300000, // 5 minutes
+      revalidateOnFocus: true,
+      dedupingInterval: 5000, // 5 seconds (balanced for Vercel/Render free)
+      refreshInterval: 0,
     }
   )
   
@@ -213,9 +213,9 @@ export function useRecentComments(limit = 4) {
     `/comments/recent?limit=${limit}`,
     fetchRecentComments,
     {
-      revalidateOnFocus: false,
-      dedupingInterval: 30000, // 30 seconds
-      refreshInterval: 120000, // 2 minutes
+      revalidateOnFocus: true,
+      dedupingInterval: 5000, // 5 seconds (balanced for Vercel/Render free)
+      refreshInterval: 0,
     }
   )
   

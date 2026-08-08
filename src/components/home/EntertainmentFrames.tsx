@@ -6,10 +6,13 @@ import {
   FilmIcon,
   TvIcon,
   ChevronLeftIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  PuzzlePieceIcon
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
+import useAuthStore from '@/store/useAuthStore'
 
 // New morphing effect for 2-column layout
 const TwoColumnMorphingItem = ({ children, isLeft, scrollProgress }: { children: ReactNode, isLeft: boolean, scrollProgress: MotionValue<number> }) => {
@@ -35,10 +38,26 @@ const TwoColumnMorphingItem = ({ children, isLeft, scrollProgress }: { children:
 };
 
 export default function EntertainmentFrames() {
+  const router = useRouter();
   const [currentNav, setCurrentNav] = useState<'movies' | 'tvshows'>('movies');
   const featuresRef = useRef<HTMLElement>(null);
   const autoPlayRef = useRef<NodeJS.Timeout | null>(null);
   const t = useTranslations('Entertainment');
+
+  const handleGameClick = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const isAuthenticated = useAuthStore.getState().isAuthenticated;
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    let targetUrl = '/game-realtime';
+    if (token) {
+      targetUrl += `?token=${encodeURIComponent(token)}`;
+    }
+    router.push(targetUrl);
+  };
 
   const { scrollYProgress: featuresScrollProgress } = useScroll({ 
     target: featuresRef, 
@@ -282,7 +301,8 @@ export default function EntertainmentFrames() {
           {/* Right Column - One larger frame */}
           <TwoColumnMorphingItem isLeft={false} scrollProgress={featuresScrollProgress}>
             <motion.div 
-              className="col-span-1 h-full bg-gradient-to-br from-red-900/10 to-orange-900/10 backdrop-blur-xl rounded-xl sm:rounded-2xl border border-red-500/30 p-4 sm:p-5 md:p-6 lg:p-8 xl:p-10 flex items-center justify-center relative overflow-hidden"
+              onClick={handleGameClick}
+              className="col-span-1 h-full bg-gradient-to-br from-red-900/10 to-orange-900/10 backdrop-blur-xl rounded-xl sm:rounded-2xl border border-red-500/30 p-4 sm:p-5 md:p-6 lg:p-8 xl:p-10 flex flex-col items-center justify-center relative overflow-hidden cursor-pointer group"
               whileHover={{ scale: 1.01 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
             >
@@ -294,14 +314,14 @@ export default function EntertainmentFrames() {
                 transition={{ duration: 0.6 }}
               >
                 <div 
-                  className="w-full h-full bg-cover bg-center"
+                  className="w-full h-full bg-cover bg-center group-hover:scale-105 transition-transform duration-700"
                   style={{
                     backgroundImage: `url('/games.webp')`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center'
                   }}
                 />
-                <div className="absolute inset-0 bg-gradient-to-br from-red-900/35 to-orange-900/35" />
+                <div className="absolute inset-0 bg-gradient-to-br from-red-900/35 to-orange-900/35 group-hover:from-red-900/20 group-hover:to-orange-900/20 transition-colors duration-500" />
               </motion.div>
 
               <motion.div
@@ -313,7 +333,7 @@ export default function EntertainmentFrames() {
                   scale: { duration: 6, repeat: Infinity, repeatType: "mirror" },
                   rotateY: { duration: 8, repeat: Infinity, ease: "easeInOut" }
                 }}
-                className="text-center relative z-10"
+                className="text-center relative z-10 flex flex-col items-center gap-4"
               >
                 <motion.div
                   animate={{ 
@@ -327,7 +347,16 @@ export default function EntertainmentFrames() {
                   className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl 2xl:text-8xl font-bold bg-gradient-to-r from-red-400 via-orange-400 to-yellow-400 text-transparent bg-clip-text"
                 >
                   Game
-                  <span className="text-sm sm:text-base text-white font-medium">{t('comingSoon')}</span>
+                </motion.div>
+
+                {/* Compact & Sleek Game Start Button */}
+                <motion.div
+                  whileHover={{ scale: 1.06 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="flex items-center gap-2 px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold transition-all duration-200 bg-gradient-to-r from-red-500/30 to-orange-500/30 hover:from-red-500/50 hover:to-orange-500/50 text-orange-200 hover:text-white shadow-[0_4px_20px_rgba(239,68,68,0.3)] border border-red-500/40 backdrop-blur-md cursor-pointer group-hover:border-orange-400/60"
+                >
+                  <PuzzlePieceIcon className="w-4 h-4 sm:w-4.5 sm:h-4.5 stroke-[2.5] text-amber-300" />
+                  <span>{t('start')}</span>
                 </motion.div>
               </motion.div>
             </motion.div>

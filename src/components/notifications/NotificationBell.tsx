@@ -133,7 +133,7 @@ function buildCommentTargetPath(target: NotificationMetadata | NotificationTarge
   return `/${basePath}/${target.movieId}${query ? `?${query}` : ''}${hash}`
 }
 
-export default function NotificationBell({ isScrolled = false, compact = false }: NotificationBellProps) {
+export default function NotificationBell({ compact = false }: NotificationBellProps) {
   const { isAuthenticated } = useAuthStore()
   const router = useRouter()
   const t = useTranslations('Notifications')
@@ -558,16 +558,12 @@ export default function NotificationBell({ isScrolled = false, compact = false }
   }
 
   const buttonClassName = compact
-    ? 'relative p-1.5 rounded-full bg-amber-50 shadow-sm border border-amber-200/85 text-amber-600 hover:bg-amber-100/70 focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-300'
-    : `relative flex h-10 w-10 items-center justify-center rounded-full border shadow-sm backdrop-blur-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 active:scale-95 ${
-        isScrolled
-          ? 'bg-white/10 border-white/15 text-amber-400 hover:text-amber-300 hover:bg-white/15'
-          : 'bg-amber-50/70 border-amber-200/80 text-amber-600 hover:border-amber-400 hover:bg-amber-100/70 hover:shadow-md'
-      }`
+    ? 'relative flex h-10 w-10 items-center justify-center rounded-full bg-white/10 shadow-sm border border-white/15 text-amber-400 hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400 transition-colors duration-200'
+    : 'relative flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-amber-400 hover:text-amber-300 hover:bg-white/20 shadow-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 active:scale-95'
 
   const panelClassName = compact
-    ? 'fixed left-3 right-3 top-[4.25rem] z-[70] flex max-h-[min(72vh,34rem)] origin-top flex-col overflow-hidden rounded-lg border border-gray-700 bg-gray-900 shadow-2xl will-change-transform'
-    : 'absolute right-0 z-[70] mt-2 flex max-h-[min(72vh,34rem)] w-[min(24rem,calc(100vw-1.5rem))] origin-top-right flex-col overflow-hidden rounded-lg border border-gray-700 bg-gray-900 shadow-2xl will-change-transform'
+    ? 'fixed left-3 right-3 top-[4.25rem] z-[70] flex max-h-[min(72vh,34rem)] origin-top flex-col overflow-hidden rounded-2xl border border-white/15 bg-gray-950/85 backdrop-blur-2xl shadow-2xl shadow-black/90 ring-1 ring-white/10 will-change-transform'
+    : 'absolute right-0 z-[70] mt-3 flex max-h-[min(72vh,34rem)] w-[min(24rem,calc(100vw-1.5rem))] origin-top-right flex-col overflow-hidden rounded-2xl border border-white/15 bg-gray-950/85 backdrop-blur-2xl shadow-2xl shadow-black/90 ring-1 ring-white/10 will-change-transform'
 
   const ease: Easing = 'easeOut'
 
@@ -628,7 +624,7 @@ export default function NotificationBell({ isScrolled = false, compact = false }
         aria-label={t('label')}
         aria-expanded={isOpen}
       >
-        <BellIcon className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
+        <BellIcon className={`${compact ? 'h-5 w-5' : 'h-5.5 w-5.5'} text-amber-400 stroke-[2.8] drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]`} />
         {totalUnread > 0 && (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-gradient-to-r from-red-600 to-pink-600 px-1 text-[10px] font-bold leading-none text-white shadow-md shadow-red-900/30 ring-2 ring-white">
             {totalUnread > 99 ? '99+' : totalUnread}

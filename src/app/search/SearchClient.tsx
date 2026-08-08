@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import axios, { CancelTokenSource } from 'axios'
-import { MagnifyingGlassIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline'
+import { MagnifyingGlassIcon, ExclamationCircleIcon, ClockIcon, XMarkIcon as XMarkMiniIcon } from '@heroicons/react/24/outline'
 import { useSearchHistory } from '@/hooks/useSearchHistory'
 import { useTranslations } from 'next-intl'
 import Pagination from '@/components/Pagination'
@@ -84,7 +84,9 @@ function SearchPageContent() {
   const navRouter = useNavRouter()
   const searchParams = useSearchParams()
   const t = useTranslations('Search')
-  const { addSearch: addToSearchHistory } = useSearchHistory()
+  const { displayHistory, addSearch: addToSearchHistory, removeSearch, clearAll: clearSearchHistory } = useSearchHistory()
+  const [isFocused, setIsFocused] = useState(false)
+  const searchFormRef = useRef<HTMLFormElement>(null)
   
   // URL params
   const queryFromUrl = searchParams.get('q') || ''
@@ -635,12 +637,29 @@ function SearchPageContent() {
     if (trimmed) {
       addToSearchHistory(trimmed)
     }
+    setIsFocused(false)
     setQuery(inputValue)
     setPage(1)
   }
 
+  // Close history dropdown when clicking outside
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (
+        searchFormRef.current && 
+        !searchFormRef.current.contains(e.target as Node)
+      ) {
+        setIsFocused(false)
+      }
+    }
+    if (isFocused) {
+      document.addEventListener('mousedown', handleClick)
+    }
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [isFocused])
 
-  
+  const showHistory = isFocused && !inputValue.trim() && displayHistory.length > 0
+
   // Handle filter changes
   const handleYearChange = useCallback((year: string | number) => {
     setSelectedYear(String(year))
@@ -721,11 +740,12 @@ function SearchPageContent() {
             Search
           </h1>
           
-          <form onSubmit={handleSearch} className="relative mb-6">
+          <form ref={searchFormRef} onSubmit={handleSearch} className="relative mb-6">
             <input
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
+              onFocus={() => setIsFocused(true)}
               placeholder={t('placeholder')}
               className="w-full bg-gray-900 border-2 border-gray-700 rounded-xl px-6 py-3 md:py-4 pl-14 pr-32 md:pr-36 text-white placeholder-gray-400 focus:outline-none focus:border-red-500 transition-colors text-base"
               style={{ fontSize: '16px' }}
@@ -733,11 +753,82 @@ function SearchPageContent() {
             <MagnifyingGlassIcon className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
             <button
               type="submit"
-              className="absolute right-2 md:right-3 top-1/2 -translate-y-1/2 bg-red-600 hover:bg-red-700 text-white px-4 md:px-6 py-2 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
+              className="absolute right-2 md:right-3 top-1/2 -translate-y-1/2 bg-red-600 hover:bg-red-700 text-white px-4 md:px-6 py-2 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base cursor-pointer"
               disabled={loading}
             >
-              Search
+              {t('button') || 'Search'}
             </button>
+
+            {/* Search History Dropdown */}
+            <AnimatePresence>
+              {showHistory && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="absolute left-0 right-0 top-full mt-2 rounded-2xl shadow-2xl z-50 border border-gray-700 bg-gray-900 text-white overflow-hidden"
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-gray-800">
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <ClockIcon className="h-4 w-4" />
+                      <span className="text-xs font-medium uppercase tracking-wide">{t('recentSearches')}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        clearSearchHistory()
+                      }}
+                      className="text-xs text-gray-400 hover:text-red-500 transition-colors font-medium cursor-pointer"
+                    >
+                      {t('clearAll')}
+                    </button>
+                  </div>
+                  {/* History Items */}
+                  <div className="max-h-[350px] overflow-y-auto scrollbar-hide">
+                    <ul className="divide-y divide-gray-800/80">
+                      {displayHistory.map((entry, index) => (
+                        <motion.li
+                          key={entry.query}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.02 }}
+                          className="group flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-800 transition-colors"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            addToSearchHistory(entry.query)
+                            setInputValue(entry.query)
+                            setQuery(entry.query)
+                            setPage(1)
+                            setIsFocused(false)
+                            router.push(`/search?q=${encodeURIComponent(entry.query)}`)
+                          }}
+                        >
+                          <ClockIcon className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                          <span className="flex-1 text-sm text-gray-200 truncate group-hover:text-white transition-colors">
+                            {entry.query}
+                          </span>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              removeSearch(entry.query)
+                            }}
+                            className="p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-gray-700 text-gray-400 hover:text-red-400 transition-all cursor-pointer"
+                            aria-label={`Remove ${entry.query}`}
+                          >
+                            <XMarkMiniIcon className="h-4 w-4" />
+                          </button>
+                        </motion.li>
+                      ))}
+                    </ul>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </form>
           
           

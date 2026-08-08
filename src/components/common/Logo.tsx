@@ -336,19 +336,11 @@ const Logo: React.FC<LogoProps> = ({
 
         {/* Main Logo Container */}
         <motion.div
-          className={`relative flex items-center justify-center px-3 py-2 rounded-xl backdrop-blur-sm border transition-all duration-500 ${
-            isScrolled 
-              ? 'bg-white/90 hover:bg-white border-gray-200 shadow-lg' 
-              : 'bg-black/50 hover:bg-black/70 border-white/20 shadow-xl'
-          }`}
+          className="relative flex h-10 items-center justify-center px-3.5 rounded-full transition-colors duration-300 bg-white/10 hover:bg-white/20 border border-white/15 shadow-sm"
           animate={{
             boxShadow: isHovered 
-              ? isScrolled 
-                ? '0 20px 40px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(249, 115, 22, 0.3)'
-                : '0 20px 40px -12px rgba(59, 130, 246, 0.4), 0 0 0 1px rgba(59, 130, 246, 0.3)'
-              : isScrolled
-                ? '0 8px 20px -3px rgba(0, 0, 0, 0.1)'
-                : '0 15px 30px -4px rgba(0, 0, 0, 0.5)'
+              ? '0 10px 25px -5px rgba(239, 68, 68, 0.4)'
+              : 'none'
           }}
         >
           {/* Logo Icon */}
@@ -361,9 +353,9 @@ const Logo: React.FC<LogoProps> = ({
           >
             {/* Animated Ring Background */}
             <motion.div
-              className="absolute inset-0 rounded-full border-2 opacity-30"
+              className="absolute inset-0 rounded-full border-2 opacity-30 borderColor-red-500"
               style={{
-                borderColor: isScrolled ? '#f59e0b' : '#3b82f6'
+                borderColor: '#ef4444'
               }}
               animate={{
                 rotate: isHovered ? -360 : 0,
@@ -374,23 +366,15 @@ const Logo: React.FC<LogoProps> = ({
             
             {/* Main Icon */}
             <motion.div
-              className={`w-full h-full rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-300 ${
-                isScrolled 
-                  ? 'bg-gradient-to-br from-orange-400 to-red-500 text-white' 
-                  : 'bg-gradient-to-br from-blue-400 to-purple-500 text-white'
-              }`}
+              className="w-full h-full rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-300 bg-gradient-to-br from-red-500 to-amber-500 text-white"
               whileHover={{ 
                 scale: 1.1,
                 rotate: 5,
               }}
               animate={{
                 background: isHovered 
-                  ? isScrolled
-                    ? 'linear-gradient(135deg, #f97316, #dc2626, #be185d)'
-                    : 'linear-gradient(135deg, #2563eb, #7c3aed, #0891b2)'
-                  : isScrolled
-                    ? 'linear-gradient(135deg, #fb923c, #ef4444)'
-                    : 'linear-gradient(135deg, #60a5fa, #a78bfa)'
+                  ? 'linear-gradient(135deg, #f97316, #dc2626, #be185d)'
+                  : 'linear-gradient(135deg, #fb923c, #ef4444)'
               }}
             >
               NTN

@@ -130,32 +130,32 @@ const debounce = (func: (...args: unknown[]) => void, delay: number) => {
 const MobileTrailerHint = () => {
   const t = useTranslations('HomePage');
   return (
-  <motion.div
-    className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full"
-    initial={{ opacity: 0, x: 10 }}
-    animate={{ opacity: 1, x: 0 }}
-    transition={{ duration: 0.5, delay: 0.3 }}
-  >
-    <ArrowUpRightIcon className="w-4 h-4 text-white/80" />
-    <span className="text-xs text-white/80 font-light">{t('tapTrailer')}</span>
-  </motion.div>
-);
+    <motion.div
+      className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full pointer-events-none"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4 }}
+    >
+      <ArrowUpRightIcon className="w-3.5 h-3.5 text-white/80" />
+      <span className="text-[11px] text-white/80 font-light">{t('tapTrailer')}</span>
+    </motion.div>
+  );
 };
 
 // Component cho mũi tên và hướng dẫn trên Desktop
 const DesktopTrailerHint = () => {
   const t = useTranslations('HomePage');
   return (
-  <motion.div
-    className="absolute left-full ml-4 top-1/2 -translate-y-1/2 flex items-center gap-2"
-    initial={{ opacity: 0, x: 10 }}
-    animate={{ opacity: 1, x: 0 }}
-    transition={{ duration: 0.5, delay: 0.3 }}
-  >
-    <ArrowUpRightIcon className="w-5 h-5 text-white/80" />
-    <span className="text-sm text-white/80 font-light">{t('clickTrailer')}</span>
-  </motion.div>
-);
+    <motion.div
+      className="absolute bottom-2.5 left-1/2 transform -translate-x-1/2 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded-full pointer-events-none transition-all duration-200 group-hover:bg-black/80 group-hover:scale-105 border border-white/10"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4 }}
+    >
+      <ArrowUpRightIcon className="w-3.5 h-3.5 text-white/90" />
+      <span className="text-xs text-white/90 font-medium whitespace-nowrap">{t('clickTrailer')}</span>
+    </motion.div>
+  );
 };
 
 export default function HeroMovies({ initialItems = null }: { initialItems?: HeroItem[] | null }) {
@@ -166,8 +166,6 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isMobile, setIsMobile] = useState(false);
   const autoPlayRef = useRef<NodeJS.Timeout | null>(null);
-  const [contentScale, setContentScale] = useState(1);
-  const contentRef = useRef<HTMLDivElement>(null);
   const mobileThumbnailsRef = useRef<HTMLDivElement>(null);
   const desktopThumbnailsRef = useRef<HTMLDivElement>(null);
   const { dragScrollProps: mobileThumbnailDragScrollProps } = useHorizontalDragScroll(mobileThumbnailsRef);
@@ -233,8 +231,6 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
     }, 600);
   }, [heroItems.length, isTransitioning, showTrailer]);
 
-
-
   const goToSlide = useCallback((index: number) => {
     if (isTransitioning || index === currentIndex || showTrailer) return;
     
@@ -246,14 +242,14 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
     }, 600);
   }, [currentIndex, isTransitioning, showTrailer]);
 
-  // Auto-play functionality - Increased interval to 10s
+  // Auto-play functionality - 10s interval
   const startAutoPlay = useCallback(() => {
     if (autoPlayRef.current) clearInterval(autoPlayRef.current);
     autoPlayRef.current = setInterval(() => {
       if (!isTransitioning && !showTrailer && heroItems.length > 0) {
         nextSlide();
       }
-    }, 10000); // Increased from 8s to 10s for better performance
+    }, 10000);
   }, [isTransitioning, nextSlide, showTrailer, heroItems.length]);
 
   const stopAutoPlay = useCallback(() => {
@@ -268,7 +264,6 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
       setIsMobile(window.innerWidth < 768);
     };
     
-    // Debounced resize handler
     const debouncedResize = debounce(checkMobile, 100);
     
     checkMobile();
@@ -278,43 +273,6 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
       window.removeEventListener('resize', debouncedResize);
     };
   }, []);
-
-  // Auto-scale content when it gets close to header
-  useEffect(() => {
-    const checkContentOverflow = () => {
-      if (!contentRef.current) return;
-
-      const contentRect = contentRef.current.getBoundingClientRect();
-      const headerHeight = 64; // 4rem = 64px (navigation height)
-      const safeZone = 20; // 20px buffer zone
-      const minTopPosition = headerHeight + safeZone;
-
-      // Calculate how much content is overlapping with header
-      if (contentRect.top < minTopPosition) {
-        // Calculate scale factor based on overlap
-        const overlap = minTopPosition - contentRect.top;
-        const maxOverlap = 100; // Maximum expected overlap
-        const scaleReduction = Math.min(overlap / maxOverlap, 0.15); // Max 15% reduction
-        const newScale = 1 - scaleReduction;
-        setContentScale(Math.max(newScale, 0.85)); // Minimum scale 85%
-      } else {
-        setContentScale(0.85); // Keep at 85% instead of resetting to full scale
-      }
-    };
-
-    // Check on mount and resize (increased debounce to reduce layout thrashing)
-    checkContentOverflow();
-    const debouncedCheck = debounce(checkContentOverflow, 200);
-    
-    window.addEventListener('resize', debouncedCheck);
-    window.addEventListener('scroll', debouncedCheck, { passive: true } as AddEventListenerOptions);
-
-    return () => {
-      window.removeEventListener('resize', debouncedCheck);
-      window.removeEventListener('scroll', debouncedCheck);
-    };
-  }, [currentIndex, heroItems]);
-
 
   // Start auto-play when component mounts and items are loaded
   useEffect(() => {
@@ -429,7 +387,7 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
   if (loading) {
     return (
       <section 
-        className="relative min-h-[60vh] md:min-h-[calc(100vh-4rem)] flex items-center justify-center overflow-hidden bg-gradient-to-br from-gray-900 via-black to-gray-800"
+        className="relative min-h-[50vh] md:min-h-[550px] flex items-center justify-center overflow-hidden bg-gradient-to-br from-gray-900 via-black to-gray-800"
       >
         <motion.div
           className="flex flex-col items-center space-y-4"
@@ -439,13 +397,13 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
         >
           <div className="relative">
             <motion.div
-              className="w-16 h-16 border-4 border-red-500/20 border-t-red-500 rounded-full"
+              className="w-12 h-12 border-4 border-red-500/20 border-t-red-500 rounded-full"
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
             />
           </div>
           <motion.p
-            className="text-gray-400 text-lg font-medium"
+            className="text-gray-400 text-base font-medium"
             animate={{ opacity: [0.5, 1, 0.5] }}
             transition={{ duration: 2, repeat: Infinity }}
           >
@@ -459,11 +417,11 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
   if (!heroItems.length) {
     return (
       <section 
-        className="relative min-h-[60vh] md:min-h-[calc(100vh-4rem)] flex items-center justify-center overflow-hidden bg-gradient-to-br from-gray-900 via-black to-gray-800"
+        className="relative min-h-[50vh] md:min-h-[550px] flex items-center justify-center overflow-hidden bg-gradient-to-br from-gray-900 via-black to-gray-800"
       >
         <div className="text-center">
-          <h2 className="text-2xl text-gray-300 mb-4">{t('noContent')}</h2>
-          <p className="text-gray-500">{t('checkApi')}</p>
+          <h2 className="text-xl text-gray-300 mb-2">{t('noContent')}</h2>
+          <p className="text-gray-500 text-sm">{t('checkApi')}</p>
         </div>
       </section>
     );
@@ -475,21 +433,20 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
   const currentBackdropUrl = currentItem.backdrop || currentItem.image || '';
 
   return (
-    <>
     <section 
-      className="relative w-full min-h-[60vh] max-h-[60vh] md:min-h-[calc(100vh-4rem)] md:max-h-[calc(100vh-4rem)] overflow-hidden flex items-center justify-center"
+      className="relative w-full min-h-[85vh] sm:min-h-screen overflow-hidden flex items-center justify-center pt-16 sm:pt-0"
       onMouseEnter={stopAutoPlay}
       onMouseLeave={startAutoPlay}
     >
-      {/* Dynamic Background with Parallax Effect */}
+      {/* Dynamic Background - Pure Opacity Fade Only (NO SCALING/ZOOMING) */}
       <AnimatePresence mode="wait">
         <motion.div
           key={currentIndex}
           className="absolute inset-0"
-          initial={{ opacity: 0, scale: 1.02 }}
-          animate={{ opacity: 1, scale: 1.0 }}
-          exit={{ opacity: 0, scale: 1 }}
-          transition={{ duration: 0.8, ease: "easeInOut" }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.6, ease: "easeInOut" }}
         >
           {currentBackdropUrl ? (
             <Image
@@ -499,69 +456,61 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
               priority={isFirstSlide}
               loading={isFirstSlide ? 'eager' : 'lazy'}
               sizes="100vw"
-              className="object-cover object-center"
+              className="object-cover object-top sm:object-center"
             />
           ) : (
             <div className="h-full w-full bg-gray-900" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40" />
+          {/* Side shadow for text readability */}
+          <div className="absolute inset-y-0 left-0 w-full sm:w-2/3 bg-gradient-to-r from-black/60 via-black/30 to-transparent pointer-events-none" />
+          {/* Bottom fade to black */}
+          <div className="absolute bottom-0 left-0 right-0 h-36 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none" />
         </motion.div>
       </AnimatePresence>
       
-      <div 
-        ref={contentRef}
-        className="relative z-10 w-full max-w-7xl mx-auto px-4 py-2 sm:py-4 overflow-x-hidden transition-transform duration-300 ease-out"
-        style={{ 
-          transform: `scale(${contentScale})`,
-          transformOrigin: 'center center'
-        }}
-      >
+      <div className="relative z-10 w-full max-w-5xl mx-auto px-4 sm:px-6 py-2 overflow-x-hidden">
         {/* Custom CSS to hide scrollbars */}
         <style jsx>{`
           .scrollbar-hide {
-            -ms-overflow-style: none;  /* Internet Explorer 10+ */
-            scrollbar-width: none;  /* Firefox */
+            -ms-overflow-style: none;
+            scrollbar-width: none;
           }
           .scrollbar-hide::-webkit-scrollbar {
-            display: none;  /* Safari and Chrome */
+            display: none;
           }
         `}</style>
         
         {/* Mobile Layout */}
         <div className="block lg:hidden">
           <motion.div
-            className="text-white text-center space-y-4"
-            initial={{ opacity: 0, y: 30 }}
+            className="text-white text-center space-y-3"
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
+            transition={{ duration: 0.6 }}
           >
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentIndex}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.6 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.5 }}
                 className="space-y-2"
               >
-                <motion.h1
-                  className="text-lg sm:text-xl md:text-2xl font-bold uppercase tracking-tight leading-tight px-4 min-h-[2.5rem] sm:min-h-[3rem] flex items-center justify-center"
+                <h1
+                  className="text-lg sm:text-xl font-bold uppercase tracking-tight leading-snug px-4 min-h-[2.25rem] flex items-center justify-center text-center max-w-sm mx-auto [text-wrap:balance]"
                   style={{
                     background: 'linear-gradient(135deg, #fff 0%, #f0f0f0 50%, #ddd 100%)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
                   }}
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.2 }}
                 >
                   {getTitle(currentItem)}
-                </motion.h1>
+                </h1>
 
                 {/* Mobile Meta */}
-                <div className="flex items-center justify-center gap-2 text-[11px] sm:text-xs flex-wrap mt-1">
+                <div className="flex items-center justify-center gap-2 text-[11px] sm:text-xs flex-wrap mt-0.5">
                   <span className="text-gray-300 text-center">
                     {formatDate(currentItem.release_date || currentItem.first_air_date || '')}
                   </span>
@@ -575,18 +524,18 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
                   </span>
                 </div>
 
-                {/* Mobile Poster */}
+                {/* Mobile Poster (Fixed size, pure opacity fade) */}
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={currentIndex}
-                    className="relative group flex justify-center my-3"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ duration: 0.6 }}
+                    className="relative group flex justify-center my-2.5"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.5 }}
                   >
                     <div 
-                      className="w-36 h-52 sm:w-44 sm:h-60 md:w-56 md:h-72 rounded-2xl overflow-hidden shadow-2xl relative cursor-pointer transition-transform duration-300 hover:scale-105"
+                      className="w-32 h-48 sm:w-40 sm:h-56 rounded-xl overflow-hidden shadow-2xl relative cursor-pointer"
                       onClick={() => handleTrailerClick(currentItem)}
                     >
                       <Image
@@ -594,85 +543,72 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
                         alt={getTitle(currentItem)}
                         fill
                         className="object-cover"
-                        sizes="(max-width: 640px) 144px, (max-width: 768px) 176px, 224px"
+                        sizes="(max-width: 640px) 128px, 160px"
                         priority={isFirstSlide}
                         loading={isFirstSlide ? 'eager' : 'lazy'}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                      {/* Mobile Trailer Hint */}
                       <MobileTrailerHint />
                     </div>
                   </motion.div>
                 </AnimatePresence>
 
-                <motion.div
-                  className="flex items-center justify-center gap-2.5 px-4 pt-1"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.4 }}
-                >
+                <div className="flex items-center justify-center gap-2 px-4 pt-1">
                   <Link href={getRoute(currentItem)} className="w-auto">
-                    <motion.button
-                      className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-yellow-500 hover:bg-yellow-600 rounded-full font-bold text-black text-sm shadow-lg transition-all duration-300"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <PlayIcon className="w-4 h-4" />
+                    <button className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-yellow-500 hover:bg-yellow-600 rounded-full font-bold text-black text-xs sm:text-sm shadow-lg transition-colors">
+                      <PlayIcon className="w-3.5 h-3.5" />
                       {t('watch')}
-                    </motion.button>
+                    </button>
                   </Link>
-                  
-                  <motion.button
+                  <button
                     onClick={() => handleToggleWatchlist(currentItem)}
-                    className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-full font-semibold text-sm transition-all duration-300 ${
+                    className={`flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-xs sm:text-sm transition-colors ${
                       isInWatchlist(currentItem.id)
                         ? 'bg-amber-700 text-white hover:bg-amber-800'
                         : 'bg-gray-700 hover:bg-gray-600 text-white'
                     }`}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
                   >
                     {isInWatchlist(currentItem.id) ? (
-                      <BookmarkSolidIcon className="w-4 h-4" />
+                      <BookmarkSolidIcon className="w-3.5 h-3.5" />
                     ) : (
-                      <BookmarkIcon className="w-4 h-4" />
+                      <BookmarkIcon className="w-3.5 h-3.5" />
                     )}
                     {isInWatchlist(currentItem.id) ? t('added') : t('save')}
-                  </motion.button>
-                </motion.div>
+                  </button>
+                </div>
 
-                {/* Mobile Thumbnails */}
+                {/* Mobile Thumbnails - Circular Avatars */}
                 <div
                   ref={mobileThumbnailsRef}
                   {...mobileThumbnailDragScrollProps}
-                  className="horizontal-scroll-container flex items-center justify-center gap-1.5 px-4 pt-1.5 overflow-x-auto pb-1 scrollbar-hide snap-x snap-mandatory"
+                  className="horizontal-scroll-container flex items-center justify-center gap-3 px-4 py-4 overflow-x-auto scrollbar-hide snap-x snap-mandatory"
                 >
                   {visibleItems.map((item, index) => (
-                    <motion.button
+                    <button
                       key={item.id}
-                      className={`relative flex-shrink-0 w-10 h-14 sm:w-12 sm:h-16 rounded-lg overflow-hidden border-2 transition-all duration-300 snap-center snap-always ${
+                      className={`relative flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full transition-all duration-300 snap-center snap-always cursor-pointer p-0.5 ${
                         index === currentIndex 
-                          ? 'border-red-500 shadow-lg shadow-red-500/30' 
-                          : 'border-white/20'
+                          ? 'ring-1.5 ring-red-500/60 scale-105 shadow-[0_0_10px_rgba(239,68,68,0.35)] z-10' 
+                          : 'opacity-60 hover:opacity-90 hover:scale-105'
                       }`}
                       onClick={() => goToSlide(index)}
-                      whileTap={{ scale: 0.95 }}
                     >
-                      <Image
-                        src={item.image || '/placeholder-poster.jpg'}
-                        alt={getTitle(item)}
-                        fill
-                        className="object-cover"
-                        sizes="48px"
-                        loading="lazy"
-                      />
-                      {index === currentIndex && (
-                        <motion.div
-                          className="absolute inset-0 bg-red-500/20"
-                          layoutId="activeThumbMobile"
+                      <div className={`relative w-full h-full rounded-full overflow-hidden transition-colors ${
+                        index === currentIndex ? 'border border-red-500/40' : 'border border-white/20'
+                      }`}>
+                        <Image
+                          src={item.image || '/placeholder-poster.jpg'}
+                          alt={getTitle(item)}
+                          fill
+                          className="object-cover"
+                          sizes="64px"
+                          loading="lazy"
                         />
-                      )}
-                    </motion.button>
+                        {index === currentIndex && (
+                          <div className="absolute inset-0 bg-red-500/5 rounded-full" />
+                        )}
+                      </div>
+                    </button>
                   ))}
                 </div>
               </motion.div>
@@ -680,117 +616,96 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
           </motion.div>
         </div>
 
-        {/* Desktop Layout */}
-        <div className="hidden lg:grid lg:grid-cols-2 gap-8 items-center min-h-[600px]">
+        {/* Desktop Layout - Sleek, Compact & Fixed (NO AUTO SCALING) */}
+        <div className="hidden lg:grid lg:grid-cols-2 gap-6 items-center min-h-[380px] lg:min-h-[420px]">
           
           {/* Left Side - Main Content */}
           <motion.div
-            className="text-white space-y-4"
-            initial={{ opacity: 0, x: -50 }}
+            className="text-white space-y-2.5 lg:pl-10"
+            initial={{ opacity: 0, x: -30 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
+            transition={{ duration: 0.6 }}
           >
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentIndex}
-                initial={{ opacity: 0, y: 30 }}
+                initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -30 }}
-                transition={{ duration: 0.6 }}
-                className="space-y-3"
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.5 }}
+                className="space-y-2"
               >
-                {/* Title */}
-                <motion.h1
-                  className="text-3xl lg:text-4xl xl:text-5xl 2xl:text-6xl font-bold uppercase tracking-tight leading-tight min-h-[5rem] lg:min-h-[6rem] xl:min-h-[7rem] 2xl:min-h-[8rem] flex items-center"
+                {/* Title - Compact & Sleek */}
+                <h1
+                  className="text-xl sm:text-2xl lg:text-3xl font-bold uppercase tracking-tight leading-snug max-w-md flex items-center [text-wrap:balance]"
                   style={{
                     background: 'linear-gradient(135deg, #fff 0%, #f0f0f0 50%, #ddd 100%)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
                   }}
-                  initial={{ opacity: 0, y: 50 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.3 }}
                 >
                   {getTitle(currentItem)}
-                </motion.h1>
+                </h1>
 
                 {/* Meta Info */}
-                <div className="flex items-center gap-4 text-sm mt-2">
-                  <span className="text-gray-300">
+                <div className="flex items-center gap-2.5 text-xs sm:text-sm text-gray-300">
+                  <span>
                     {formatDate(currentItem.release_date || currentItem.first_air_date || '')}
                   </span>
-                  <span className="text-gray-300">•</span>
-                  <span className="text-gray-300">
+                  <span>•</span>
+                  <span>
                     {getCountryName(currentItem.original_language)}
                   </span>
-                  <span className="text-gray-300">•</span>
-                  <span className="text-gray-300">
+                  <span>•</span>
+                  <span>
                     {currentItem.type === 'movie' ? `🎬 ${t('movie')}` : `📺 ${t('tvShow')}`}
                   </span>
                 </div>
 
-
-                {/* Action Buttons */}
-                <motion.div
-                  className="flex items-center gap-4 pt-2"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.5 }}
-                >
+                {/* Action Buttons - Compact */}
+                <div className="flex items-center gap-2.5 pt-1">
                   <Link href={getRoute(currentItem)}>
-                    <motion.button
-                      className="flex items-center gap-3 px-6 py-3 bg-yellow-500 hover:bg-yellow-600 rounded-full font-bold text-black shadow-xl transition-all duration-300"
-                      whileHover={{ scale: 1.05}}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <PlayIcon className="w-5 h-5" />
+                    <button className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 rounded-full font-bold text-black text-xs sm:text-sm shadow-md transition-colors">
+                      <PlayIcon className="w-4 h-4" />
                       {t('watchNow')}
-                    </motion.button>
+                    </button>
                   </Link>
                   
-                  <motion.button
+                  <button
                     onClick={() => handleToggleWatchlist(currentItem)}
-                    className={`flex items-center gap-3 px-6 py-3 rounded-full font-semibold text-base transition-all duration-300 ${
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full font-semibold text-xs sm:text-sm transition-colors ${
                       isInWatchlist(currentItem.id)
                         ? 'bg-amber-700 text-white hover:bg-amber-800'
                         : 'bg-gray-700 hover:bg-gray-600 text-white'
                     }`}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
                   >
                     {isInWatchlist(currentItem.id) ? (
-                      <BookmarkSolidIcon className="w-5 h-5" />
+                      <BookmarkSolidIcon className="w-4 h-4" />
                     ) : (
-                      <BookmarkIcon className="w-5 h-5" />
+                      <BookmarkIcon className="w-4 h-4" />
                     )}
                     {isInWatchlist(currentItem.id) ? t('addedToList') : t('saveToList')}
-                  </motion.button>
-                </motion.div>
+                  </button>
+                </div>
               </motion.div>
             </AnimatePresence>
           </motion.div>
 
-          {/* Right Side - Poster and Thumbnails */}
-          <motion.div
-            className="flex flex-col items-center space-y-4"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
-          >
-            {/* Main Poster */}
+          {/* Right Side - Compact Poster & Thumbnails (Pure Opacity Fade Only, NO Scale Zooming) */}
+          <div className="flex flex-col items-center space-y-3">
+            {/* Main Poster - Sleek & Compact */}
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentIndex}
                 className="relative group"
-                initial={{ opacity: 0, rotateY: 90 }}
-                animate={{ opacity: 1, rotateY: 0 }}
-                exit={{ opacity: 0, rotateY: -90 }}
-                transition={{ duration: 0.6 }}
-                whileHover={{ scale: 1.02 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.5 }}
               >
                 <div 
-                  className="w-80 h-96 rounded-2xl overflow-hidden shadow-2xl relative cursor-pointer transition-transform duration-300 hover:scale-102"
+                  className="w-44 h-60 lg:w-48 lg:h-64 xl:w-52 xl:h-70 rounded-xl overflow-hidden shadow-2xl relative cursor-pointer border border-white/10"
                   onClick={() => handleTrailerClick(currentItem)}
                 >
                   <Image
@@ -798,64 +713,60 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
                     alt={getTitle(currentItem)}
                     fill
                     className="object-cover"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    sizes="(max-width: 768px) 100vw, 220px"
                     priority={isFirstSlide}
                     loading={isFirstSlide ? 'eager' : 'lazy'}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                  {/* Desktop Trailer Hint */}
+                  <DesktopTrailerHint />
                 </div>
                 
                 {/* Glow effect */}
-                <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-red-500/20 to-pink-500/20 blur-xl -z-10 opacity-60" />
-                
-                {/* Desktop Trailer Hint */}
-                <DesktopTrailerHint />
+                <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-red-500/15 to-pink-500/15 blur-lg -z-10 opacity-50" />
               </motion.div>
             </AnimatePresence>
 
-            {/* Thumbnail Navigation */}
+            {/* Circular Story-Style Thumbnail Navigation */}
             <div
               ref={desktopThumbnailsRef}
               {...desktopThumbnailDragScrollProps}
-              className="horizontal-scroll-container flex items-center gap-3 max-w-full overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory"
+              className="horizontal-scroll-container flex items-center gap-3.5 max-w-full overflow-x-auto py-4 px-3 scrollbar-hide snap-x snap-mandatory"
             >
               {visibleItems.map((item, index) => (
-                <motion.button
+                <button
                   key={item.id}
-                  className={`relative flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden border-2 transition-all duration-300 snap-center snap-always ${
+                  className={`relative flex-shrink-0 w-14 h-14 lg:w-16 lg:h-16 rounded-full transition-all duration-300 snap-center snap-always cursor-pointer p-0.5 ${
                     index === currentIndex 
-                      ? 'border-red-500 shadow-lg shadow-red-500/30' 
-                      : 'border-white/20 hover:border-white/40'
+                      ? 'ring-1.5 ring-red-500/60 scale-105 shadow-[0_0_12px_rgba(239,68,68,0.35)] z-10' 
+                      : 'opacity-60 hover:opacity-90 hover:scale-105'
                   }`}
                   onClick={() => goToSlide(index)}
-                  whileTap={{ scale: 0.95 }}
                 >
-                  <Image
-                    src={item.image || '/placeholder-poster.jpg'}
-                    alt={getTitle(item)}
-                    fill
-                    className="object-cover"
-                    sizes="64px"
-                    loading="lazy"
-                  />
-                  {index === currentIndex && (
-                    <motion.div
-                      className="absolute inset-0 bg-red-500/20"
-                      layoutId="activeThumb"
+                  <div className={`relative w-full h-full rounded-full overflow-hidden transition-colors ${
+                    index === currentIndex ? 'border border-red-500/40' : 'border border-white/20'
+                  }`}>
+                    <Image
+                      src={item.image || '/placeholder-poster.jpg'}
+                      alt={getTitle(item)}
+                      fill
+                      className="object-cover"
+                      sizes="64px"
+                      loading="lazy"
                     />
-                  )}
-                </motion.button>
+                    {index === currentIndex && (
+                      <div className="absolute inset-0 bg-red-500/5 rounded-full" />
+                    )}
+                  </div>
+                </button>
               ))}
             </div>
-          </motion.div>
+          </div>
         </div>
 
         {/* Mobile Scroll Down Indicator */}
-        <motion.div
-          className="lg:hidden flex flex-col items-center gap-0.5 cursor-pointer mt-4"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 1 }}
+        <div
+          className="lg:hidden flex flex-col items-center gap-0.5 cursor-pointer mt-3"
           onClick={() => {
             window.scrollTo({ 
               top: window.innerHeight, 
@@ -863,22 +774,14 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
             });
           }}
         >
-          <motion.p
-            className="text-gray-400 text-[10px] font-light"
-            animate={{ opacity: [0.4, 0.8, 0.4] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          >
+          <p className="text-gray-400 text-[10px] font-light">
             {t('scrollExplore')}
-          </motion.p>
-          <motion.div
-            className="flex flex-col items-center -space-y-1.5"
-            animate={{ y: [0, 6, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-          >
-            <ChevronDownIcon className="w-4 h-4 text-red-500" />
-            <ChevronDownIcon className="w-4 h-4 text-red-500" />
-          </motion.div>
-        </motion.div>
+          </p>
+          <div className="flex flex-col items-center -space-y-1.5 animate-bounce">
+            <ChevronDownIcon className="w-3.5 h-3.5 text-red-500" />
+            <ChevronDownIcon className="w-3.5 h-3.5 text-red-500" />
+          </div>
+        </div>
       </div>
       
       {/* Trailer Modal */}
@@ -892,24 +795,20 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
             onClick={closeTrailer}
           >
             <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
+              initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ duration: 0.3 }}
               className="relative w-full max-w-4xl mx-4 aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Close Button */}
-              <motion.button
+              <button
                 onClick={closeTrailer}
-                className="absolute top-4 right-4 z-10 w-10 h-10 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center text-white transition-all duration-300 hover:scale-110"
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
+                className="absolute top-4 right-4 z-10 w-9 h-9 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center text-white transition-colors"
               >
-                <XMarkIcon className="w-6 h-6" />
-              </motion.button>
+                <XMarkIcon className="w-5 h-5" />
+              </button>
               
-              {/* YouTube Embed */}
               <iframe
                 src={currentTrailer}
                 title="Movie Trailer"
@@ -922,6 +821,5 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
         )}
       </AnimatePresence>
     </section>
-    </>
   )
 }

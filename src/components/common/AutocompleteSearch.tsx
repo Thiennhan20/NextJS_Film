@@ -112,14 +112,14 @@ export default function AutocompleteSearch({
   inputClassName, 
   showClose, 
   onClose, 
-  onFocusChange,
-  isScrolled = false
+  onFocusChange
 }: AutocompleteSearchProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [isActivated, setIsActivated] = useState(false);
   const [cache, setCache] = useState<{ [key: string]: CacheEntry }>({});
   const t = useTranslations('Search');
   
@@ -139,8 +139,8 @@ export default function AutocompleteSearch({
   // Search history hook
   const { displayHistory, addSearch: addToSearchHistory, removeSearch, clearAll: clearSearchHistory } = useSearchHistory();
 
-  // Whether to show history dropdown (focused + empty query + has history)
-  const showHistory = isFocused && !query.trim() && displayHistory.length > 0;
+  // Whether to show history dropdown (focused or activated on mobile + empty query + has history)
+  const showHistory = (isFocused || (menu && isActivated)) && !query.trim() && displayHistory.length > 0;
 
   // Check if voice recognition is supported
   useEffect(() => {
@@ -494,8 +494,10 @@ export default function AutocompleteSearch({
         !inputRef.current.contains(e.target as Node) &&
         (!historyContainerRef.current || !historyContainerRef.current.contains(e.target as Node))
       ) {
-        setShowDropdown(false);
-        setIsFocused(false);
+        if (!menu) {
+          setShowDropdown(false);
+          setIsFocused(false);
+        }
       }
     }
     
@@ -504,7 +506,7 @@ export default function AutocompleteSearch({
     }
     
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [showDropdown, showHistory]);
+  }, [showDropdown, showHistory, menu]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -560,14 +562,17 @@ export default function AutocompleteSearch({
 
   const handleFocus = useCallback(() => {
     setIsFocused(true);
+    setIsActivated(true);
     if (results.length > 0 && query.trim()) setShowDropdown(true);
     onFocusChange?.(true);
   }, [results.length, onFocusChange, query]);
 
   const handleBlur = useCallback(() => {
     setIsFocused(false);
-    onFocusChange?.(false);
-  }, [onFocusChange]);
+    if (!menu) {
+      onFocusChange?.(false);
+    }
+  }, [onFocusChange, menu]);
 
   const getTitle = useCallback((item: SearchResult) => {
     if (item.type === 'movie') return item.title;
@@ -610,23 +615,21 @@ export default function AutocompleteSearch({
   }, [getTitle]);
 
   const inputClassNames = useMemo(() => 
-    `px-5 py-2.5 rounded-full border transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-red-500 font-medium ${
+    `w-full rounded-full border transition-all duration-300 focus:outline-none font-bold text-white placeholder-white placeholder:font-bold ${
       menu
-        ? 'w-full bg-gray-800 text-white border-red-400 placeholder-gray-200 focus:bg-gray-900 pr-24'
-        : isScrolled
-          ? 'w-full sm:w-48 sm:focus:w-64 bg-white/10 text-white border-white/15 placeholder-white/80 focus:bg-gray-950/70 focus:border-red-500/50 backdrop-blur-sm pr-24'
-          : 'w-full sm:w-48 sm:focus:w-64 bg-gray-100 text-gray-900 border-gray-300/85 placeholder-gray-700 focus:bg-white focus:border-red-500/50 backdrop-blur-sm pr-24'
+        ? 'h-12 sm:h-14 text-base sm:text-lg px-5 border-white/30 ring-1 ring-white/15 bg-gray-950/95 text-white placeholder-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/50 pr-28 sm:pr-32 shadow-2xl backdrop-blur-2xl'
+        : 'h-10 text-sm px-4 border-white/25 ring-1 ring-white/10 sm:w-48 sm:focus:w-64 bg-white/10 text-white placeholder-white focus:bg-gray-950/80 focus:border-red-500/50 shadow-sm pr-24'
     } ${inputClassName || ''}`
-  , [menu, isScrolled, inputClassName]);
+  , [menu, inputClassName]);
 
   const searchIconColor = useMemo(() => {
     if (query.trim()) {
       return menu ? 'text-red-400 drop-shadow-lg' : 'text-red-500 drop-shadow-lg';
     }
-    if (menu) return 'text-gray-400';
-    if (isFocused) return isScrolled ? 'text-gray-300' : 'text-gray-400';
-    return isScrolled ? 'text-white/80' : 'text-gray-700';
-  }, [query, menu, isFocused, isScrolled]);
+    if (menu) return 'text-gray-300';
+    if (isFocused) return 'text-white';
+    return 'text-white';
+  }, [query, menu, isFocused]);
 
   return (
     <div className={`relative w-full ${menu ? 'max-w-full' : ''}`}>
@@ -675,9 +678,7 @@ export default function AutocompleteSearch({
                       ? 'text-gray-400 hover:text-red-400' 
                       : isFocused 
                         ? 'text-red-500 hover:text-red-600' 
-                        : isScrolled
-                          ? 'text-white/80 hover:text-red-400'
-                          : 'text-gray-700 hover:text-red-500'
+                        : 'text-white hover:text-red-400'
                 }`}
               />
             </motion.div>
@@ -768,234 +769,310 @@ export default function AutocompleteSearch({
       
       <AnimatePresence>
         {showDropdown && (
-          <motion.div
-            ref={dropdownRef}
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className={`absolute left-0 right-0 mt-2 rounded-2xl shadow-2xl z-50 max-h-80 overflow-y-auto border border-gray-200 scrollbar-hide ${
-              menu ? 'bg-white text-gray-900' : 'bg-white'
-            }`}
+          <div 
+            className="absolute left-0 right-0 mt-2 z-50 flex flex-col items-center gap-2.5 pointer-events-auto"
             style={{ 
               minWidth: menu ? '100%' : '220px', 
               maxWidth: '100%'
             }}
           >
-            <AnimatePresence mode="wait">
-              {loading ? (
-                <motion.div
-                  key="loading"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="p-4 text-center text-gray-500"
-                >
+            <motion.div
+              ref={dropdownRef}
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className={`w-full rounded-2xl shadow-2xl max-h-80 overflow-y-auto border border-gray-200 scrollbar-hide ${
+                menu ? 'bg-white text-gray-900' : 'bg-white'
+              }`}
+            >
+              <AnimatePresence mode="wait">
+                {loading ? (
                   <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    className="inline-block"
+                    key="loading"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="p-4 text-center text-gray-500"
                   >
-                    <MagnifyingGlassIcon className="h-5 w-5 mx-auto mb-2" />
-                  </motion.div>
-                  <p className="text-sm">{t('searching')}</p>
-                </motion.div>
-              ) : query.length < MIN_QUERY_LENGTH ? (
-                <motion.div
-                  key="encourage"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="p-4 text-center"
-                >
-                  <div className="flex flex-col items-center gap-2">
                     <motion.div
-                      animate={{ 
-                        scale: [1, 1.1, 1],
-                        rotate: [0, 5, -5, 0]
-                      }}
-                      transition={{ 
-                        duration: 2, 
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                      }}
-                      className="relative"
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="inline-block"
                     >
-                      <SparklesIcon className="h-6 w-6 text-yellow-500" />
+                      <MagnifyingGlassIcon className="h-5 w-5 mx-auto mb-2" />
+                    </motion.div>
+                    <p className="text-sm">{t('searching')}</p>
+                  </motion.div>
+                ) : query.length < MIN_QUERY_LENGTH ? (
+                  <motion.div
+                    key="encourage"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="p-4 text-center"
+                  >
+                    <div className="flex flex-col items-center gap-2">
                       <motion.div
                         animate={{ 
-                          scale: [1, 1.3, 1],
-                          opacity: [0.7, 1, 0.7]
+                          scale: [1, 1.1, 1],
+                          rotate: [0, 5, -5, 0]
                         }}
                         transition={{ 
-                          duration: 1.5, 
+                          duration: 2, 
                           repeat: Infinity,
                           ease: "easeInOut"
                         }}
-                        className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"
-                      />
-                    </motion.div>
-                    <div className="space-y-1">
-                      <p className="text-gray-500 text-xs">
-                        {t('minChars', { count: MIN_QUERY_LENGTH })}
-                      </p>
-                    </div>
-                    <motion.div 
-                      className="flex items-center gap-1"
-                      animate={{ opacity: [0.5, 1, 0.5] }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                    >
-                      {[0, 0.2, 0.4].map((delay, i) => (
-                        <motion.div
-                          key={i}
-                          className="w-1.5 h-1.5 bg-gray-300 rounded-full"
-                          animate={{ scale: [1, 1.5, 1] }}
-                          transition={{ duration: 0.8, repeat: Infinity, delay }}
-                        />
-                      ))}
-                    </motion.div>
-                  </div>
-                </motion.div>
-              ) : results.length === 0 ? (
-                <motion.div
-                  key="no-results"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="p-4 text-center text-gray-400"
-                >
-                  <p className="text-sm">{t('noResults')}</p>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="results"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                >
-                  <ul className="divide-y divide-gray-100">
-                    {results.map((item, index) => (
-                      <motion.li
-                        key={`${item.type}-${item.id}-${index}`}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.03 }}
-                        className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-gray-100 transition-colors"
-                        onClick={() => handleSelect(item)}
+                        className="relative"
                       >
-                        <div className="flex-shrink-0 w-10 h-14 relative rounded overflow-hidden bg-gray-200">
-                          {item.poster_path ? (
-                            <Image
-                              src={`https://image.tmdb.org/t/p/w92${item.poster_path}`}
-                              alt={getTitle(item)}
-                              fill
-                              sizes="40px"
-                              style={{ objectFit: 'cover' }}
-                              loading="lazy"
-                              quality={60}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400 text-xl">
-                              {getTypeIcon(item.type)}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start gap-2">
-                            <div className="flex-1 min-w-0">
-                              {getDisplayTitle(item)}
-                            </div>
-                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded flex-shrink-0 mt-0.5">
-                              {getTypeLabel(item.type)}
-                            </span>
+                        <SparklesIcon className="h-6 w-6 text-yellow-500" />
+                        <motion.div
+                          animate={{ 
+                            scale: [1, 1.3, 1],
+                            opacity: [0.7, 1, 0.7]
+                          }}
+                          transition={{ 
+                            duration: 1.5, 
+                            repeat: Infinity,
+                            ease: "easeInOut"
+                          }}
+                          className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"
+                        />
+                      </motion.div>
+                      <div className="space-y-1">
+                        <p className="text-gray-500 text-xs">
+                          {t('minChars', { count: MIN_QUERY_LENGTH })}
+                        </p>
+                      </div>
+                      <motion.div 
+                        className="flex items-center gap-1"
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
+                      >
+                        {[0, 0.2, 0.4].map((delay, i) => (
+                          <motion.div
+                            key={i}
+                            className="w-1.5 h-1.5 bg-gray-300 rounded-full"
+                            animate={{ scale: [1, 1.5, 1] }}
+                            transition={{ duration: 0.8, repeat: Infinity, delay }}
+                          />
+                        ))}
+                      </motion.div>
+                    </div>
+                  </motion.div>
+                ) : results.length === 0 ? (
+                  <motion.div
+                    key="no-results"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="p-4 text-center text-gray-400"
+                  >
+                    <p className="text-sm">{t('noResults')}</p>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="results"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    <ul className="divide-y divide-gray-100">
+                      {results.map((item, index) => (
+                        <motion.li
+                          key={`${item.type}-${item.id}-${index}`}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.03 }}
+                          className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleSelect(item)}
+                        >
+                          <div className="flex-shrink-0 w-10 h-14 relative rounded overflow-hidden bg-gray-200">
+                            {item.poster_path ? (
+                              <Image
+                                src={`https://image.tmdb.org/t/p/w92${item.poster_path}`}
+                                alt={getTitle(item)}
+                                fill
+                                sizes="40px"
+                                style={{ objectFit: 'cover' }}
+                                loading="lazy"
+                                quality={60}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-400 text-xl">
+                                {getTypeIcon(item.type)}
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      </motion.li>
-                    ))}
-                  </ul>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start gap-2">
+                              <div className="flex-1 min-w-0">
+                                {getDisplayTitle(item)}
+                              </div>
+                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded flex-shrink-0 mt-0.5">
+                                {getTypeLabel(item.type)}
+                              </span>
+                            </div>
+                          </div>
+                        </motion.li>
+                      ))}
+                    </ul>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+            {/* Separate Bottom Close Button below the white box */}
+            {(showClose || onClose || menu) && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 5 }}
+                className="w-full flex justify-center"
+              >
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsActivated(false);
+                    onClose?.();
+                    setIsFocused(false);
+                    inputRef.current?.blur();
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsActivated(false);
+                    onClose?.();
+                    setIsFocused(false);
+                    inputRef.current?.blur();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-5 rounded-2xl text-xs sm:text-sm font-bold text-red-400 hover:text-white bg-gray-950/90 hover:bg-red-600/90 shadow-2xl border border-red-500/40 hover:border-red-500 backdrop-blur-xl transition-all cursor-pointer active:scale-95 ring-1 ring-white/10"
+                >
+                  <XMarkMiniIcon className="w-4 h-4 stroke-[2.5]" />
+                  <span>{t('closeSearch')}</span>
+                </button>
+              </motion.div>
+            )}
+          </div>
         )}
       </AnimatePresence>
 
       {/* Search History Dropdown */}
       <AnimatePresence>
         {showHistory && !showDropdown && (
-          <motion.div
-            ref={historyContainerRef}
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className={`absolute left-0 right-0 mt-2 rounded-2xl shadow-2xl z-50 border border-gray-200 ${
-              menu ? 'bg-white text-gray-900' : 'bg-white'
-            }`}
+          <div 
+            className="absolute left-0 right-0 mt-2 z-50 flex flex-col items-center gap-2.5 pointer-events-auto"
             style={{ 
               minWidth: menu ? '100%' : '220px', 
               maxWidth: '100%'
             }}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 pt-3 pb-2">
-              <div className="flex items-center gap-2 text-gray-500">
-                <ClockIcon className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase tracking-wide">{t('recentSearches')}</span>
+            <motion.div
+              ref={historyContainerRef}
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className={`w-full rounded-2xl shadow-2xl border border-gray-200 ${
+                menu ? 'bg-white text-gray-900' : 'bg-white'
+              }`}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 pt-3 pb-2">
+                <div className="flex items-center gap-2 text-gray-500">
+                  <ClockIcon className="h-4 w-4" />
+                  <span className="text-xs font-medium uppercase tracking-wide">{t('recentSearches')}</span>
+                </div>
+                <button
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    clearSearchHistory();
+                  }}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors font-medium"
+                >
+                  {t('clearAll')}
+                </button>
               </div>
-              <button
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  clearSearchHistory();
-                }}
-                className="text-xs text-gray-400 hover:text-red-500 transition-colors font-medium"
-              >
-                {t('clearAll')}
-              </button>
-            </div>
-            {/* History Items — show 10 visible, scroll for 15 total */}
-            <div className="max-h-[420px] overflow-y-auto scrollbar-hide">
-              <ul className="divide-y divide-gray-100">
-                {displayHistory.map((entry, index) => (
-                  <motion.li
-                    key={entry.query}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.02 }}
-                    className="group flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      addToSearchHistory(entry.query);
-                      router.push(`/search?q=${encodeURIComponent(entry.query)}`);
-                      setIsFocused(false);
-                      setQuery('');
-                      inputRef.current?.blur();
-                      onSelectMovie?.();
-                    }}
-                  >
-                    {/* Clock icon */}
-                    <ClockIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                    {/* Query text */}
-                    <span className="flex-1 text-sm text-gray-700 truncate group-hover:text-gray-900 transition-colors">
-                      {entry.query}
-                    </span>
-                    {/* Delete button — visible on hover */}
-                    <button
+              {/* History Items — show 10 visible, scroll for 15 total */}
+              <div className="max-h-[420px] overflow-y-auto scrollbar-hide">
+                <ul className="divide-y divide-gray-100">
+                  {displayHistory.map((entry, index) => (
+                    <motion.li
+                      key={entry.query}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.02 }}
+                      className="group flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors"
                       onMouseDown={(e) => {
                         e.preventDefault();
-                        e.stopPropagation();
-                        removeSearch(entry.query);
+                        addToSearchHistory(entry.query);
+                        router.push(`/search?q=${encodeURIComponent(entry.query)}`);
+                        setIsFocused(false);
+                        setQuery('');
+                        inputRef.current?.blur();
+                        onSelectMovie?.();
                       }}
-                      className="p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-gray-200 text-gray-400 hover:text-red-500 transition-all"
-                      aria-label={`Remove ${entry.query}`}
                     >
-                      <XMarkMiniIcon className="h-4 w-4" />
-                    </button>
-                  </motion.li>
-                ))}
-              </ul>
-            </div>
-          </motion.div>
+                      {/* Clock icon */}
+                      <ClockIcon className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                      {/* Query text */}
+                      <span className="flex-1 text-sm text-gray-700 truncate group-hover:text-gray-900 transition-colors">
+                        {entry.query}
+                      </span>
+                      {/* Delete button — visible on hover */}
+                      <button
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          removeSearch(entry.query);
+                        }}
+                        className="p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-gray-200 text-gray-400 hover:text-red-500 transition-all"
+                        aria-label={`Remove ${entry.query}`}
+                      >
+                        <XMarkMiniIcon className="h-4 w-4" />
+                      </button>
+                    </motion.li>
+                  ))}
+                </ul>
+              </div>
+            </motion.div>
+
+            {/* Separate Bottom Close Button below the white box */}
+            {(showClose || onClose || menu) && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 5 }}
+                className="w-full flex justify-center"
+              >
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsActivated(false);
+                    onClose?.();
+                    setIsFocused(false);
+                    inputRef.current?.blur();
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsActivated(false);
+                    onClose?.();
+                    setIsFocused(false);
+                    inputRef.current?.blur();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-5 rounded-2xl text-xs sm:text-sm font-bold text-red-400 hover:text-white bg-gray-950/90 hover:bg-red-600/90 shadow-2xl border border-red-500/40 hover:border-red-500 backdrop-blur-xl transition-all cursor-pointer active:scale-95 ring-1 ring-white/10"
+                >
+                  <XMarkMiniIcon className="w-4 h-4 stroke-[2.5]" />
+                  <span>{t('closeSearch')}</span>
+                </button>
+              </motion.div>
+            )}
+          </div>
         )}
       </AnimatePresence>
     </div>

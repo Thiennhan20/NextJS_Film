@@ -132,21 +132,21 @@ export default function Home({ initialHeroItems = null }: HomePageClientProps) {
       <HeroMovies initialItems={initialHeroItems} />
 
       {/* Recently Watched Movies Section - Near fold, load early */}
-      <LazySection rootMargin="200px" minHeight={RECENTLY_WATCHED_SECTION_RESERVE}>
+      <LazySection rootMargin="700px" minHeight={RECENTLY_WATCHED_SECTION_RESERVE}>
         <Suspense fallback={<ReservedSectionSpace minHeight={RECENTLY_WATCHED_SECTION_RESERVE} />}>
           <RecentlyWatchedMovies />
         </Suspense>
       </LazySection>
 
       {/* Active Streaming Rooms Section */}
-      <LazySection rootMargin="200px" minHeight={STREAMING_ROOMS_SECTION_RESERVE}>
+      <LazySection rootMargin="700px" minHeight={STREAMING_ROOMS_SECTION_RESERVE}>
         <Suspense fallback={<ReservedSectionSpace minHeight={STREAMING_ROOMS_SECTION_RESERVE} />}>
           <ActiveStreamingRooms />
         </Suspense>
       </LazySection>
 
       {/* Korean Frame - Each frame gets its own LazySection */}
-      <LazySection rootMargin="150px" minHeight={POSTER_ROW_SECTION_RESERVE}>
+      <LazySection rootMargin="700px" minHeight={POSTER_ROW_SECTION_RESERVE}>
         <Suspense fallback={<ReservedSectionSpace minHeight={POSTER_ROW_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto py-4 sm:py-6">
             <KoreanFrame />
@@ -155,7 +155,7 @@ export default function Home({ initialHeroItems = null }: HomePageClientProps) {
       </LazySection>
 
       {/* US-UK Frame */}
-      <LazySection rootMargin="150px" minHeight={POSTER_ROW_SECTION_RESERVE}>
+      <LazySection rootMargin="700px" minHeight={POSTER_ROW_SECTION_RESERVE}>
         <Suspense fallback={<ReservedSectionSpace minHeight={POSTER_ROW_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto py-4 sm:py-6">
             <USUKFrame />
@@ -164,7 +164,7 @@ export default function Home({ initialHeroItems = null }: HomePageClientProps) {
       </LazySection>
 
       {/* China Frame */}
-      <LazySection rootMargin="150px" minHeight={POSTER_ROW_SECTION_RESERVE}>
+      <LazySection rootMargin="700px" minHeight={POSTER_ROW_SECTION_RESERVE}>
         <Suspense fallback={<ReservedSectionSpace minHeight={POSTER_ROW_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto py-4 sm:py-6">
             <ChinaFrame />
@@ -173,14 +173,14 @@ export default function Home({ initialHeroItems = null }: HomePageClientProps) {
       </LazySection>
 
       {/* Top Comments Section */}
-      <LazySection rootMargin="150px" minHeight="500px">
+      <LazySection rootMargin="700px" minHeight="500px">
         <Suspense fallback={<SectionSkeleton />}>
           <TopComments />
         </Suspense>
       </LazySection>
 
       {/* Top Movies Section */}
-      <LazySection rootMargin="150px" minHeight={TOP_FIVE_SECTION_RESERVE}>
+      <LazySection rootMargin="700px" minHeight={TOP_FIVE_SECTION_RESERVE}>
         <Suspense fallback={<ReservedSectionSpace minHeight={TOP_FIVE_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto">
             <MoviesFrame />
@@ -189,14 +189,14 @@ export default function Home({ initialHeroItems = null }: HomePageClientProps) {
       </LazySection>
 
       {/* Coming Soon Movies Section */}
-      <LazySection rootMargin="150px" minHeight={COMING_SOON_SECTION_RESERVE}>
+      <LazySection rootMargin="700px" minHeight={COMING_SOON_SECTION_RESERVE}>
         <Suspense fallback={<ReservedSectionSpace minHeight={COMING_SOON_SECTION_RESERVE} />}>
           <ComingSoonMovies />
         </Suspense>
       </LazySection>
 
       {/* Top TV Shows Section */}
-      <LazySection rootMargin="150px" minHeight={TOP_FIVE_SECTION_RESERVE}>
+      <LazySection rootMargin="700px" minHeight={TOP_FIVE_SECTION_RESERVE}>
         <Suspense fallback={<ReservedSectionSpace minHeight={TOP_FIVE_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto">
             <TVShowsFrame />
@@ -205,7 +205,7 @@ export default function Home({ initialHeroItems = null }: HomePageClientProps) {
       </LazySection>
 
       {/* Anime Frame Section */}
-      <LazySection rootMargin="150px" minHeight={ANIME_SECTION_RESERVE} onIntersect={preloadFeatureFrames}>
+      <LazySection rootMargin="700px" minHeight={ANIME_SECTION_RESERVE} onIntersect={preloadFeatureFrames}>
         <Suspense fallback={<ReservedSectionSpace minHeight={ANIME_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto pb-12">
             <AnimeFrame />
@@ -214,7 +214,7 @@ export default function Home({ initialHeroItems = null }: HomePageClientProps) {
       </LazySection>
 
       {/* Action Frame - Separate LazySection */}
-      <LazySection rootMargin="150px" minHeight={POSTER_ROW_SECTION_RESERVE}>
+      <LazySection rootMargin="700px" minHeight={POSTER_ROW_SECTION_RESERVE}>
         <Suspense fallback={<ReservedSectionSpace minHeight={POSTER_ROW_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto py-4 sm:py-6">
             <ActionFrame />
@@ -223,7 +223,7 @@ export default function Home({ initialHeroItems = null }: HomePageClientProps) {
       </LazySection>
 
       {/* Horror Frame - Separate LazySection */}
-      <LazySection rootMargin="150px" minHeight={POSTER_ROW_SECTION_RESERVE}>
+      <LazySection rootMargin="700px" minHeight={POSTER_ROW_SECTION_RESERVE}>
         <Suspense fallback={<ReservedSectionSpace minHeight={POSTER_ROW_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto py-4 sm:py-6">
             <HorrorFrame />
@@ -232,7 +232,7 @@ export default function Home({ initialHeroItems = null }: HomePageClientProps) {
       </LazySection>
 
       {/* Romance Frame - 3D Image Ring */}
-      <LazySection rootMargin="150px" minHeight={ROMANCE_SECTION_RESERVE}>
+      <LazySection rootMargin="700px" minHeight={ROMANCE_SECTION_RESERVE}>
         <Suspense fallback={<ReservedSectionSpace minHeight={ROMANCE_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto py-4 sm:py-6">
             <RomanceFrame />
@@ -241,7 +241,7 @@ export default function Home({ initialHeroItems = null }: HomePageClientProps) {
       </LazySection>
 
       {/* Featured Actors Frame */}
-      <LazySection rootMargin="150px" minHeight={ACTORS_SECTION_RESERVE}>
+      <LazySection rootMargin="700px" minHeight={ACTORS_SECTION_RESERVE}>
         <Suspense fallback={<ReservedSectionSpace minHeight={ACTORS_SECTION_RESERVE} />}>
           <div className="max-w-7xl mx-auto py-4 sm:py-6">
             <ActorsFrame />
@@ -250,7 +250,7 @@ export default function Home({ initialHeroItems = null }: HomePageClientProps) {
       </LazySection>
 
       {/* Entertainment Frames Section */}
-      <LazySection rootMargin="150px" minHeight={ENTERTAINMENT_SECTION_RESERVE}>
+      <LazySection rootMargin="700px" minHeight={ENTERTAINMENT_SECTION_RESERVE}>
         <Suspense fallback={<ReservedSectionSpace minHeight={ENTERTAINMENT_SECTION_RESERVE} />}>
           <EntertainmentFrames />
         </Suspense>

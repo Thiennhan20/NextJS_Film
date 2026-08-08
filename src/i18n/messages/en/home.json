@@ -11,8 +11,8 @@
     "watchNow": "Watch Now",
     "save": "Save",
     "added": "Added",
-    "saveToList": "Save to list",
-    "addedToList": "Added to list",
+    "saveToList": "Save",
+    "addedToList": "Saved",
     "movie": "Movie",
     "tvShow": "TV Show",
     "noTrailer": "No trailer available for this content",
@@ -70,7 +70,8 @@
     "clickSeeMore": "Click to see more",
     "comingSoon": "Coming Soon",
     "ai": "AI",
-    "game": "Game"
+    "game": "Game",
+    "start": "Start"
   },
   "Comments": {
     "topComments": "TOP COMMENTS",

@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+:root {
+  --background: #000000;
+  --foreground: #ffffff;
+  --color-background: #000000;
+  --color-foreground: #ffffff;
+}
+
+html, body {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  font-family: Arial, Helvetica, sans-serif;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
+
 /* Splash Screen Styles */
 .splash-screen-active {
   overflow: hidden !important;
@@ -147,65 +167,6 @@
     transition-duration: 120ms !important;
   }
 }
-
-/* Prevent translation for logo and brand elements */
-[translate="no"],
-.no-translate {
-  translate: no !important;
-}
-
-/* Alternative method for next-intl */
-[data-no-translate="true"] {
-  translate: no !important;
-}
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-  /* Hide main page scrollbar */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* Internet Explorer 10+ */
-}
-
-/* Hide main page scrollbar for Webkit browsers */
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
-}
-
-/* Safari video player fixes */
-video::-webkit-media-controls {
-  display: none !important;
-}
-
-/* Horizontal scroll container styles */
-.horizontal-scroll-container {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* Internet Explorer 10+ */
-}
-
-.horizontal-scroll-container::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
-}
-
-/* Smooth scrolling for horizontal containers */
 .horizontal-scroll-container {
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;

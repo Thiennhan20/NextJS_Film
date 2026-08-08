@@ -11,8 +11,8 @@
     "watchNow": "Xem Ngay",
     "save": "Lưu",
     "added": "Đã Lưu",
-    "saveToList": "Lưu vào danh sách",
-    "addedToList": "Đã lưu vào danh sách",
+    "saveToList": "Lưu",
+    "addedToList": "Đã lưu",
     "movie": "Phim",
     "tvShow": "Phim Bộ",
     "noTrailer": "Không có trailer cho nội dung này",
@@ -70,7 +70,8 @@
     "clickSeeMore": "Nhấn để xem thêm",
     "comingSoon": "Sắp Ra Mắt",
     "ai": "AI",
-    "game": "Game"
+    "game": "Game",
+    "start": "Bắt đầu"
   },
   "Comments": {
     "topComments": "BÌNH LUẬN NỔI BẬT",

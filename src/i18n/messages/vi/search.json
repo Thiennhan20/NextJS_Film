@@ -10,6 +10,7 @@
     "resultsFound": "Tìm thấy {count} kết quả",
     "noResults": "Không tìm thấy kết quả.",
     "recentSearches": "Tìm kiếm gần đây",
+    "closeSearch": "Đóng tìm kiếm",
     "clearAll": "Xóa tất cả",
     "pageOf": "Trang {current} / {total}",
     "error": "Lỗi khi tải kết quả. Vui lòng thử lại.",
