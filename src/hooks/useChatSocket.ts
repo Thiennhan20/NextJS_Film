@@ -214,9 +214,10 @@ export const useChatSocket = ({ username, onUserCountChange }: UseChatSocketProp
 
   // Initialize Socket.IO
   useEffect(() => {
-    const socketUrl = process.env.NODE_ENV === 'development'
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || (process.env.NODE_ENV === 'development'
       ? 'http://localhost:3001'
-      : 'https://server-nextjs-firm.onrender.com/';
+      // : 'https://server-nextjs-firm.onrender.com/' // Old US Oregon
+      : 'https://server-nextjs-film.onrender.com/'); // New Singapore
 
     socketRef.current = io(socketUrl, {
       transports: ['websocket'],

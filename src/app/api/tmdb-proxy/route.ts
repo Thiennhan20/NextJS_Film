@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRedisClient, buildCacheKey, getTTLForEndpoint } from '@/lib/redis';
 
-const BACKEND_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://server-nextjs-firm.onrender.com/api/tmdb'
-  : 'http://localhost:3001/api/tmdb';
+// const BACKEND_BASE_URL = process.env.API_URL || (process.env.NODE_ENV === 'production'
+//   ? 'https://server-nextjs-firm.onrender.com/api/tmdb' // Old US Oregon
+//   : 'http://localhost:3001/api/tmdb');
+const BACKEND_BASE_URL = process.env.API_URL || (process.env.NODE_ENV === 'production'
+  ? 'https://server-nextjs-film.onrender.com/api/tmdb' // New Singapore
+  : 'http://localhost:3001/api/tmdb');
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_API_KEY = process.env.TMDB_API_KEY;

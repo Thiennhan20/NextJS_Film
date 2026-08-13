@@ -207,7 +207,8 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'https://server-nextjs-firm.onrender.com/api/:path*',
+        // destination: 'https://server-nextjs-firm.onrender.com/api/:path*', // Old US Oregon
+        destination: 'https://server-nextjs-film.onrender.com/api/:path*', // New Singapore
       },
     ];
   },
