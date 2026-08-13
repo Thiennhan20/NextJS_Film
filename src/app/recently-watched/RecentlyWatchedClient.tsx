@@ -111,11 +111,15 @@ export default function RecentlyWatchedClient() {
       if (!progressData.currentTime || progressData.currentTime <= 0) continue
 
       if (isMovie) {
-        const id = key.replace('movie-progress-', '')
+        const rawId = key.replace(/^movie-progress-/, '')
+        const id = rawId.replace(/-(vietsub|dubbed)$/i, '')
+        const detectedAudio = rawId.endsWith('-dubbed') ? 'dubbed' : 'vietsub'
+        const audio = progressData.audio || detectedAudio
+
         allItems.push({
           id,
           server: progressData.server || 'server1',
-          audio: progressData.audio || 'vietsub',
+          audio: audio,
           currentTime: progressData.currentTime,
           duration: progressData.duration,
           title: progressData.title,
@@ -125,13 +129,16 @@ export default function RecentlyWatchedClient() {
           watchUrl: progressData.watchUrl || undefined,
         })
       } else if (isTVShow) {
-        const keyParts = key.replace('tvshow-progress-', '').split('-')
+        const keyParts = key.replace(/^tvshow-progress-/, '').split('-')
         if (keyParts.length < 3) continue
         const [id, season, episode] = keyParts
+        const detectedAudio = keyParts[3] || 'vietsub'
+        const audio = progressData.audio || detectedAudio
+
         allItems.push({
           id,
           server: progressData.server || 'server1',
-          audio: progressData.audio || 'vietsub',
+          audio: audio,
           currentTime: progressData.currentTime,
           duration: progressData.duration,
           title: progressData.title,
@@ -260,9 +267,12 @@ export default function RecentlyWatchedClient() {
 
   // Remove item
   const handleRemove = useCallback(async (item: RecentlyWatchedItem) => {
+    const norm = (val?: string) => (val || '').toLowerCase().replace(/\s/g, '');
+    const itemAudio = norm(item.audio);
+
     // Optimistic update
     setItems(prev => prev.filter(i =>
-      !(i.id === item.id && i.isTVShow === item.isTVShow && i.season === item.season && i.episode === item.episode)
+      !(i.id === item.id && i.isTVShow === item.isTVShow && i.season === item.season && i.episode === item.episode && norm(i.audio) === itemAudio)
     ))
 
     if (userId) {
@@ -273,16 +283,21 @@ export default function RecentlyWatchedClient() {
             isTVShow: item.isTVShow || false,
             season: item.season ?? null,
             episode: item.episode ?? null,
+            audio: item.audio,
           },
         })
       } catch (error) {
         console.error('Failed to delete:', error)
       }
     } else {
-      const key = item.isTVShow && item.season && item.episode
+      const keyWithAudio = item.isTVShow && item.season && item.episode
+        ? `tvshow-progress-${item.id}-${item.season}-${item.episode}-${item.audio}`
+        : `movie-progress-${item.id}-${item.audio}`
+      const keyFallback = item.isTVShow && item.season && item.episode
         ? `tvshow-progress-${item.id}-${item.season}-${item.episode}`
         : `movie-progress-${item.id}`
-      localStorage.removeItem(key)
+      localStorage.removeItem(keyWithAudio)
+      localStorage.removeItem(keyFallback)
     }
   }, [userId])
 
@@ -382,7 +397,7 @@ export default function RecentlyWatchedClient() {
                 <AnimatePresence mode="popLayout">
                   {items.map((item, index) => (
                     <motion.div
-                      key={`${item.isTVShow ? 'tv' : 'movie'}-${item.id}-${item.season || ''}-${item.episode || ''}`}
+                      key={`${item.isTVShow ? 'tv' : 'movie'}-${item.id}-${item.season || ''}-${item.episode || ''}-${item.audio || ''}`}
                       initial={{ opacity: 0, y: 15 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.9 }}

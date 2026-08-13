@@ -310,12 +310,13 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
           watchUrl: watchUrlToSave
         }).catch(() => {});
       } else {
+        const targetAudio = audio || 'vietsub';
         const key = isTVShow && season && episode
-          ? `tvshow-progress-${movieId}-${season}-${episode}`
-          : `movie-progress-${movieId}`;
+          ? `tvshow-progress-${movieId}-${season}-${episode}-${targetAudio}`
+          : `movie-progress-${movieId}-${targetAudio}`;
         localStorage.setItem(key, JSON.stringify({
           currentTime: 0, duration: 0, title: title || '', poster: poster || '',
-          server: server || '', audio: audio || '',
+          server: server || '', audio: audio || targetAudio,
           watchUrl: watchUrlToSave,
           lastWatched: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -1009,13 +1010,19 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
 
       // When logged in, merge guest localStorage progress to DB, then clear it
       if (userId) {
-        const movieKey = `movie-progress-${movieId}`;
-        const tvKey = isTVShow && season && episode
+        const targetAudio = audio || 'vietsub';
+        const movieKeyWithAudio = `movie-progress-${movieId}-${targetAudio}`;
+        const movieKeyFallback = `movie-progress-${movieId}`;
+        const tvKeyWithAudio = isTVShow && season && episode
+          ? `tvshow-progress-${movieId}-${season}-${episode}-${targetAudio}`
+          : null;
+        const tvKeyFallback = isTVShow && season && episode
           ? `tvshow-progress-${movieId}-${season}-${episode}`
           : null;
+
         // Check if guest had progress worth migrating
-        const guestKey = tvKey || movieKey;
-        const guestData = localStorage.getItem(guestKey);
+        const guestKey = tvKeyWithAudio || movieKeyWithAudio;
+        const guestData = localStorage.getItem(guestKey) || (tvKeyFallback ? localStorage.getItem(tvKeyFallback) : localStorage.getItem(movieKeyFallback));
         if (guestData) {
           try {
             const pd = JSON.parse(guestData);
@@ -1030,8 +1037,10 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
             }
           } catch { /* ignore parse errors */ }
         }
-        localStorage.removeItem(movieKey);
-        if (tvKey) localStorage.removeItem(tvKey);
+        localStorage.removeItem(movieKeyWithAudio);
+        localStorage.removeItem(movieKeyFallback);
+        if (tvKeyWithAudio) localStorage.removeItem(tvKeyWithAudio);
+        if (tvKeyFallback) localStorage.removeItem(tvKeyFallback);
       }
 
       hasEverPlayedRef.current = false;
@@ -1059,12 +1068,13 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       });
 
       const saveToLocalStorage = (ct: number, dur: number) => {
+        const targetAudio = audio || 'vietsub';
         const key = isTVShow && season && episode
-          ? `tvshow-progress-${movieId}-${season}-${episode}`
-          : `movie-progress-${movieId}`;
+          ? `tvshow-progress-${movieId}-${season}-${episode}-${targetAudio}`
+          : `movie-progress-${movieId}-${targetAudio}`;
         localStorage.setItem(key, JSON.stringify({
           currentTime: ct, duration: dur, title: title || '', poster: poster || '',
-          server: server || '', audio: audio || '',
+          server: server || '', audio: audio || targetAudio,
           watchUrl: saveUrlRef.current || '',
           lastWatched: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),

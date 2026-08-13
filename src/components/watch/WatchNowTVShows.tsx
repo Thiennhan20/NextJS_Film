@@ -83,7 +83,12 @@ export default function WatchNowTVShows({
   // Read audio parameter from URL
   const audioFromUrl = searchParams.get('audio');
 
-  const [selectedAudio, setSelectedAudio] = useState<'vietsub' | 'dubbed' | null>(null);
+  const [selectedAudio, setSelectedAudio] = useState<'vietsub' | 'dubbed' | null>(() => {
+    if (audioFromUrl === 'dubbed' || audioFromUrl === 'vietsub') {
+      return audioFromUrl;
+    }
+    return null;
+  });
   const [server2Link, setServer2Link] = useState('');
   const [tvShowLinksLoading, setTVShowLinksLoading] = useState(false);
   const [apiSearchCompleted, setApiSearchCompleted] = useState(false);
@@ -142,17 +147,13 @@ export default function WatchNowTVShows({
   const [isSavedLinkFatalError, setIsSavedLinkFatalError] = useState(false);
 
 
-  // Load Saved Progress on mount / episode change
+  // Load Saved Progress on mount / episode / selectedAudio / audioFromUrl change
   useEffect(() => {
     let cancelled = false;
     async function loadProgress() {
-      // Clear old progress state first so we don't bleed previous episode's progress to current episode
-      setSavedProgress(null);
-      setActiveWatchUrl('');
-      setIsSavedLinkFatalError(false);
       setHasLoadedSavedProgress(false);
-      setApiSearchCompleted(false); // Trigger loading state immediately
-      setDataReady(false);          // Trigger loading state immediately
+
+      const targetAudio = selectedAudio || (audioFromUrl === 'dubbed' || audioFromUrl === 'vietsub' ? audioFromUrl : null) || 'vietsub';
 
       let savedTime = 0;
       let savedWatchUrl = '';
@@ -160,12 +161,15 @@ export default function WatchNowTVShows({
 
       if (userId) {
         try {
-          const params = {
+          const params: Record<string, string> = {
             contentId: String(tvShow.id),
             isTVShow: 'true',
             season: String(selectedSeason),
             episode: String(selectedEpisode)
           };
+          if (targetAudio) {
+            params.audio = targetAudio;
+          }
           const resp = await api.get('/recently-watched', { params });
           if (cancelled) return;
           savedTime = resp.data?.item?.currentTime || 0;
@@ -173,35 +177,56 @@ export default function WatchNowTVShows({
           savedAudio = resp.data?.item?.audio || '';
         } catch { /* ignore */ }
       } else {
-        const key = `tvshow-progress-${tvShow.id}-${selectedSeason}-${selectedEpisode}`;
-        const saved = localStorage.getItem(key);
+        const keyWithAudio = `tvshow-progress-${tvShow.id}-${selectedSeason}-${selectedEpisode}-${targetAudio}`;
+        const keyFallback = `tvshow-progress-${tvShow.id}-${selectedSeason}-${selectedEpisode}`;
+        let saved = localStorage.getItem(keyWithAudio);
+        if (!saved && targetAudio === 'vietsub') {
+          const fallbackData = localStorage.getItem(keyFallback);
+          if (fallbackData) {
+            try {
+              const pd = JSON.parse(fallbackData);
+              if (!pd.audio || pd.audio === 'vietsub') {
+                saved = fallbackData;
+              }
+            } catch {
+              saved = fallbackData;
+            }
+          }
+        }
         if (saved) {
           try {
             const pd = JSON.parse(saved);
             savedTime = pd.currentTime || 0;
             savedWatchUrl = pd.watchUrl || '';
-            savedAudio = pd.audio || '';
+            savedAudio = pd.audio || targetAudio;
             if (pd.expiresAt && new Date() > new Date(pd.expiresAt)) {
-              localStorage.removeItem(key);
+              localStorage.removeItem(keyWithAudio);
+              if (targetAudio === 'vietsub') localStorage.removeItem(keyFallback);
               savedTime = 0;
               savedWatchUrl = '';
               savedAudio = '';
             }
           } catch {
             savedTime = parseFloat(saved) || 0;
+            savedAudio = targetAudio;
           }
         }
       }
 
       if (cancelled) return;
       if (savedTime > 0 || savedWatchUrl) {
-        setSavedProgress({ currentTime: savedTime, watchUrl: savedWatchUrl, audio: savedAudio || undefined });
+        setSavedProgress({ currentTime: savedTime, watchUrl: savedWatchUrl, audio: savedAudio || targetAudio });
         if (savedWatchUrl) {
           setActiveWatchUrl(savedWatchUrl);
+        } else {
+          setActiveWatchUrl('');
         }
-        if (savedAudio === 'vietsub' || savedAudio === 'dubbed') {
+        if (!selectedAudio && !audioFromUrl && (savedAudio === 'vietsub' || savedAudio === 'dubbed')) {
           setSelectedAudio(savedAudio as 'vietsub' | 'dubbed');
         }
+      } else {
+        setSavedProgress(null);
+        setActiveWatchUrl('');
       }
       setHasLoadedSavedProgress(true);
     }
@@ -212,7 +237,7 @@ export default function WatchNowTVShows({
     return () => {
       cancelled = true;
     };
-  }, [tvShow.id, selectedSeason, selectedEpisode, userId]);
+  }, [tvShow.id, selectedSeason, selectedEpisode, userId, selectedAudio, audioFromUrl]);
 
   // Auto-swap on fatal error when background search completes
   useEffect(() => {
@@ -248,7 +273,7 @@ export default function WatchNowTVShows({
           watchUrl: rawVideoSrc
         }).catch(() => {});
       } else {
-        const key = `tvshow-progress-${tvShow.id}-${selectedSeason}-${selectedEpisode}`;
+        const key = `tvshow-progress-${tvShow.id}-${selectedSeason}-${selectedEpisode}-${selectedAudio || 'vietsub'}`;
         localStorage.setItem(key, JSON.stringify({
           currentTime: 0, duration: 0, title: tvShow.name, poster: tvShow.poster,
           server: selectedServer, audio: selectedAudio || '',
@@ -261,17 +286,6 @@ export default function WatchNowTVShows({
       }
     }
   }, [apiSearchCompleted, isSavedLinkFatalError, tvShowLinks, selectedAudio, userId, tvShow.id, tvShow.name, tvShow.poster, selectedSeason, selectedEpisode, selectedServer]);
-
-  // Reset activeWatchUrl when user manually changes audio
-  useEffect(() => {
-    if (hasLoadedSavedProgress && savedProgress) {
-      const savedAudio = savedProgress.audio || 'vietsub';
-      const currentAudio = selectedAudio || 'vietsub';
-      if (currentAudio !== savedAudio) {
-        setActiveWatchUrl('');
-      }
-    }
-  }, [selectedAudio, savedProgress, hasLoadedSavedProgress]);
 
   // Server 3 states
   const [server3Links, setServer3Links] = useState({ vietsub: '', dubbed: '', m3u8: '' });
@@ -826,12 +840,19 @@ export default function WatchNowTVShows({
           </div>
         ) : selectedServer === 'server1' ? (
           (() => {
+            const currentAudio = selectedAudio || (audioFromUrl === 'dubbed' || audioFromUrl === 'vietsub' ? audioFromUrl : null);
             let videoSrc = '';
             let effectiveAudio: 'vietsub' | 'dubbed' | null = null;
-            if (selectedAudio === 'vietsub' && tvShowLinks.vietsub) {
+            if (currentAudio === 'vietsub' && tvShowLinks.vietsub) {
               videoSrc = tvShowLinks.vietsub;
               effectiveAudio = 'vietsub';
-            } else if (selectedAudio === 'dubbed' && tvShowLinks.dubbed) {
+            } else if (currentAudio === 'dubbed' && tvShowLinks.dubbed) {
+              videoSrc = tvShowLinks.dubbed;
+              effectiveAudio = 'dubbed';
+            } else if (!currentAudio && tvShowLinks.vietsub) {
+              videoSrc = tvShowLinks.vietsub;
+              effectiveAudio = 'vietsub';
+            } else if (!currentAudio && tvShowLinks.dubbed) {
               videoSrc = tvShowLinks.dubbed;
               effectiveAudio = 'dubbed';
             } else if (tvShowLinks.vietsub) {
@@ -893,20 +914,22 @@ export default function WatchNowTVShows({
               );
             }
 
+            const playerAudio = effectiveAudio || currentAudio || 'vietsub';
+
             return playUrl ? (
               (() => {
                 const preparedPlaySource = prepareHlsPlayerSource(playUrl);
 
                 return (
               <EnhancedMoviePlayer
-                key={`${selectedSeason}-${selectedEpisode}`}
+                key={`${selectedSeason}-${selectedEpisode}-${playerAudio}`}
                 ref={handlePlayerRef}
                 src={preparedPlaySource.src}
                 poster={tvShow.poster}
                 autoPlay={false}
                 movieId={tvShow.id}
                 server={selectedServer}
-                audio={effectiveAudio || undefined}
+                audio={playerAudio}
                 title={tvShow.name}
                 season={selectedSeason}
                 episode={selectedEpisode}
@@ -1052,7 +1075,7 @@ export default function WatchNowTVShows({
               );
             }
 
-            // Server 3 sử dụng iframe vì nguonc.com không cho phép embed trực tiếp
+            // Server 3 sử dụng iframe 100%
             let embedSrc = '';
             if (selectedAudio === 'vietsub' && server3Links.vietsub) {
               embedSrc = server3Links.vietsub;
@@ -1074,7 +1097,7 @@ export default function WatchNowTVShows({
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
                 title={`${tvShow.name} - Season ${selectedSeason} Episode ${selectedEpisode} - Server 3`}
-                referrerPolicy="origin"
+                referrerPolicy="no-referrer"
               />
             ) : (
               <div className="flex items-center justify-center h-full text-white text-lg font-semibold">

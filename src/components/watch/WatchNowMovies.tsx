@@ -98,7 +98,12 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
   });
   const [movieLinksLoading, setMovieLinksLoading] = useState(false);
   const [apiSearchCompleted, setApiSearchCompleted] = useState(false);
-  const [selectedAudio, setSelectedAudio] = useState<'vietsub' | 'dubbed' | null>(null);
+  const [selectedAudio, setSelectedAudio] = useState<'vietsub' | 'dubbed' | null>(() => {
+    if (audioFromUrl === 'dubbed' || audioFromUrl === 'vietsub') {
+      return audioFromUrl;
+    }
+    return null;
+  });
 
   // Instant Playback States
   const [savedProgress, setSavedProgress] = useState<{ currentTime: number; watchUrl: string; audio?: string } | null>(null);
@@ -106,16 +111,13 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
   const [activeWatchUrl, setActiveWatchUrl] = useState<string>('');
   const [isSavedLinkFatalError, setIsSavedLinkFatalError] = useState(false);
 
-  // Load Saved Progress on mount
+  // Load Saved Progress on mount and on selectedAudio / audioFromUrl change
   useEffect(() => {
     let cancelled = false;
     async function loadProgress() {
-      // Clear old progress state first to prevent bleed and race conditions
-      setSavedProgress(null);
-      setActiveWatchUrl('');
-      setIsSavedLinkFatalError(false);
       setHasLoadedSavedProgress(false);
-      setApiSearchCompleted(false); // Trigger loading state immediately
+
+      const targetAudio = selectedAudio || (audioFromUrl === 'dubbed' || audioFromUrl === 'vietsub' ? audioFromUrl : null) || 'vietsub';
 
       let savedTime = 0;
       let savedWatchUrl = '';
@@ -123,7 +125,10 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
 
       if (userId) {
         try {
-          const params = { contentId: String(movie.id), isTVShow: 'false' };
+          const params: Record<string, string> = { contentId: String(movie.id), isTVShow: 'false' };
+          if (targetAudio) {
+            params.audio = targetAudio;
+          }
           const resp = await api.get('/recently-watched', { params });
           if (cancelled) return;
           savedTime = resp.data?.item?.currentTime || 0;
@@ -131,35 +136,56 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
           savedAudio = resp.data?.item?.audio || '';
         } catch { /* ignore */ }
       } else {
-        const key = `movie-progress-${movie.id}`;
-        const saved = localStorage.getItem(key);
+        const keyWithAudio = `movie-progress-${movie.id}-${targetAudio}`;
+        const keyFallback = `movie-progress-${movie.id}`;
+        let saved = localStorage.getItem(keyWithAudio);
+        if (!saved && targetAudio === 'vietsub') {
+          const fallbackData = localStorage.getItem(keyFallback);
+          if (fallbackData) {
+            try {
+              const pd = JSON.parse(fallbackData);
+              if (!pd.audio || pd.audio === 'vietsub') {
+                saved = fallbackData;
+              }
+            } catch {
+              saved = fallbackData;
+            }
+          }
+        }
         if (saved) {
           try {
             const pd = JSON.parse(saved);
             savedTime = pd.currentTime || 0;
             savedWatchUrl = pd.watchUrl || '';
-            savedAudio = pd.audio || '';
+            savedAudio = pd.audio || targetAudio;
             if (pd.expiresAt && new Date() > new Date(pd.expiresAt)) {
-              localStorage.removeItem(key);
+              localStorage.removeItem(keyWithAudio);
+              if (targetAudio === 'vietsub') localStorage.removeItem(keyFallback);
               savedTime = 0;
               savedWatchUrl = '';
               savedAudio = '';
             }
           } catch {
             savedTime = parseFloat(saved) || 0;
+            savedAudio = targetAudio;
           }
         }
       }
 
       if (cancelled) return;
       if (savedTime > 0 || savedWatchUrl) {
-        setSavedProgress({ currentTime: savedTime, watchUrl: savedWatchUrl, audio: savedAudio || undefined });
+        setSavedProgress({ currentTime: savedTime, watchUrl: savedWatchUrl, audio: savedAudio || targetAudio });
         if (savedWatchUrl) {
           setActiveWatchUrl(savedWatchUrl);
+        } else {
+          setActiveWatchUrl('');
         }
-        if (savedAudio === 'vietsub' || savedAudio === 'dubbed') {
+        if (!selectedAudio && !audioFromUrl && (savedAudio === 'vietsub' || savedAudio === 'dubbed')) {
           setSelectedAudio(savedAudio as 'vietsub' | 'dubbed');
         }
+      } else {
+        setSavedProgress(null);
+        setActiveWatchUrl('');
       }
       setHasLoadedSavedProgress(true);
     }
@@ -168,7 +194,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
     return () => {
       cancelled = true;
     };
-  }, [movie.id, userId]);
+  }, [movie.id, userId, selectedAudio, audioFromUrl]);
 
   // Auto-swap on fatal error when background search completes
   useEffect(() => {
@@ -203,7 +229,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
           watchUrl: rawVideoSrc
         }).catch(() => {});
       } else {
-        const key = `movie-progress-${movie.id}`;
+        const key = `movie-progress-${movie.id}-${selectedAudio || 'vietsub'}`;
         localStorage.setItem(key, JSON.stringify({
           currentTime: 0, duration: 0, title: movie.title, poster: movie.poster,
           server: selectedServer, audio: selectedAudio || '',
@@ -214,17 +240,6 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
       }
     }
   }, [apiSearchCompleted, isSavedLinkFatalError, movieLinks, selectedAudio, userId, movie.id, movie.title, movie.poster, selectedServer]);
-
-  // Reset activeWatchUrl when user manually changes audio
-  useEffect(() => {
-    if (hasLoadedSavedProgress && savedProgress) {
-      const savedAudio = savedProgress.audio || 'vietsub';
-      const currentAudio = selectedAudio || 'vietsub';
-      if (currentAudio !== savedAudio) {
-        setActiveWatchUrl('');
-      }
-    }
-  }, [selectedAudio, savedProgress, hasLoadedSavedProgress]);
 
   // Server 3 states
   const [server3Links, setServer3Links] = useState({ vietsub: '', dubbed: '', m3u8: '' });
@@ -638,12 +653,19 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
       <div className="relative w-full rounded-lg bg-black/50 aspect-video">
         {selectedServer === 'server1' && (
           (() => {
+            const currentAudio = selectedAudio || (audioFromUrl === 'dubbed' || audioFromUrl === 'vietsub' ? audioFromUrl : null);
             let videoSrc = '';
             let effectiveAudio: 'vietsub' | 'dubbed' | null = null;
-            if (selectedAudio === 'vietsub' && movieLinks.vietsub) {
+            if (currentAudio === 'vietsub' && movieLinks.vietsub) {
               videoSrc = movieLinks.vietsub;
               effectiveAudio = 'vietsub';
-            } else if (selectedAudio === 'dubbed' && movieLinks.dubbed) {
+            } else if (currentAudio === 'dubbed' && movieLinks.dubbed) {
+              videoSrc = movieLinks.dubbed;
+              effectiveAudio = 'dubbed';
+            } else if (!currentAudio && movieLinks.vietsub) {
+              videoSrc = movieLinks.vietsub;
+              effectiveAudio = 'vietsub';
+            } else if (!currentAudio && movieLinks.dubbed) {
               videoSrc = movieLinks.dubbed;
               effectiveAudio = 'dubbed';
             } else if (movieLinks.vietsub) {
@@ -705,20 +727,22 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
               );
             }
 
+            const playerAudio = effectiveAudio || currentAudio || 'vietsub';
+
             return playUrl ? (
               (() => {
                 const preparedPlaySource = prepareHlsPlayerSource(playUrl);
 
                 return (
               <EnhancedMoviePlayer
-                key={movie.id}
+                key={`${movie.id}-${playerAudio}`}
                 ref={handlePlayerRef}
                 src={preparedPlaySource.src}
                 poster={movie.poster}
                 autoPlay={false}
                 movieId={movie.id}
                 server={selectedServer}
-                audio={effectiveAudio || undefined}
+                audio={playerAudio}
                 title={movie.title}
                 userId={typeof userId === 'string' ? userId : undefined}
                 watchUrl={preparedPlaySource.watchUrl}
@@ -791,7 +815,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
               );
             }
 
-            // Server 3 sử dụng iframe vì nguonc.com không cho phép embed trực tiếp
+            // Server 3 sử dụng iframe 100%
             let embedSrc = '';
             if (selectedAudio === 'vietsub' && server3Links.vietsub) {
               embedSrc = server3Links.vietsub;
@@ -813,7 +837,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
                 title={movie.title + ' - Server 3'}
-                referrerPolicy="origin"
+                referrerPolicy="no-referrer"
               />
             ) : (
               <div className="flex items-center justify-center h-full text-white text-lg font-semibold">

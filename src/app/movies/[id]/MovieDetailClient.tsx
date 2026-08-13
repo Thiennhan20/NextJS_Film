@@ -49,7 +49,10 @@ export default function MovieDetailClient({ params }: { params: Promise<{ id: st
   const [id, setId] = useState<string>('');
   
   useEffect(() => {
-    params.then(p => setId(p.id));
+    params.then(p => {
+      const cleanId = (p.id || '').replace(/-(vietsub|dubbed)$/i, '');
+      setId(cleanId);
+    });
   }, [params]);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -22,7 +22,8 @@ async function getMovieData(id: string) {
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const resolvedParams = await params;
-  const movie = await getMovieData(resolvedParams.id);
+  const cleanId = (resolvedParams.id || '').replace(/-(vietsub|dubbed)$/i, '');
+  const movie = await getMovieData(cleanId);
   
   if (!movie) {
     return {
