@@ -69,36 +69,46 @@ export interface EnhancedMoviePlayerProps {
 // ─── Constants ────────────────────────────────────────────────────
 const HLS_CONFIG = {
   enableWorker: true,
-  maxBufferLength: 30,
-  maxMaxBufferLength: 60,
+  maxBufferLength: 60,                // 60s forward buffer (was 30) — more runway before stall
+  maxMaxBufferLength: 120,            // Allow up to 2 min buffer when bandwidth allows
   maxBufferSize: 90 * 1000 * 1000,   // 90MB — handles 1080p high bitrate
-  maxBufferHole: 0.5,
-  backBufferLength: 10,
+  maxBufferHole: 0.8,                 // Tolerate 0.8s gaps (was 0.5) — less stall triggers
+  backBufferLength: 5,                // 5s back buffer (was 10) — free memory for forward buffer
   startLevel: -1,
   abrEwmaDefaultEstimate: 1000000,
-  abrBandWidthFactor: 0.95,
-  abrBandWidthUpFactor: 0.9,
-  fragLoadingTimeOut: 15000,          // 15s — faster retry on slow CDN
-  fragLoadingMaxRetry: 4,             // 4 retries — worst case ~1 min
-  fragLoadingRetryDelay: 1000,
-  manifestLoadingTimeOut: 10000,
-  manifestLoadingMaxRetry: 3,
+  abrBandWidthFactor: 0.95,           // Keep aggressive — strong networks get full quality
+  abrBandWidthUpFactor: 0.9,          // Keep — reactive drop (below) handles weak networks
+  fragLoadingTimeOut: 35000,          // 35s (was 15s) — allow heavy 3.7MB segments to finish downloading on slow networks without infinite abort/retry loops
+  fragLoadingMaxRetry: 6,             // 6 retries — more chances for weak networks
+  fragLoadingRetryDelay: 1500,        // 1.5s between retries — give network time
+  manifestLoadingTimeOut: 20000,
+  manifestLoadingMaxRetry: 4,         // 4 retries
   manifestLoadingRetryDelay: 500,
-  levelLoadingTimeOut: 10000,
-  levelLoadingMaxRetry: 3,
+  levelLoadingTimeOut: 20000,
+  levelLoadingMaxRetry: 4,            // 4 retries
   lowLatencyMode: false,
   testBandwidth: true,
-  startFragPrefetch: true,
+  startFragPrefetch: false,          // 100% sequential loading — concentrate bandwidth on 1 segment at a time for weak networks
   progressive: true,
+  nudgeOffset: 0.2,                   // Auto-skip small buffer holes instead of stalling
+  nudgeMaxRetry: 5,                   // Retry nudge up to 5 times
 };
 
 const RESUME_SKIP_DELAY_MS = 5000;
-const RESUME_STUCK_NOTICE_DELAY_MS = 10000;
+const RESUME_STUCK_NOTICE_DELAY_MS = 45000;         // 45s (was 25s) — only show if stuck loading for a long time
 const RESUME_HARD_TIMEOUT_MS = 15000;
 const RESUME_PLAY_RETRY_INTERVAL_MS = 1000;
 const RESUME_HLS_RELOAD_INTERVAL_MS = 2500;
 const RESUME_HLS_RELOAD_MAX_ATTEMPTS = 3;
 const SEEK_UI_UPDATE_INTERVAL_MS = 120;
+
+// ─── Smooth playback constants ───────────────────────────────────
+const BUFFERING_DEBOUNCE_MS = 500;           // Delay before showing spinner (hide micro-stalls)
+const STALL_WINDOW_MS = 30_000;              // Time window to count stalls
+const STALL_THRESHOLD = 3;                   // Stalls in window before quality drop
+const QUALITY_RECOVERY_MS = 120_000;         // 2 min smooth → restore auto quality
+const FATAL_NETWORK_MAX_RETRIES = 5;         // Max fatal network error retries
+const FATAL_NETWORK_BASE_DELAY_MS = 1000;    // Base delay for exponential backoff
 const PLAYER_ANTI_COPY_STYLE: React.CSSProperties & {
   WebkitTouchCallout?: string;
   WebkitTapHighlightColor?: string;
@@ -226,6 +236,12 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     // HLS discontinuity correction: track offset between intended position and video.currentTime
     const timeOffsetRef = useRef(0);
     const pendingSeekRef = useRef<number | null>(null);
+
+    // ─── Smooth playback refs ────────────────────────────────
+    const bufferingDebounceRef = useRef<NodeJS.Timeout | null>(null);
+    const stallTimestamps = useRef<number[]>([]);
+    const forcedQualityLevel = useRef<number | null>(null);
+    const qualityRecoveryTimer = useRef<NodeJS.Timeout | null>(null);
     const [showControls, setShowControls] = useState(true);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [volume, setVolume] = useState(1);
@@ -590,30 +606,89 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
           hls = new Hls(HLS_CONFIG);
           hls.loadSource(playbackSrc);
           hls.attachMedia(video);
+
+          // Track media error recovery attempts
+          let mediaErrorRecoveries = 0;
+          // Track consecutive non-fatal fragment failures
+          let consecutiveFragErrors = 0;
+
           hls.on(Hls.Events.MANIFEST_PARSED, (_, data: { levels: Level[] }) => {
             networkErrorRetries = 0;
+            mediaErrorRecoveries = 0;
+            consecutiveFragErrors = 0;
             setQualities(parseQualities(data.levels));
             setCurrentQuality(-1);
+            // Restore forced quality level if it was set before manifest reload
+            if (forcedQualityLevel.current !== null && hls) {
+              hls.currentLevel = forcedQualityLevel.current;
+            }
             applyResumeOrAutoplay();
           });
+
+          hls.on(Hls.Events.FRAG_LOADED, () => {
+            // Fragment loaded successfully — reset consecutive error counter
+            consecutiveFragErrors = 0;
+          });
+
           hls.on(Hls.Events.ERROR, (_event, data) => {
-            if (data.fatal) {
-              switch (data.type) {
-                case Hls.ErrorTypes.NETWORK_ERROR:
-                  networkErrorRetries += 1;
-                  if (networkErrorRetries <= 2) {
-                    hls?.startLoad();
-                  } else {
-                    hls?.destroy();
-                    if (onError) onError();
-                  }
-                  break;
-                case Hls.ErrorTypes.MEDIA_ERROR:
-                  networkErrorRetries = 0;
-                  hls?.recoverMediaError();
-                  break;
-                default: hls?.destroy(); if (onError) onError(); break;
+            // ── Non-fatal error handling ──
+            if (!data.fatal) {
+              // Track consecutive fragment load failures
+              if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR ||
+                  data.details === Hls.ErrorDetails.FRAG_LOAD_TIMEOUT) {
+                consecutiveFragErrors += 1;
+                // After 3 consecutive fragment failures, kick-start loading
+                if (consecutiveFragErrors >= 3 && hls) {
+                  consecutiveFragErrors = 0;
+                  hls.startLoad();
+                }
               }
+              // Buffer stall detected — proactively restart loading
+              if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR && hls) {
+                hls.startLoad();
+              }
+              return;
+            }
+
+            // ── Fatal error handling ──
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR: {
+                networkErrorRetries += 1;
+                if (networkErrorRetries <= FATAL_NETWORK_MAX_RETRIES) {
+                  // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+                  const delay = FATAL_NETWORK_BASE_DELAY_MS * Math.pow(2, networkErrorRetries - 1);
+                  setTimeout(() => {
+                    if (cancelled || !hls) return;
+                    // Reload manifest from scratch (-1) in case segments expired
+                    hls.startLoad(-1);
+                  }, delay);
+                } else {
+                  hls?.destroy();
+                  if (onError) onError();
+                }
+                break;
+              }
+              case Hls.ErrorTypes.MEDIA_ERROR: {
+                networkErrorRetries = 0;
+                mediaErrorRecoveries += 1;
+                if (mediaErrorRecoveries <= 1) {
+                  // First attempt: standard recovery
+                  hls?.recoverMediaError();
+                } else if (mediaErrorRecoveries <= 2) {
+                  // Second attempt: swap audio codec then recover
+                  hls?.swapAudioCodec();
+                  hls?.recoverMediaError();
+                } else {
+                  // Give up after 2 recovery attempts
+                  hls?.destroy();
+                  if (onError) onError();
+                }
+                break;
+              }
+              default:
+                hls?.destroy();
+                if (onError) onError();
+                break;
             }
           });
           hlsRef.current = hls;
@@ -673,8 +748,68 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         setCurrentTime(correctedTime);
         setIsBuffering(false);
       };
-      const onWaiting = () => setIsBuffering(true);
-      const onCanPlay = () => setIsBuffering(false);
+      // ── Debounced buffering: hide micro-stalls under 500ms ──
+      const onWaiting = () => {
+        // Clear any pending clear-buffering timeout
+        if (bufferingDebounceRef.current) { clearTimeout(bufferingDebounceRef.current); bufferingDebounceRef.current = null; }
+        // Delay showing spinner — if canplay/timeupdate fires within BUFFERING_DEBOUNCE_MS, skip it
+        bufferingDebounceRef.current = setTimeout(() => {
+          bufferingDebounceRef.current = null;
+          setIsBuffering(true);
+
+          // ── Reactive quality drop: track stall timestamps ──
+          const now = Date.now();
+          stallTimestamps.current.push(now);
+          // Keep only stalls within the window
+          stallTimestamps.current = stallTimestamps.current.filter(t => now - t < STALL_WINDOW_MS);
+
+          if (stallTimestamps.current.length >= STALL_THRESHOLD) {
+            // Too many stalls — force lower quality
+            const hls = hlsRef.current;
+            if (hls && hls.levels.length > 1) {
+              const currentLevel = hls.currentLevel === -1 ? hls.loadLevel : hls.currentLevel;
+              // Drop one level below current (minimum is 0 = lowest quality)
+              const newLevel = Math.max(0, currentLevel - 1);
+              if (forcedQualityLevel.current === null || newLevel < forcedQualityLevel.current) {
+                forcedQualityLevel.current = newLevel;
+                hls.currentLevel = newLevel;
+                hls.nextLevel = newLevel;
+                setCurrentQuality(newLevel);
+              }
+            }
+            // Reset stall counter after applying drop
+            stallTimestamps.current = [];
+
+            // Reset recovery timer
+            if (qualityRecoveryTimer.current) { clearTimeout(qualityRecoveryTimer.current); qualityRecoveryTimer.current = null; }
+          }
+        }, BUFFERING_DEBOUNCE_MS);
+      };
+      const onCanPlay = () => {
+        // Cancel pending spinner show
+        if (bufferingDebounceRef.current) { clearTimeout(bufferingDebounceRef.current); bufferingDebounceRef.current = null; }
+        setIsBuffering(false);
+
+        // ── Quality recovery: after smooth playback, restore auto ──
+        if (forcedQualityLevel.current !== null) {
+          // Reset any existing recovery timer
+          if (qualityRecoveryTimer.current) clearTimeout(qualityRecoveryTimer.current);
+          qualityRecoveryTimer.current = setTimeout(() => {
+            qualityRecoveryTimer.current = null;
+            // Only restore if no recent stalls
+            const now = Date.now();
+            const recentStalls = stallTimestamps.current.filter(t => now - t < QUALITY_RECOVERY_MS);
+            if (recentStalls.length === 0) {
+              forcedQualityLevel.current = null;
+              const hls = hlsRef.current;
+              if (hls) {
+                hls.currentLevel = -1; // Restore ABR auto
+                setCurrentQuality(-1);
+              }
+            }
+          }, QUALITY_RECOVERY_MS);
+        }
+      };
       const onSeeking = () => setIsSeeking(true);
       const onSeeked = () => {
         setIsSeeking(false);
@@ -709,6 +844,11 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         if (onLoadedMetadataForResume) {
           video.removeEventListener('loadedmetadata', onLoadedMetadataForResume);
         }
+        // Clean up smooth playback timers
+        if (bufferingDebounceRef.current) { clearTimeout(bufferingDebounceRef.current); bufferingDebounceRef.current = null; }
+        if (qualityRecoveryTimer.current) { clearTimeout(qualityRecoveryTimer.current); qualityRecoveryTimer.current = null; }
+        forcedQualityLevel.current = null;
+        stallTimestamps.current = [];
         if (hls) hls.destroy();
         hlsRef.current = null;
         if (preparedCleanup) preparedCleanup();
@@ -1564,22 +1704,54 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
           </div>
         )}
 
-        {/* Resume Stuck Notice — shown when browser fails to resume after 5s */}
+        {/* Resume Stuck Notice — shown only when browser fails to load/resume after 25s */}
         {resumeStuckNotice && (
-          <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/80" data-no-toggle>
-            <div className="bg-gray-900/95 border border-gray-700 rounded-2xl px-6 py-5 sm:px-8 sm:py-6 flex flex-col items-center gap-4 shadow-2xl max-w-sm mx-4 backdrop-blur-sm">
-              <svg className="w-10 h-10 sm:w-12 sm:h-12 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/80 backdrop-blur-sm animate-fade-in" data-no-toggle>
+            <div className="relative bg-gray-900/95 border border-gray-700 rounded-2xl px-6 py-5 sm:px-8 sm:py-6 flex flex-col items-center gap-4 shadow-2xl max-w-sm mx-4 backdrop-blur-sm animate-scale-up">
+              {/* Close button X */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setResumeStuckNotice(false);
+                  const video = getVideo(ref, innerRef);
+                  if (video) video.play().catch(() => {});
+                }}
+                className="absolute top-3 right-3 p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                aria-label={t('close')}
+                title={t('close')}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
+              <svg className="w-10 h-10 sm:w-12 sm:h-12 text-yellow-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>
-              <p className="text-gray-200 text-sm sm:text-base text-center leading-relaxed">
+
+              <p className="text-gray-200 text-sm sm:text-base text-center leading-relaxed font-medium">
                 {t('resumeStuckMessage')}
               </p>
-              <button
-                onClick={(e) => { e.stopPropagation(); setResumeStuckNotice(false); router.back(); }}
-                className="px-6 py-2.5 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-semibold text-sm sm:text-base transition-colors shadow-lg hover:shadow-yellow-500/30"
-              >
-                {t('resumeStuckGoBack')}
-              </button>
+
+              <div className="flex flex-row gap-2.5 w-full mt-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setResumeStuckNotice(false);
+                    const video = getVideo(ref, innerRef);
+                    if (video) video.play().catch(() => {});
+                  }}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs sm:text-sm transition-all duration-200 shadow-md hover:shadow-yellow-500/20 active:scale-[0.97]"
+                >
+                  {t('tryAgain')}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setResumeStuckNotice(false); router.back(); }}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm transition-all duration-200 active:scale-[0.97]"
+                >
+                  {t('resumeStuckGoBack')}
+                </button>
+              </div>
             </div>
           </div>
         )}

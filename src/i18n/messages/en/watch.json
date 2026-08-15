@@ -37,6 +37,8 @@
     "skipWatchFromBeginning": "Skip, watch from beginning",
     "resumeStuckMessage": "Your browser could not resume playback. Please go back and re-enter to continue watching.",
     "resumeStuckGoBack": "Go Back",
+    "close": "Close",
+    "tryAgain": "Try Again",
     "settingsDisabled": "Settings disabled during watch party",
     "settings": "Settings",
     "speed": "Speed",
