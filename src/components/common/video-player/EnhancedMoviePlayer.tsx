@@ -73,7 +73,7 @@ const HLS_CONFIG = {
   maxMaxBufferLength: 120,            // Allow up to 2 min buffer when bandwidth allows
   maxBufferSize: 90 * 1000 * 1000,   // 90MB — handles 1080p high bitrate
   maxBufferHole: 0.8,                 // Tolerate 0.8s gaps (was 0.5) — less stall triggers
-  backBufferLength: 5,                // 5s back buffer (was 10) — free memory for forward buffer
+  backBufferLength: 30,               // 30s back buffer — backward seeks within 30s use cache instead of re-downloading from CDN
   startLevel: -1,
   abrEwmaDefaultEstimate: 1000000,
   abrBandWidthFactor: 0.95,           // Keep aggressive — strong networks get full quality
@@ -88,7 +88,7 @@ const HLS_CONFIG = {
   levelLoadingMaxRetry: 4,            // 4 retries
   lowLatencyMode: false,
   testBandwidth: true,
-  startFragPrefetch: false,          // 100% sequential loading — concentrate bandwidth on 1 segment at a time for weak networks
+  startFragPrefetch: false,          // Default off (safe for weak networks) — toggled dynamically by adaptive prefetch logic below
   progressive: true,
   nudgeOffset: 0.2,                   // Auto-skip small buffer holes instead of stalling
   nudgeMaxRetry: 5,                   // Retry nudge up to 5 times
@@ -109,6 +109,7 @@ const STALL_THRESHOLD = 3;                   // Stalls in window before quality 
 const QUALITY_RECOVERY_MS = 120_000;         // 2 min smooth → restore auto quality
 const FATAL_NETWORK_MAX_RETRIES = 5;         // Max fatal network error retries
 const FATAL_NETWORK_BASE_DELAY_MS = 1000;    // Base delay for exponential backoff
+const ADAPTIVE_PREFETCH_BW_THRESHOLD = 3_000_000; // 3 Mbps — above this, prefetch next segment in parallel; below, sequential loading
 const PLAYER_ANTI_COPY_STYLE: React.CSSProperties & {
   WebkitTouchCallout?: string;
   WebkitTapHighlightColor?: string;
@@ -236,6 +237,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     // HLS discontinuity correction: track offset between intended position and video.currentTime
     const timeOffsetRef = useRef(0);
     const pendingSeekRef = useRef<number | null>(null);
+    const lastSeekTimestampRef = useRef(0); // When last user seek occurred — used to ignore post-seek stalls for quality drop
 
     // ─── Smooth playback refs ────────────────────────────────
     const bufferingDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -628,6 +630,12 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
           hls.on(Hls.Events.FRAG_LOADED, () => {
             // Fragment loaded successfully — reset consecutive error counter
             consecutiveFragErrors = 0;
+            // Adaptive prefetch: enable parallel segment loading when bandwidth
+            // is strong (≥3 Mbps), keep sequential when network is weak.
+            if (hls) {
+              const bwBps = hls.bandwidthEstimate || 0; // bits per second
+              hls.config.startFragPrefetch = bwBps > ADAPTIVE_PREFETCH_BW_THRESHOLD;
+            }
           });
 
           hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -759,6 +767,11 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
 
           // ── Reactive quality drop: track stall timestamps ──
           const now = Date.now();
+          // Don't count buffering within 3s of a user seek as a stall.
+          // Seeking naturally fires 'waiting' events; recording them as stalls
+          // triggers unnecessary quality drops that compound the lag.
+          const POST_SEEK_GRACE_MS = 3000;
+          if (now - lastSeekTimestampRef.current < POST_SEEK_GRACE_MS) return;
           stallTimestamps.current.push(now);
           // Keep only stalls within the window
           stallTimestamps.current = stallTimestamps.current.filter(t => now - t < STALL_WINDOW_MS);
@@ -810,7 +823,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
           }, QUALITY_RECOVERY_MS);
         }
       };
-      const onSeeking = () => setIsSeeking(true);
+      const onSeeking = () => { setIsSeeking(true); lastSeekTimestampRef.current = Date.now(); };
       const onSeeked = () => {
         setIsSeeking(false);
         userSeekingRef.current = false;
