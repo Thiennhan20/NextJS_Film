@@ -63,6 +63,7 @@ interface WatchNowMoviesServer3Props {
     movie: Movie;
     server1Ready?: boolean;
     onLinksChange?: (links: { vietsub: string; dubbed: string; m3u8: string }) => void;
+    onM3u8ProxyChange?: (m3u8Proxy: { vietsub: string; dubbed: string }) => void;
     onLoadingChange?: (loading: boolean) => void;
     onSearchComplete?: (completed: boolean) => void;
 }
@@ -146,6 +147,7 @@ export default function WatchNowMoviesServer3({
     movie,
     server1Ready,
     onLinksChange,
+    onM3u8ProxyChange,
     onLoadingChange,
     onSearchComplete
 }: WatchNowMoviesServer3Props) {
@@ -201,6 +203,28 @@ export default function WatchNowMoviesServer3({
             if (data.status === 'success' && data.data) {
                 setNguoncMovie(data.data.detail);
                 if (onLinksChange) onLinksChange(data.data.links);
+
+                // Async: fetch m3u8Proxy for iOS native playback (non-blocking)
+                if (onM3u8ProxyChange) {
+                    const links = data.data.links;
+                    const fetchM3u8 = async (embedProxyUrl: string) => {
+                        try {
+                            // Extract original embed URL from embed-proxy URL
+                            const urlObj = new URL(embedProxyUrl);
+                            const originalUrl = urlObj.searchParams.get('url');
+                            if (!originalUrl) return '';
+                            const res = await fetch(`${apiUrl}/server3/stream-url?url=${encodeURIComponent(originalUrl)}`);
+                            const json = await res.json();
+                            return json.status === 'success' ? json.m3u8 : '';
+                        } catch { return ''; }
+                    };
+                    Promise.all([
+                        links.vietsub ? fetchM3u8(links.vietsub) : Promise.resolve(''),
+                        links.dubbed ? fetchM3u8(links.dubbed) : Promise.resolve('')
+                    ]).then(([vietsub, dubbed]) => {
+                        if (vietsub || dubbed) onM3u8ProxyChange({ vietsub, dubbed });
+                    });
+                }
             } else {
                 setSearchError('Movie not available on this server.');
             }
@@ -211,7 +235,7 @@ export default function WatchNowMoviesServer3({
             setSearchCompleted(true);
             if (onSearchComplete) onSearchComplete(true);
         }
-    }, [movie?.title, movie?.year, movie?.releaseDate, movie?.director, onLinksChange, onSearchComplete]);
+    }, [movie?.title, movie?.year, movie?.releaseDate, movie?.director, onLinksChange, onM3u8ProxyChange, onSearchComplete]);
 
     // Auto-search: wait for server1 to finish, then search by movie title
     useEffect(() => {

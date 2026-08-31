@@ -114,6 +114,7 @@ interface WatchNowTVShowsServer3Props {
     selectedEpisode: number;
     server1Ready?: boolean;
     onLinksChange?: (links: { vietsub: string; dubbed: string; m3u8: string }) => void;
+    onM3u8ProxyChange?: (m3u8Proxy: { vietsub: string; dubbed: string }) => void;
     onLoadingChange?: (loading: boolean) => void;
     onSearchComplete?: (completed: boolean) => void;
 }
@@ -139,6 +140,7 @@ export default function WatchNowTVShowsServer3({
     selectedEpisode,
     server1Ready,
     onLinksChange,
+    onM3u8ProxyChange,
     onLoadingChange,
     onSearchComplete
 }: WatchNowTVShowsServer3Props) {
@@ -190,6 +192,27 @@ export default function WatchNowTVShowsServer3({
                 lastSearchEpisodeRef.current = episode;
                 setCachedEpisodes(data.data.detail.episodes);
                 if (onLinksChange) onLinksChange(data.data.links);
+
+                // Async: fetch m3u8Proxy for iOS native playback (non-blocking)
+                if (onM3u8ProxyChange) {
+                    const links = data.data.links;
+                    const fetchM3u8 = async (embedProxyUrl: string) => {
+                        try {
+                            const urlObj = new URL(embedProxyUrl);
+                            const originalUrl = urlObj.searchParams.get('url');
+                            if (!originalUrl) return '';
+                            const res = await fetch(`${apiUrl}/server3/stream-url?url=${encodeURIComponent(originalUrl)}`);
+                            const json = await res.json();
+                            return json.status === 'success' ? json.m3u8 : '';
+                        } catch { return ''; }
+                    };
+                    Promise.all([
+                        links.vietsub ? fetchM3u8(links.vietsub) : Promise.resolve(''),
+                        links.dubbed ? fetchM3u8(links.dubbed) : Promise.resolve('')
+                    ]).then(([vietsub, dubbed]) => {
+                        if (vietsub || dubbed) onM3u8ProxyChange({ vietsub, dubbed });
+                    });
+                }
             } else {
             }
         } catch {
@@ -198,7 +221,7 @@ export default function WatchNowTVShowsServer3({
             setSearchCompleted(true);
             if (onSearchComplete) onSearchComplete(true);
         }
-    }, [tvShow?.name, tvShow?.year, tvShow?.firstAirDate, selectedSeason, selectedEpisode, onLinksChange, onSearchComplete]);
+    }, [tvShow?.name, tvShow?.year, tvShow?.firstAirDate, selectedSeason, selectedEpisode, onLinksChange, onM3u8ProxyChange, onSearchComplete]);
 
 
 

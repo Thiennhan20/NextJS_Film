@@ -289,8 +289,17 @@ export default function WatchNowTVShows({
 
   // Server 3 states
   const [server3Links, setServer3Links] = useState({ vietsub: '', dubbed: '', m3u8: '' });
+  const [server3M3u8Proxy, setServer3M3u8Proxy] = useState({ vietsub: '', dubbed: '' });
   const [server3Loading, setServer3Loading] = useState(false);
   const [server3SearchCompleted, setServer3SearchCompleted] = useState(false);
+
+  // Detect iOS for native video playback
+  const [isIOS, setIsIOS] = useState(false);
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    const ios = /iphone|ipod|ipad/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    setIsIOS(ios);
+  }, []);
 
   // ── Auto Next Episode states ──
   const [autoNextEnabled, setAutoNextEnabled] = useState(false);
@@ -615,6 +624,9 @@ export default function WatchNowTVShows({
           server1Ready={apiSearchCompleted}
           onLinksChange={(links) => {
             setServer3Links(links)
+          }}
+          onM3u8ProxyChange={(m3u8Proxy) => {
+            setServer3M3u8Proxy(m3u8Proxy)
           }}
           onLoadingChange={(loading) => {
             setServer3Loading(loading)
@@ -991,6 +1003,35 @@ export default function WatchNowTVShows({
               embedSrc = server3Links.m3u8;
             }
 
+            // On iOS: use native <video> with proxied M3U8 URL
+            if (isIOS) {
+              let m3u8Src = '';
+              if (selectedAudio === 'vietsub' && server3M3u8Proxy.vietsub) {
+                m3u8Src = server3M3u8Proxy.vietsub;
+              } else if (selectedAudio === 'dubbed' && server3M3u8Proxy.dubbed) {
+                m3u8Src = server3M3u8Proxy.dubbed;
+              } else if (server3M3u8Proxy.vietsub) {
+                m3u8Src = server3M3u8Proxy.vietsub;
+              } else if (server3M3u8Proxy.dubbed) {
+                m3u8Src = server3M3u8Proxy.dubbed;
+              }
+
+              if (m3u8Src) {
+                return (
+                  <video
+                    key={`${selectedSeason}-${selectedEpisode}-${m3u8Src}`}
+                    src={m3u8Src}
+                    className="w-full h-full bg-black"
+                    controls
+                    autoPlay
+                    playsInline
+                    title={`${tvShow.name} - Season ${selectedSeason} Episode ${selectedEpisode} - Server 3`}
+                  />
+                );
+              }
+            }
+
+            // Desktop: use iframe with embed-proxy
             return embedSrc ? (
               <iframe
                 key={`${selectedSeason}-${selectedEpisode}-${embedSrc}`}
