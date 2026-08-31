@@ -372,10 +372,12 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
   }, [fetchRecentItems, isAuthChecked])
 
   const handleContinueWatching = useCallback((item: RecentlyWatchedItem) => {
-    if (item.isTVShow && item.season && item.episode) {
-      router.push(`/tvshows/${item.id}?season=${item.season}&episode=${item.episode}&server=${item.server}&audio=${item.audio}`)
+    if (item.isTVShow) {
+      const season = item.season || 1;
+      const episode = item.episode || 1;
+      router.push(`/tvshows/${item.id}/watch?season=${season}&episode=${episode}&server=${item.server || 'server1'}&audio=${item.audio || 'vietsub'}`)
     } else {
-      router.push(`/movies/${item.id}?server=${item.server}&audio=${item.audio}`)
+      router.push(`/movies/${item.id}/watch?server=${item.server || 'server1'}&audio=${item.audio || 'vietsub'}`)
     }
   }, [router])
 

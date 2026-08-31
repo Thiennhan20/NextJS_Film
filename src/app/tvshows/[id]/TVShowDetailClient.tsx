@@ -1,1000 +1,1322 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
-import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Image from 'next/image'
-import { ClockIcon, CalendarIcon, PlayIcon, ChevronDownIcon } from '@heroicons/react/24/solid'
-import { BookmarkIcon } from '@heroicons/react/24/outline'
-import { useWatchlistStore } from '@/store/store'
+import Link from 'next/link'
+import { useLocale, useTranslations } from 'next-intl'
 import toast from 'react-hot-toast'
-import axios from 'axios'
-import { useSearchParams, useRouter } from 'next/navigation'
-import useAuthStore from '@/store/useAuthStore'
+import {
+  ArrowsPointingInIcon,
+  ArrowsPointingOutIcon,
+  Bars3Icon,
+  BookmarkIcon,
+  CalendarDaysIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ChevronUpIcon,
+  FilmIcon,
+  InformationCircleIcon,
+  PhotoIcon,
+  PlusIcon,
+  ServerIcon,
+  SpeakerWaveIcon,
+  SparklesIcon,
+  UserGroupIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline'
+import { PlayIcon } from '@heroicons/react/24/solid'
 import api from '@/lib/axios'
-import Comments from '@/components/Comments'
-import WatchNowTVShows from '@/components/watch/WatchNowTVShows'
+import useAuthStore from '@/store/useAuthStore'
+import { useWatchlistStore } from '@/store/store'
 import RelatedContent from '@/components/RelatedContent'
-import AnimeEpisodePlayer from '@/components/anime/AnimeEpisodePlayer'
-import { isAnimeInList, getAnimeConfig, getAnimeTotalEpisodes, getAnimeEpisodeMapping } from '@/config/anime-list'
-import { useTranslations } from 'next-intl'
+import Comments from '@/components/Comments'
+import MediaPageLoading from '@/components/common/MediaPageLoading'
+import {
+  fetchSeasonEpisodes,
+  type MediaEpisode,
+  type MediaType,
+  useMediaDetails,
+} from './tvshow-data'
 
-
-interface CastMember {
-  name: string
-  character: string
-  profilePath: string
+interface TVShowDetailClientProps {
+  id: string
 }
 
-// Định nghĩa kiểu TVShow rõ ràng
-interface TVShow {
-  id: number
-  name: string
+type DetailTab = 'episodes' | 'gallery' | 'cast' | 'suggestions'
 
-  duration: string
-  year: number | ''
-  firstAirDate?: string
-  creator: string
-  cast: CastMember[]
-  genre: string
-  description: string
-  poster: string
-  backdrop: string
-  trailer: string
-  tvShowUrl: string
-  scenes: string[]
+const buttonClass =
+  'inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.07] px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-xl transition hover:border-white/25 hover:bg-white/[0.13]'
 
-  totalSeasons?: number
-  totalEpisodes?: number
+const watchButtonClass =
+  'inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-rose-500 via-red-600 to-red-700 font-black text-white shadow-[0_12px_38px_rgba(225,29,72,0.38)] transition hover:-translate-y-0.5 hover:from-rose-400 hover:via-red-500 hover:to-red-600 hover:shadow-[0_16px_44px_rgba(225,29,72,0.48)]'
+
+function formatReleaseDate(value: string, locale: string) {
+  if (!value) return ''
+  const date = new Date(`${value}T00:00:00Z`)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat(locale === 'vi' ? 'vi-VN' : 'en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date)
 }
 
-
-interface Episode {
-  id: number
-  name: string
-  episode_number: number
-  season_number: number
-  still_path?: string
-  overview?: string
-  air_date?: string
-}
-
-
-
-
-
-interface Person {
-  name: string
-  job?: string
-}
-
-export default function TVShowDetailClient({ params }: { params: Promise<{ id: string }> }) {
-  const [id, setId] = useState<string>('');
-  
-  useEffect(() => {
-    params.then(p => {
-      const cleanId = (p.id || '').replace(/-(vietsub|dubbed)$/i, '');
-      setId(cleanId);
-    });
-  }, [params]);
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const searchParams = useSearchParams()
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const router = useRouter()
-  const [tvShow, setTVShow] = useState<TVShow | null>(null)
-  const t = useTranslations('TVShows')
-
-
-
-  const [loading, setLoading] = useState<boolean>(true)
+export default function TVShowDetailClient({ id }: TVShowDetailClientProps) {
+  const type = 'tv' as MediaType
+  const locale = useLocale()
+  const t = useTranslations('MediaDetail')
+  const text = {
+    watchNow: t('watchNow'),
+    trailer: t('trailer'),
+    movieInfo: t('movieInfo'),
+    hideInfo: t('hideInfo'),
+    add: t('add'),
+    added: t('added'),
+    episodes: t('episodes'),
+    overview: t('overview'),
+    gallery: t('gallery'),
+    cast: t('cast'),
+    suggestions: t('suggestions'),
+    season: t('season'),
+    episode: t('episode'),
+    episodeShort: t('episodeShort'),
+    introduction: t('introduction'),
+    director: t('director'),
+    country: t('country'),
+    duration: t('duration'),
+    noOverview: t('noOverview'),
+    loginRequired: t('loginRequired'),
+    addedSuccess: t('addedSuccess'),
+    removedSuccess: t('removedSuccess'),
+    error: t('error'),
+    loading: t('loading'),
+    notFound: t('notFound'),
+    expand: t('expand'),
+    compact: t('compact'),
+    seeMore: t('seeMore'),
+    showLess: t('showLess'),
+    contentNavLabel: t('contentNavLabel'),
+    movieExperienceTitle: t('movieExperienceTitle'),
+    movieExperienceDescription: t('movieExperienceDescription'),
+    closeImage: t('closeImage'),
+    previousImage: t('previousImage'),
+    nextImage: t('nextImage'),
+    closeTrailer: t('closeTrailer'),
+  }
+  const { media, loading, error } = useMediaDetails(type, id)
+  const [selectedSeason, setSelectedSeason] = useState(1)
+  const [seasonMeta, setSeasonMeta] = useState<{ airDate: string; voteAverage: number } | null>(null)
+  const [episodes, setEpisodes] = useState<MediaEpisode[]>([])
+  const [episodesLoading, setEpisodesLoading] = useState(false)
+  const [episodeRange, setEpisodeRange] = useState(0)
+  const [isEpisodesCompact, setIsEpisodesCompact] = useState(true)
+  const [activeTab, setActiveTab] = useState<DetailTab>('episodes')
   const [activeScene, setActiveScene] = useState<number | null>(null)
-  const [showTrailer, setShowTrailer] = useState<boolean>(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ["start start", "end start"]
-  })
-
+  const [showTrailer, setShowTrailer] = useState(false)
+  const [isMobileInfoExpanded, setIsMobileInfoExpanded] = useState(false)
+  const [isOverviewExpanded, setIsOverviewExpanded] = useState(false)
+  const [isSeasonMenuOpen, setIsSeasonMenuOpen] = useState(false)
+  const seasonPickerRef = useRef<HTMLDivElement>(null)
   const { addToWatchlist, removeFromWatchlist, isInWatchlist, fetchWatchlistFromServer } = useWatchlistStore()
   const { isAuthenticated, token } = useAuthStore()
-  const isBookmarked = tvShow ? isInWatchlist(tvShow.id) : false
-  const [isCastExpanded, setIsCastExpanded] = useState(false)
-  const [isDescExpanded, setIsDescExpanded] = useState(false)
-  const [posterLoaded, setPosterLoaded] = useState(false)
+  const isBookmarked = media ? isInWatchlist(media.id) : false
 
-  const handleToggleWatchlist = async () => {
-    if (!tvShow) return
+  useEffect(() => {
+    if (!media || type !== 'tv') return
+    const preferredSeason = media.seasons[0]?.seasonNumber || 1
+    setSelectedSeason(preferredSeason)
+  }, [media, type])
+
+  useEffect(() => {
+    setActiveTab('episodes')
+    setActiveScene(null)
+    setIsMobileInfoExpanded(false)
+    setIsSeasonMenuOpen(false)
+  }, [id, type])
+
+  const seasonPortalRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isSeasonMenuOpen) return
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node
+      if (
+        seasonPickerRef.current && !seasonPickerRef.current.contains(target) &&
+        seasonPortalRef.current && !seasonPortalRef.current.contains(target)
+      ) {
+        setIsSeasonMenuOpen(false)
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setIsSeasonMenuOpen(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isSeasonMenuOpen])
+
+  useEffect(() => {
+    if (activeScene === null) return
+
+    const sceneCount = media?.scenes.length || 0
+    const previousOverflow = document.body.style.overflow
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setActiveScene(null)
+      if (event.key === 'ArrowLeft' && sceneCount > 0) {
+        setActiveScene((current) => current === null || current === 0 ? sceneCount - 1 : current - 1)
+      }
+      if (event.key === 'ArrowRight' && sceneCount > 0) {
+        setActiveScene((current) => current === null || current === sceneCount - 1 ? 0 : current + 1)
+      }
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [activeScene, media?.scenes.length])
+
+  useEffect(() => {
+    if (!media || type !== 'tv') return
+    let cancelled = false
+    setEpisodesLoading(true)
+    setEpisodeRange(0)
+    fetchSeasonEpisodes(media.id, selectedSeason)
+      .then((res) => {
+        if (!cancelled) {
+          setEpisodes(res.episodes)
+          setSeasonMeta({ airDate: res.airDate, voteAverage: res.voteAverage })
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEpisodes([])
+          setSeasonMeta(null)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setEpisodesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [media, selectedSeason, type])
+
+  const seasonEpisodeCount = useMemo(() => {
+    if (!media) return 0
+    return media.seasons.find((season) => season.seasonNumber === selectedSeason)?.episodeCount || episodes.length
+  }, [episodes.length, media, selectedSeason])
+
+  const episodeNumbers = useMemo(() => {
+    if (episodes.length > 0) return episodes.map((episode) => episode.episode_number)
+    return Array.from({ length: seasonEpisodeCount }, (_, index) => index + 1)
+  }, [episodes, seasonEpisodeCount])
+
+  const episodeRanges = useMemo(() => {
+    const maxEpisode = Math.max(seasonEpisodeCount, ...episodeNumbers, 0)
+    if (maxEpisode === 0) return []
+    return Array.from({ length: Math.ceil(maxEpisode / 100) }, (_, index) => ({
+      start: index * 100 + 1,
+      end: Math.min((index + 1) * 100, maxEpisode),
+    }))
+  }, [episodeNumbers, seasonEpisodeCount])
+
+  const visibleEpisodeNumbers = useMemo(() => {
+    const range = episodeRanges[episodeRange]
+    if (!range) return episodeNumbers
+    return episodeNumbers.filter((episode) => episode >= range.start && episode <= range.end)
+  }, [episodeNumbers, episodeRange, episodeRanges])
+
+  const episodeByNumber = useMemo(
+    () => new Map(episodes.map((episode) => [episode.episode_number, episode])),
+    [episodes],
+  )
+
+  async function toggleWatchlist() {
+    if (!media) return
     if (!isAuthenticated) {
-      toast.error(t('loginRequired'))
+      toast.error(text.loginRequired)
       return
     }
     try {
       if (isBookmarked) {
-        await api.delete('/auth/watchlist', {
-          data: { id: tvShow.id },
-        })
-        removeFromWatchlist(tvShow.id)
-        toast.success(t('removedFromWatchlist'))
-        if (token) await fetchWatchlistFromServer(token)
+        await api.delete('/auth/watchlist', { data: { id: media.id } })
+        removeFromWatchlist(media.id)
+        toast.success(text.removedSuccess)
       } else {
         await api.post('/auth/watchlist', {
-          id: tvShow.id,
-          title: tvShow.name,
-          poster_path: tvShow.poster,
-          type: 'tv',
+          id: media.id,
+          title: media.title,
+          poster_path: media.poster,
+          type,
         })
         addToWatchlist({
-          id: tvShow.id,
-          title: tvShow.name,
-          poster_path: tvShow.poster,
-          type: 'tv',
+          id: media.id,
+          title: media.title,
+          poster_path: media.poster,
+          type,
         })
-        toast.success(t('addedToWatchlist'))
-        if (token) await fetchWatchlistFromServer(token)
+        toast.success(text.addedSuccess)
       }
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'response' in err) {
-        toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || t('errorOccurred'))
-      } else {
-        toast.error(t('errorOccurred'))
-      }
-    }
-  }
-
-  const [selectedSeason, setSelectedSeason] = useState<number>(1)
-  const [selectedEpisode, setSelectedEpisode] = useState<number>(0)
-  const [episodes, setEpisodes] = useState<Episode[]>([])
-  const [episodesLoading, setEpisodesLoading] = useState(false)
-  const [seasons, setSeasons] = useState<{ id: number; name: string; season_number: number; episode_count: number; poster_path?: string; overview?: string; air_date?: string }[]>([])
-  const [isSeasonDropdownOpen, setIsSeasonDropdownOpen] = useState(false)
-  const seasonDropdownRef = useRef<HTMLDivElement>(null)
-  const [isEpisodesCompact, setIsEpisodesCompact] = useState(true)
-
-
-
-  const handleSeasonSelect = (season: number) => {
-    setSelectedSeason(season)
-    setSelectedEpisode(1) // Mặc định chọn episode 1 khi đổi season
-
-
-
-    // Update URL: set season and episode 1
-    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
-    params.set('season', String(season))
-    params.set('episode', '1')
-    if (typeof window !== 'undefined') {
-      window.history.pushState({}, '', `${window.location.pathname}?${params.toString()}`)
-    }
-  }
-
-  const handleEpisodeSelect = (episode: number) => {
-    setSelectedEpisode(episode)
-
-    // Update URL: set season and episode
-    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
-    params.set('season', String(selectedSeason))
-    params.set('episode', String(episode))
-    if (typeof window !== 'undefined') {
-      window.history.pushState({}, '', `${window.location.pathname}?${params.toString()}`)
-    }
-  }
-
-
-
-  const y = useTransform(scrollYProgress, [0, 1], [0, -100])
-  const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0])
-
-
-
-  useEffect(() => {
-    if (!id) return;
-    const fetchTVShow = async () => {
-      setLoading(true)
-      try {
-        // Fetch all TMDB data in a single bundled request (saves 3 serverless invocations)
-        const bundleResponse = await axios.get(`/api/tmdb-bundle?type=tv&id=${id}`)
-        const { detail: data, images: imgData, videos: videoData, credits } = bundleResponse.data
-
-        if (!data) throw new Error('Failed to fetch TV show detail')
-
-        // Images - optional, graceful fallback
-        let scenes: string[] = []
-        if (imgData) {
-          const backdrops: { file_path: string }[] = imgData.backdrops || []
-          scenes = backdrops.slice(0, 3).map((img: { file_path: string }) => `https://image.tmdb.org/t/p/w780${img.file_path}`)
-        }
-        if (scenes.length < 3) {
-          if (data.backdrop_path) scenes.push(`https://image.tmdb.org/t/p/w780${data.backdrop_path}`)
-          if (data.poster_path) scenes.push(`https://image.tmdb.org/t/p/w500${data.poster_path}`)
-        }
-        scenes = scenes.slice(0, 3)
-
-        // Videos - optional, graceful fallback
-        let trailer = ''
-        if (videoData) {
-          const videos: { type: string; site: string; key: string }[] = videoData.results || []
-          const ytTrailer = videos.find((v) => v.type === 'Trailer' && v.site === 'YouTube')
-          if (ytTrailer) {
-            trailer = `https://www.youtube.com/embed/${ytTrailer.key}`
-          }
-        }
-
-        // Credits - graceful fallback
-        const creditsData = credits || { crew: [], cast: [] }
-
-        // Set seasons data
-        setSeasons(data.seasons || [])
-
-        const tvShowData = {
-          id: data.id,
-          name: data.name,
-
-          duration: data.episode_run_time && data.episode_run_time.length > 0
-            ? `${data.episode_run_time[0]}m` : '',
-          year: data.first_air_date ? Number(data.first_air_date.slice(0, 4)) : '' as number | '',
-          firstAirDate: data.first_air_date || '',
-          creator: creditsData.crew?.find((person: Person) => person.job === 'Creator')?.name || '',
-          cast: creditsData.cast?.slice(0, 10).map((person: { name: string; character?: string; profile_path?: string }) => ({
-            name: person.name,
-            character: person.character || '',
-            profilePath: person.profile_path ? `https://image.tmdb.org/t/p/w185${person.profile_path}` : ''
-          })) || [],
-          genre: data.genres ? data.genres.map((g: { name: string }) => g.name).join(', ') : '',
-          description: data.overview,
-          poster: data.poster_path ? `https://image.tmdb.org/t/p/w342${data.poster_path}` : '',
-          backdrop: data.backdrop_path ? `https://image.tmdb.org/t/p/original${data.backdrop_path}` : '',
-          trailer,
-          tvShowUrl: '',
-          scenes,
-
-          totalSeasons: data.number_of_seasons,
-          totalEpisodes: data.number_of_episodes,
-        }
-
-        setTVShow(tvShowData)
-      } catch {
-        setTVShow(null)
-      }
-      setLoading(false)
-    }
-    fetchTVShow()
-  }, [id])
-
-  // Reset selections when navigating to a different TV show id
-  useEffect(() => {
-    setSelectedSeason(1)
-    setSelectedEpisode(1) // Mặc định chọn episode 1
-    setEpisodes([])
-  }, [id])
-
-  // Helper to format date as dd/mm/yyyy (Vietnam locale)
-  const formatDate = (dateStr?: string) => {
-    try {
-      if (!dateStr) return ''
-      const d = new Date(dateStr)
-      return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      if (token) await fetchWatchlistFromServer(token)
     } catch {
-      return dateStr || ''
+      toast.error(text.error)
+    }
+  }
+
+  const tWatch = useTranslations('Watch')
+  const [selectedServer, setSelectedServer] = useState<'server1' | 'server2' | 'server3'>('server1')
+  const [selectedAudio, setSelectedAudio] = useState<'vietsub' | 'dubbed' | ''>('vietsub')
+  const [isServerMenuOpen, setIsServerMenuOpen] = useState(false)
+  const [isAudioMenuOpen, setIsAudioMenuOpen] = useState(false)
+  const serverPickerRef = useRef<HTMLDivElement>(null)
+  const audioPickerRef = useRef<HTMLDivElement>(null)
+  const [audioOptions, setAudioOptions] = useState<{ hasVietsub: boolean; hasDubbed: boolean }>({
+    hasVietsub: false,
+    hasDubbed: false,
+  })
+
+  const [isMounted, setIsMounted] = useState(false)
+  const [serverCoords, setServerCoords] = useState<{ top: number; left: number; minWidth: number }>({ top: 0, left: 0, minWidth: 0 })
+  const [audioCoords, setAudioCoords] = useState<{ top: number; left: number; minWidth: number }>({ top: 0, left: 0, minWidth: 0 })
+  const [seasonCoords, setSeasonCoords] = useState<{ top: number; left: number; minWidth: number }>({ top: 0, left: 0, minWidth: 0 })
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  const updateServerCoords = () => {
+    if (serverPickerRef.current) {
+      const rect = serverPickerRef.current.getBoundingClientRect()
+      setServerCoords({
+        top: rect.bottom + 6,
+        left: rect.left,
+        minWidth: rect.width,
+      })
+    }
+  }
+
+  const updateAudioCoords = () => {
+    if (audioPickerRef.current) {
+      const rect = audioPickerRef.current.getBoundingClientRect()
+      setAudioCoords({
+        top: rect.bottom + 6,
+        left: rect.left,
+        minWidth: rect.width,
+      })
+    }
+  }
+
+  const updateSeasonCoords = () => {
+    if (seasonPickerRef.current) {
+      const rect = seasonPickerRef.current.getBoundingClientRect()
+      setSeasonCoords({
+        top: rect.bottom + 6,
+        left: rect.left,
+        minWidth: rect.width,
+      })
     }
   }
 
   useEffect(() => {
-    if (tvShow?.id) {
-      setEpisodesLoading(true)
-      const fetchEpisodes = async () => {
-        try {
-          const response = await axios.get(
-            `/api/tmdb-proxy?endpoint=/tv/${tvShow.id}/season/${selectedSeason}`
-          )
-          const data = response.data
-          if (data.episodes) {
+    if (!isServerMenuOpen && !isAudioMenuOpen && !isSeasonMenuOpen) return
+    function handleScrollOrResize() {
+      if (isServerMenuOpen) updateServerCoords()
+      if (isAudioMenuOpen) updateAudioCoords()
+      if (isSeasonMenuOpen) updateSeasonCoords()
+    }
+    window.addEventListener('scroll', handleScrollOrResize, true)
+    window.addEventListener('resize', handleScrollOrResize)
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true)
+      window.removeEventListener('resize', handleScrollOrResize)
+    }
+  }, [isServerMenuOpen, isAudioMenuOpen, isSeasonMenuOpen])
 
-            setEpisodes(data.episodes)
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (serverPickerRef.current && !serverPickerRef.current.contains(event.target as Node)) {
+        setIsServerMenuOpen(false)
+      }
+      if (audioPickerRef.current && !audioPickerRef.current.contains(event.target as Node)) {
+        setIsAudioMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  useEffect(() => {
+    const mediaId = media?.id
+    const mediaTitle = media?.title
+    if (!mediaId) return
+    let isCancelled = false
+
+    async function checkAudio() {
+      if (selectedServer === 'server2') {
+        setAudioOptions({ hasVietsub: false, hasDubbed: false })
+        setSelectedAudio('')
+        return
+      }
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+
+      if (selectedServer === 'server3') {
+        let vDub = false
+        let vSub = false
+        try {
+          const tmdbYear = media?.year || (media?.releaseDate ? parseInt(media.releaseDate.substring(0, 4)) : 0)
+          const tmdbDirector = (media as unknown as { director?: string })?.director || ''
+          const res = await fetch(`${apiUrl}/server3/search-tv?keyword=${encodeURIComponent(mediaTitle || '')}&name=${encodeURIComponent(mediaTitle || '')}&season=${selectedSeason}&year=${tmdbYear}&director=${encodeURIComponent(tmdbDirector)}`)
+          const data = await res.json()
+          if (isCancelled) return
+          if (data?.status === 'success' && data?.data?.links) {
+            if (data.data.links.dubbed) vDub = true
+            if (data.data.links.vietsub) vSub = true
           }
-        } catch {
-          setEpisodes([])
-        } finally {
-          setEpisodesLoading(false)
+        } catch { /* ignore */ }
+
+        if (!isCancelled) {
+          setAudioOptions({ hasVietsub: vSub, hasDubbed: vDub })
+          if (vSub) {
+            setSelectedAudio('vietsub')
+          } else if (vDub) {
+            setSelectedAudio('dubbed')
+          } else {
+            setSelectedAudio('')
+          }
+        }
+        return
+      }
+
+      // Server 1
+      let vDub = false
+      let vSub = false
+      let slug = null
+
+      try {
+        const tmdbRes = await fetch(`${apiUrl}/server1/tmdb/${type}/${mediaId}`)
+        const tmdbData = await tmdbRes.json()
+        if (tmdbData?.status === true && tmdbData?.movie?.slug) {
+          slug = tmdbData.movie.slug
+        }
+      } catch { /* ignore */ }
+
+      if (!slug && mediaTitle) {
+        try {
+          const searchRes = await fetch(`${apiUrl}/server1/search?keyword=${encodeURIComponent(mediaTitle)}`)
+          const searchData = await searchRes.json()
+          const items = searchData?.data?.items || searchData?.items || []
+          if (Array.isArray(items) && items.length > 0) {
+            slug = items[0].slug
+          }
+        } catch { /* ignore */ }
+      }
+
+      if (isCancelled) return
+
+      if (slug) {
+        try {
+          const detailRes = await fetch(`${apiUrl}/server1/detail/${slug}`)
+          const detailData = await detailRes.json()
+          if (isCancelled) return
+
+          if (detailData?.episodes && Array.isArray(detailData.episodes)) {
+            detailData.episodes.forEach((ep: { server_name?: string }) => {
+              const sName = (ep.server_name || '').toLowerCase()
+              if (sName.includes('vietsub') || sName.includes('sub')) {
+                vSub = true
+              }
+              if (sName.includes('thuyết minh') || sName.includes('lồng tiếng') || sName.includes('dubbed')) {
+                vDub = true
+              }
+            })
+          }
+        } catch { /* ignore */ }
+      }
+
+      if (!isCancelled) {
+        setAudioOptions({ hasVietsub: vSub, hasDubbed: vDub })
+        if (vSub) {
+          setSelectedAudio('vietsub')
+        } else if (vDub) {
+          setSelectedAudio('dubbed')
+        } else {
+          setSelectedAudio('')
         }
       }
-      fetchEpisodes()
-    }
-  }, [tvShow?.id, selectedSeason])
-
-  // Sync selected season and episode from URL on mount and browser navigation without route reload
-  useEffect(() => {
-    const syncFromUrl = () => {
-      const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
-      const seasonParam = params.get('season')
-      const episodeParam = params.get('episode')
-
-      const seasonNum = seasonParam && !isNaN(Number(seasonParam)) ? Number(seasonParam) : 1
-      // Mặc định chọn episode 1 thay vì 0
-      const episodeNum = episodeParam && !isNaN(Number(episodeParam)) ? Number(episodeParam) : 1
-
-      // Always set from URL; React will skip state update if value is unchanged
-      setSelectedSeason(seasonNum)
-      setSelectedEpisode(episodeNum)
-
-      // Nếu URL không có episode param, tự động thêm episode=1 vào URL
-      if (!episodeParam && typeof window !== 'undefined') {
-        const newParams = new URLSearchParams(window.location.search)
-        newParams.set('season', String(seasonNum))
-        newParams.set('episode', '1')
-        const newUrl = `${window.location.pathname}?${newParams.toString()}`
-        window.history.replaceState({}, '', newUrl)
-      }
     }
 
-    syncFromUrl()
-    if (typeof window !== 'undefined') {
-      window.addEventListener('popstate', syncFromUrl)
-      return () => window.removeEventListener('popstate', syncFromUrl)
-    }
-  }, [id])
-
-
-
-
-
-
-
-
-
-
-
-
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (seasonDropdownRef.current && !seasonDropdownRef.current.contains(event.target as Node)) {
-        setIsSeasonDropdownOpen(false)
-      }
-    }
-
-    if (isSeasonDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
+    checkAudio()
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
+      isCancelled = true
     }
-  }, [isSeasonDropdownOpen])
+  }, [media, type, selectedServer, selectedSeason])
 
-  // Removed large useEffect for watch now logic - now handled by WatchNowTVShows component
+  const basePath = type === 'movie' ? `/movies/${id}` : `/tvshows/${id}`
 
-  // Reset poster loading state when season changes
-  useEffect(() => {
-    setPosterLoaded(false);
-  }, [selectedSeason]);
+  const hasAudioOptions = selectedServer !== 'server2' && (audioOptions.hasVietsub || audioOptions.hasDubbed)
 
-  if (loading || !tvShow) {
-    return (
-      <div ref={containerRef} className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-900 to-black">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
-          className="w-16 h-16 border-4 border-red-500 border-t-transparent rounded-full"
-        />
-      </div>
-    )
+  const audioLabel = useMemo(() => {
+    if (selectedServer === 'server2') return 'None'
+    if (selectedAudio === 'vietsub' && audioOptions.hasVietsub) return tWatch('vietsub') || 'Vietsub'
+    if (selectedAudio === 'dubbed' && audioOptions.hasDubbed) return tWatch('dubbed') || 'Thuyết minh'
+    if (audioOptions.hasVietsub) return tWatch('vietsub') || 'Vietsub'
+    if (audioOptions.hasDubbed) return tWatch('dubbed') || 'Thuyết minh'
+    return 'None'
+  }, [selectedServer, selectedAudio, audioOptions, tWatch])
+  const watchHref = useMemo(() => {
+    const params = new URLSearchParams()
+    if (type === 'tv') {
+      params.set('season', String(selectedSeason))
+      params.set('episode', '1')
+    }
+    params.set('server', selectedServer)
+    if (selectedServer !== 'server2') {
+      params.set('audio', selectedAudio)
+    }
+    return `${basePath}/watch?${params.toString()}`
+  }, [basePath, type, selectedSeason, selectedServer, selectedAudio])
+
+  const currentSeason = media?.seasons.find((season) => season.seasonNumber === selectedSeason)
+
+  const effectiveVoteAverage = useMemo(() => {
+    if (seasonMeta?.voteAverage && seasonMeta.voteAverage > 0) return seasonMeta.voteAverage
+    if (currentSeason?.voteAverage && currentSeason.voteAverage > 0) return currentSeason.voteAverage
+    return media?.voteAverage || 0
+  }, [seasonMeta, currentSeason, media])
+
+  const effectiveReleaseDateStr = useMemo(() => {
+    if (seasonMeta?.airDate) return seasonMeta.airDate
+    if (currentSeason?.airDate) return currentSeason.airDate
+    return media?.releaseDate || ''
+  }, [seasonMeta, currentSeason, media])
+
+  if (loading) {
+    return <MediaPageLoading label={text.loading} fullScreen />
   }
 
-  const { name, backdrop, poster, duration, year, genre, creator, cast, description, scenes, trailer, totalSeasons, totalEpisodes, firstAirDate } = tvShow
+  if (error || !media) {
+    return <main className="flex min-h-screen items-center justify-center bg-[#08090b] text-white/70">{text.notFound}</main>
+  }
 
-  // Check if this anime is in the manual config list
-  const isAnime = isAnimeInList(tvShow.id)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _animeConfig = getAnimeConfig(tvShow.id)
-
-  // Get total episodes from config or use TMDB data as fallback
-  const animeTotalEpisodes = getAnimeTotalEpisodes(tvShow.id, totalEpisodes)
-
-  // Get episode to season mapping from config
-  const episodeToSeason = getAnimeEpisodeMapping(tvShow.id)
-
-  // Season-aware visuals
-  const currentSeason = seasons.find((s) => s.season_number === selectedSeason) || seasons[selectedSeason - 1]
-  const displayPoster = currentSeason?.poster_path
-    ? `https://image.tmdb.org/t/p/w342${currentSeason.poster_path}`
-    : poster
-  const seasonAirDate = currentSeason?.air_date
-
-  const heroHeightClass = (displayPoster && displayPoster.length > 0)
-    ? 'h-[30vh] sm:h-[35vh] md:h-[50vh] lg:h-[60vh]'
-    : 'h-[20vh] sm:h-[24vh] md:h-[28vh] lg:h-[32vh]';
+  const seasonOptions = media.seasons.length
+    ? media.seasons
+    : [{ seasonNumber: 1, id: 1, name: '', episodeCount: media.totalEpisodes, posterPath: '', airDate: '' }]
+  const displayPoster = currentSeason?.posterPath || media.poster
+  const releaseDate = formatReleaseDate(effectiveReleaseDateStr, locale)
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-gradient-to-b from-gray-900 to-black">
-      <div className="relative w-full overflow-hidden py-10 sm:py-14 lg:py-0 min-h-[60vh] md:min-h-screen flex items-center">
-        <div className="absolute inset-0">
-          <Image
-            src={backdrop}
-            alt={name}
-            fill
-            className="object-cover"
-            priority
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black" />
-        </div>
-
-        <motion.div
-          style={{ y, opacity }}
-          className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 lg:grid lg:grid-cols-2 lg:gap-8 lg:items-center"
-        >
-          <div className={`relative ${heroHeightClass} w-full flex items-center justify-center mb-4 sm:mb-6 lg:mb-0`}>
-            {displayPoster ? (
-              <div className="flex items-center justify-center w-full h-full" style={{ perspective: '1000px' }}>
-                <div
-                  className="relative w-[140px] h-[210px] sm:w-[150px] sm:h-[225px] md:w-[170px] md:h-[255px] lg:w-[190px] lg:h-[285px] rounded-xl overflow-hidden shadow-2xl"
-                  style={{
-                    transformStyle: 'preserve-3d',
-                    animation: 'posterFloat 6s ease-in-out infinite',
-                  }}
-                >
-                  {/* Loading skeleton */}
-                  {!posterLoaded && (
-                    <div className="absolute inset-0 bg-gray-700 animate-pulse rounded-xl flex items-center justify-center">
-                      <div className="w-8 h-8 border-3 border-red-500 border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  )}
-                  <Image
-                    src={`/api/cache-image?id=${id}&url=${encodeURIComponent(displayPoster ?? '')}`}
-                    alt={name}
-                    fill
-                    className={`object-cover transition-opacity duration-300 ${posterLoaded ? 'opacity-100' : 'opacity-0'}`}
-                    sizes="(max-width: 640px) 160px, (max-width: 768px) 200px, 280px"
-                    priority
-                    unoptimized
-                    onLoad={() => setPosterLoaded(true)}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gray-700/70 rounded-lg flex items-center justify-center shadow-inner border border-gray-600 w-[96px] h-[144px] sm:w-[128px] sm:h-[192px] md:w-[160px] md:h-[240px] lg:w-[192px] lg:h-[288px]">
-                <span className="text-2xl sm:text-3xl">📺</span>
-              </div>
-            )}
-          </div>
-
-          <div className="text-white space-y-3 sm:space-y-4 lg:space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-              <motion.h1
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-xl sm:text-2xl md:text-3xl lg:text-5xl font-bold leading-tight"
-              >
-                {name}
-              </motion.h1>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <span className="px-2 py-1 text-xs sm:text-sm font-bold rounded-md bg-blue-600 text-white whitespace-nowrap">
-                  {t('season')} {selectedSeason}
-                </span>
-
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-
-              <div className="flex items-center space-x-1.5">
-                <ClockIcon className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-gray-400" />
-                <span className="text-gray-400 text-sm sm:text-base">{duration}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <CalendarIcon className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-gray-400" />
-                <span className="text-gray-400 text-sm sm:text-base">{seasonAirDate ? formatDate(seasonAirDate) : (firstAirDate ? formatDate(firstAirDate) : year)}</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-gray-300 text-sm sm:text-base">{genre}</p>
-              {creator && (
-                <p className="text-gray-300">{t('director')}: {creator}</p>
-              )}
-              {/* Cast collapsed */}
-              <div className="min-h-[36px]">
-                <AnimatePresence mode="wait">
-                  {!isCastExpanded ? (
-                    <motion.div
-                      key="cast-collapsed"
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      transition={{ duration: 0.2 }}
-                      className="flex items-center w-full"
-                    >
-                      <div className="min-w-0 overflow-hidden flex-1">
-                        <div className="flex flex-nowrap gap-2 whitespace-nowrap py-1">
-                          {cast.map((actor: CastMember, index: number) => (
-                            <span key={index} className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm bg-gray-900/60 border border-white/15 text-white shadow-sm backdrop-blur-[2px]">
-                              {actor.profilePath ? (
-                                <div className="relative w-5 h-5 rounded-full overflow-hidden shrink-0 border border-white/20">
-                                  <Image
-                                    src={actor.profilePath}
-                                    alt={actor.name}
-                                    fill
-                                    className="object-cover"
-                                    unoptimized
-                                  />
-                                </div>
-                              ) : (
-                                <div className="w-5 h-5 rounded-full bg-gray-800 flex items-center justify-center text-[10px] shrink-0 text-gray-400">
-                                  👤
-                                </div>
-                              )}
-                              <span className="max-w-[100px] truncate">{actor.name}</span>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex-none flex items-center gap-2 pl-2">
-                        <span className="px-2 py-0.5 rounded-full bg-gray-900/60 border border-white/15 text-white text-xs shadow-sm backdrop-blur-[2px] select-none">…</span>
-                        <button
-                          onClick={() => setIsCastExpanded(true)}
-                          className="text-xs px-2.5 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white border border-white/20 backdrop-blur-sm transition-colors"
-                        >
-                          {t('showMore')}
-                        </button>
-                      </div>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="cast-expanded"
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 4 }}
-                      transition={{ duration: 0.2 }}
-                      className="w-full"
-                    >
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6 py-2">
-                        {cast.map((actor: CastMember, index: number) => (
-                          <motion.div
-                            key={index}
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: index * 0.03, duration: 0.2 }}
-                            whileHover={{ y: -4 }}
-                            className="flex flex-col items-center text-center group"
-                          >
-                            <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-red-500 transition-colors duration-300 shadow-md">
-                              {actor.profilePath ? (
-                                <Image
-                                  src={actor.profilePath}
-                                  alt={actor.name}
-                                  fill
-                                  className="object-cover transition-transform duration-300 group-hover:scale-110"
-                                  unoptimized
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-gray-800 flex items-center justify-center text-xl text-gray-500">
-                                  👤
-                                </div>
-                              )}
-                            </div>
-                            <span className="mt-2 text-xs font-semibold text-white group-hover:text-red-400 transition-colors line-clamp-1 w-full px-1">
-                              {actor.name}
-                            </span>
-                            <span className="text-[10px] text-gray-400 line-clamp-1 w-full px-1">
-                              {actor.character}
-                            </span>
-                          </motion.div>
-                        ))}
-
-                        {/* Beautiful circular Show Less action card directly inside the grid */}
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: cast.length * 0.03, duration: 0.2 }}
-                          whileHover={{ y: -4 }}
-                          onClick={() => setIsCastExpanded(false)}
-                          className="flex flex-col items-center text-center group cursor-pointer"
-                        >
-                          <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-white/15 bg-white/10 group-hover:bg-red-600/20 group-hover:border-red-500 transition-all duration-300 shadow-md flex items-center justify-center backdrop-blur-sm">
-                            <svg className="w-5 h-5 text-white group-hover:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
-                            </svg>
-                          </div>
-                          <span className="mt-2 text-xs font-semibold text-white group-hover:text-red-400 transition-colors line-clamp-1 w-full px-1">
-                            {t('showLess')}
-                          </span>
-                          <span className="text-[10px] text-gray-400 line-clamp-1 w-full px-1">
-                            Collapse
-                          </span>
-                        </motion.div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-
-            {/* Description collapsed */}
-            <div className="min-h-[24px]">
-              <AnimatePresence mode="wait">
-                {!isDescExpanded ? (
-                  <motion.div
-                    key="desc-collapsed"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.18 }}
-                    className="relative"
-                  >
-                    <p className="text-gray-300 leading-relaxed text-sm sm:text-base whitespace-nowrap overflow-hidden text-ellipsis pr-24">
-                      {description}
-                    </p>
-                    <div className="absolute inset-y-0 right-0 flex items-center pl-6">
-                      <button
-                        onClick={() => setIsDescExpanded(true)}
-                        className="relative z-10 text-xs px-2 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white border border-white/20 backdrop-blur-sm transition-colors"
-                      >
-                        {t('readMore')}
-                      </button>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="desc-expanded"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.18 }}
-                    className="space-y-2"
-                  >
-                    <p className="text-gray-300 leading-relaxed text-sm sm:text-base">{description}</p>
-                    <button
-                      onClick={() => setIsDescExpanded(false)}
-                      className="text-xs px-2 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white border border-white/20 transition-colors"
-                    >
-                      {t('showLess')}
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowTrailer(true)}
-                className="flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
-              >
-                <PlayIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                {t('trailer')}
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleToggleWatchlist}
-                className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 text-sm sm:text-base ${isBookmarked
-                  ? 'bg-amber-700 text-white hover:bg-amber-800'
-                  : 'bg-gray-700 text-white hover:bg-gray-600'
-                  }`}
-              >
-                <BookmarkIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                <span className="hidden xs:inline">{isBookmarked ? t('added') : t('save')}</span>
-                <span className="xs:hidden">{isBookmarked ? '✓' : t('save')}</span>
-              </motion.button>
-
-              {scenes.length > 0 && (
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setActiveScene(0)}
-                  className="flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 bg-gray-700 text-white rounded-lg font-semibold hover:bg-gray-600 transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
-                >
-                  <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <span className="hidden sm:inline">{t('scenes')}</span>
-                </motion.button>
-              )}
-            </div>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Watch Now Section - Use Anime Player for anime in config list */}
-      {isAnime && animeTotalEpisodes ? (
-        <AnimeEpisodePlayer
-          tvShow={tvShow}
-          totalEpisodes={animeTotalEpisodes}
-          episodeToSeason={episodeToSeason}
-        />
-      ) : (
-        tvShow && <WatchNowTVShows tvShow={tvShow} selectedSeason={selectedSeason} selectedEpisode={selectedEpisode} episodes={episodes} />
-      )}
-
-      {/* Episodes Section - Only show for regular TV shows, not anime */}
-      {!isAnime && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-white">
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-3xl font-bold">{t('episodes')}</h2>
-              {totalSeasons && totalSeasons > 1 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-300 text-sm">{t('season')}:</span>
-                  <div className="relative" ref={seasonDropdownRef}>
-                    <button
-                      onClick={() => setIsSeasonDropdownOpen(!isSeasonDropdownOpen)}
-                      className="flex items-center justify-between bg-gray-700 text-white text-sm px-3 py-1.5 pr-2 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent cursor-pointer hover:bg-gray-600 transition-colors min-w-[80px] max-w-[120px]"
-                    >
-                      <span>{selectedSeason}</span>
-                      <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${isSeasonDropdownOpen ? 'rotate-180' : ''}`} />
-                    </button>
-
-                    {isSeasonDropdownOpen && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-gray-700 border border-gray-600 rounded-md shadow-lg z-50 max-h-[200px] overflow-y-auto scrollbar-hide">
-                        {Array.from({ length: totalSeasons || 0 }, (_, i) => i + 1).map((season) => (
-                          <button
-                            key={season}
-                            onClick={() => {
-                              handleSeasonSelect(season);
-                              setIsSeasonDropdownOpen(false);
-                            }}
-                            className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-600 transition-colors ${selectedSeason === season ? 'bg-red-500 text-white' : 'text-white'
-                              }`}
-                          >
-                            {season}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center justify-between">
-              {totalSeasons && totalEpisodes && (
-                <p className="text-gray-300 text-sm">
-                  {(totalSeasons || 0) > 1 ? t('seasonsCountPlural', { count: totalSeasons }) : t('seasonsCount', { count: totalSeasons })} • {(totalEpisodes || 0) > 1 ? t('episodesCountPlural', { count: totalEpisodes }) : t('episodesCount', { count: totalEpisodes })}
-                </p>
-              )}
-              <button
-                onClick={() => setIsEpisodesCompact(!isEpisodesCompact)}
-                className="flex items-center gap-1.5 bg-gray-700 text-white text-xs px-2.5 py-1 rounded-md border border-gray-600 hover:bg-gray-600 transition-colors"
-                title={isEpisodesCompact ? t('expandView') : t('compactView')}
-              >
-                {isEpisodesCompact ? (
-                  <>
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                    </svg>
-                    <span>{t('expand')}</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
-                    </svg>
-                    <span>{t('compact')}</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-          {episodesLoading ? (
-            <div className="flex justify-center">
-              <div className="w-16 h-16 border-4 border-red-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          ) : episodes.length > 0 ? (
-            <div className={`grid gap-3 sm:gap-4 ${isEpisodesCompact
-              ? 'grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 2xl:grid-cols-16'
-              : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8'
-              }`}>
-              {episodes.map((episode) => (
-                <motion.div
-                  key={episode.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: episode.episode_number * 0.05 }}
-                  className={`relative bg-gray-800/50 backdrop-blur-sm rounded-xl overflow-hidden cursor-pointer transition-all duration-300 group ${selectedEpisode === episode.episode_number
-                    ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-gray-900 scale-105 shadow-lg shadow-red-500/25'
-                    : 'hover:scale-105 hover:shadow-lg hover:shadow-gray-500/25'
-                    }`}
-                  onClick={() => handleEpisodeSelect(episode.episode_number)}
-                >
-                  {!isEpisodesCompact ? (
-                    <>
-                      {episode.still_path ? (
-                        <div className="relative aspect-[4/3]">
-                          <Image
-                            src={`https://image.tmdb.org/t/p/w500${episode.still_path}`}
-                            alt={episode.name}
-                            fill
-                            className="object-cover transition-transform duration-300 group-hover:scale-110"
-                          />
-                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                            <div className="bg-gray-300/10 text-red-600 px-3 py-1 rounded-full text-sm font-semibold">
-                              S{selectedSeason} E{episode.episode_number}
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="aspect-[4/3] bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
-                          <div className="text-center">
-                            <div className="text-2xl sm:text-3xl mb-1">📺</div>
-                            <div className="bg-gray-300/10 text-red-600 px-3 py-1 rounded-full text-sm font-semibold">
-                              S{selectedSeason} E{episode.episode_number}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      <div className="p-2 sm:p-3">
-                        <h3 className="font-semibold text-xs sm:text-sm text-center leading-tight truncate" title={episode.name}>
-                          {episode.name}
-                        </h3>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="aspect-square bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center p-2">
-                      <div className="text-center">
-                        <div className="text-red-500 text-xs sm:text-sm font-bold">
-                          S{selectedSeason}
-                        </div>
-                        <div className="text-white text-lg sm:text-xl font-bold">
-                          E{episode.episode_number}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {selectedEpisode === episode.episode_number && (
-                    <div className="absolute top-1 right-1 sm:top-2 sm:right-2">
-                      <div className="bg-red-500 text-white rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center text-[10px] sm:text-xs font-bold shadow-lg">
-                        ✓
-                      </div>
-                    </div>
-                  )}
-                </motion.div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">📺</div>
-              <p className="text-gray-400">{t('noEpisodes')}</p>
-            </div>
+    <main className="min-h-screen overflow-hidden bg-[#08090b] text-white">
+      <section className={`relative transition-[min-height] duration-300 ${isMobileInfoExpanded ? 'min-h-[880px]' : 'min-h-[540px]'} sm:min-h-[570px] md:min-h-[630px]`}>
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          {media.backdrop && (
+            <Image
+              src={media.backdrop}
+              alt=""
+              fill
+              priority
+              className="scale-[1.02] object-cover object-center brightness-[1.05]"
+              sizes="100vw"
+            />
           )}
+          <div className="absolute inset-0 z-[1] bg-gradient-to-t from-[#08090b] via-[#08090b]/30 to-transparent sm:bg-[linear-gradient(180deg,rgba(8,9,11,0.1)_0%,rgba(8,9,11,0.35)_55%,#08090b_100%)]" />
         </div>
-      )}
-
-
-      <AnimatePresence>
-        {showTrailer && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
-            onClick={() => setShowTrailer(false)}
+        <div className="absolute inset-x-0 bottom-0 z-10 mx-auto flex w-full max-w-[1440px] flex-col items-center gap-4 px-4 pb-2 sm:flex-row sm:items-end sm:gap-6 sm:px-6 sm:pb-5 lg:px-10">
+          <div
+            className="h-[180px] w-[120px] shrink-0 sm:h-[290px] sm:w-[194px] sm:translate-y-20 lg:h-[330px] lg:w-[220px]"
+            style={{ perspective: '1000px' }}
           >
-            <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              className="relative w-full max-w-4xl aspect-video"
-              onClick={e => e.stopPropagation()}
+            <div
+              data-testid="floating-3d-poster"
+              className="relative h-full w-full overflow-hidden rounded-2xl border border-white/15 bg-[#15171b] shadow-[0_30px_80px_rgba(0,0,0,0.65)] motion-reduce:animate-none"
+              style={{
+                transformStyle: 'preserve-3d',
+                animation: 'posterFloat 6s ease-in-out infinite',
+                willChange: 'transform',
+              }}
             >
-              <iframe
-                src={trailer}
-                className="w-full h-full rounded-lg"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-              <button
-                className="absolute top-4 right-4 text-white bg-black/50 rounded-full p-2 hover:bg-black/80 transition-colors"
-                onClick={() => setShowTrailer(false)}
+              {displayPoster ? (
+                <Image src={displayPoster} alt={media.title} fill className="object-cover" priority sizes="220px" />
+              ) : (
+                <div className="flex h-full items-center justify-center"><FilmIcon className="h-12 w-12 text-white/25" /></div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,transparent_20%,rgba(255,255,255,0.16)_48%,transparent_68%)] opacity-50" />
+            </div>
+          </div>
+
+          <div className="w-full min-w-0 flex-1 text-center sm:pl-1 sm:text-left lg:pl-4">
+            <h1 className="mx-auto max-w-4xl text-3xl font-black leading-[1.04] tracking-[-0.035em] [text-shadow:0_3px_18px_rgba(0,0,0,0.95)] sm:mx-0 sm:text-5xl lg:text-6xl">{media.title}</h1>
+            {media.originalTitle && media.originalTitle !== media.title && (
+              <p className="mt-2 text-base font-medium text-white/75 [text-shadow:0_2px_10px_rgba(0,0,0,0.95)] sm:text-lg">{media.originalTitle}</p>
+            )}
+
+            <button
+              type="button"
+              data-testid="mobile-info-toggle"
+              aria-expanded={isMobileInfoExpanded}
+              aria-controls="mobile-media-info"
+              onClick={() => setIsMobileInfoExpanded((current) => !current)}
+              className="mx-auto mt-4 flex items-center gap-2 rounded-full px-3 py-2 text-sm font-black text-white/85 transition hover:bg-white/[0.08] hover:text-white sm:hidden"
+            >
+              {isMobileInfoExpanded ? text.hideInfo : text.movieInfo}
+              {isMobileInfoExpanded ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
+            </button>
+
+            {isMobileInfoExpanded && (
+              <div
+                id="mobile-media-info"
+                data-testid="mobile-media-info"
+                className="mx-auto mt-3 max-w-lg rounded-2xl border border-white/[0.09] bg-[#0d0f13]/90 p-4 text-left shadow-2xl shadow-black/30 backdrop-blur-xl sm:hidden"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="rounded-md border border-sky-400/50 bg-sky-400/10 px-2.5 py-1 text-xs font-black text-sky-300">TMDb {effectiveVoteAverage.toFixed(1)}</span>
+                  {releaseDate && (
+                    <span className="inline-flex items-center gap-2 text-xs font-semibold text-white/60">
+                      <CalendarDaysIcon className="h-4 w-4 text-white/45" />
+                      {releaseDate}
+                    </span>
+                  )}
+                </div>
 
-
-
-
-
-
-
-      {/* Comments Section */}
-      <Comments
-        movieId={tvShow.id}
-        type="tvshow"
-        title={tvShow.name}
-      />
-
-      {/* Related TV Shows */}
-      <RelatedContent
-        id={tvShow.id}
-        type="tv"
-        title={tvShow.name}
-      />
-
-      {/* Scenes Modal */}
-      <AnimatePresence>
-        {activeScene !== null && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4"
-            onClick={() => setActiveScene(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="relative w-full max-w-5xl"
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white text-lg font-semibold">TV Show Scenes ({activeScene + 1}/{scenes.length})</h3>
-                <button
-                  className="text-white bg-gray-800 hover:bg-gray-700 rounded-full p-2 transition-colors"
-                  onClick={() => setActiveScene(null)}
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Main Image */}
-              <div className="relative aspect-video rounded-lg overflow-hidden bg-gray-900">
-                <Image
-                  src={scenes[activeScene]}
-                  alt={`Scene ${activeScene + 1}`}
-                  fill
-                  className="object-contain"
-                />
-              </div>
-
-              {/* Navigation */}
-              <div className="flex items-center justify-center gap-4 mt-4">
-                <button
-                  onClick={() => setActiveScene(prev => prev !== null && prev > 0 ? prev - 1 : scenes.length - 1)}
-                  className="p-2 bg-gray-800 hover:bg-gray-700 text-white rounded-full transition-colors"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-
-                {/* Thumbnails */}
-                <div className="flex gap-2">
-                  {scenes.map((scene, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setActiveScene(index)}
-                      className={`relative w-16 h-10 rounded overflow-hidden transition-all ${activeScene === index ? 'ring-2 ring-red-500 scale-110' : 'opacity-60 hover:opacity-100'
-                        }`}
-                    >
-                      <Image src={scene} alt={`Thumb ${index + 1}`} fill className="object-cover" />
-                    </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {media.genres.map((genre) => (
+                    <span key={genre} className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-white/70">{genre}</span>
                   ))}
                 </div>
 
-                <button
-                  onClick={() => setActiveScene(prev => prev !== null && prev < scenes.length - 1 ? prev + 1 : 0)}
-                  className="p-2 bg-gray-800 hover:bg-gray-700 text-white rounded-full transition-colors"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
+                <p className="mt-4 line-clamp-5 text-sm leading-6 text-white/65">{media.description || text.noOverview}</p>
+
+                <dl className="mt-4 grid gap-2.5 border-t border-white/[0.08] pt-4 text-xs">
+                  {media.creator && (
+                    <div className="flex gap-3"><dt className="w-20 shrink-0 text-white/38">{text.director}</dt><dd className="font-semibold text-white/75">{media.creator}</dd></div>
+                  )}
+                  {media.countries.length > 0 && (
+                    <div className="flex gap-3"><dt className="w-20 shrink-0 text-white/38">{text.country}</dt><dd className="font-semibold text-white/75">{media.countries.join(', ')}</dd></div>
+                  )}
+                  {media.duration && (
+                    <div className="flex gap-3"><dt className="w-20 shrink-0 text-white/38">{text.duration}</dt><dd className="font-semibold text-white/75">{media.duration}</dd></div>
+                  )}
+                </dl>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+            )}
+
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3 sm:mt-6 sm:justify-start">
+              <Link href={watchHref} data-testid="watch-now-button" className={`${watchButtonClass} px-6 py-3.5 text-sm`}>
+                <PlayIcon className="h-5 w-5" /> {text.watchNow}
+              </Link>
+              {media.trailer && (
+                <button
+                  type="button"
+                  data-testid="trailer-button"
+                  onClick={() => setShowTrailer(true)}
+                  className={buttonClass}
+                >
+                  <FilmIcon className="h-5 w-5" />
+                  <span>{text.trailer}</span>
+                </button>
+              )}
+              <button type="button" onClick={toggleWatchlist} className={buttonClass}>
+                {isBookmarked ? <BookmarkIcon className="h-5 w-5 text-yellow-300" /> : <PlusIcon className="h-5 w-5" />}
+                <span className="hidden md:inline">{isBookmarked ? text.added : text.add}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <nav className="border-y border-white/[0.08] bg-[#08090b]/95 backdrop-blur-xl" aria-label={text.contentNavLabel}>
+        <div className="mx-auto flex max-w-[1440px] gap-8 overflow-x-auto px-4 pl-4 sm:px-6 sm:pl-[250px] lg:px-10 lg:pl-[286px]" role="tablist">
+          {[
+            { id: 'episodes' as DetailTab, label: type === 'tv' ? text.episodes : text.overview, icon: FilmIcon },
+            { id: 'gallery' as DetailTab, label: text.gallery, icon: PhotoIcon },
+            { id: 'cast' as DetailTab, label: text.cast, icon: UserGroupIcon },
+            { id: 'suggestions' as DetailTab, label: text.suggestions, icon: SparklesIcon },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              id={`detail-tab-${tab.id}`}
+              type="button"
+              role="tab"
+              data-testid={`detail-tab-${tab.id}`}
+              aria-selected={activeTab === tab.id}
+              aria-controls={`detail-panel-${tab.id}`}
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative flex shrink-0 items-center gap-2 py-4 text-sm font-bold transition ${activeTab === tab.id ? 'text-white' : 'text-white/45 hover:text-white'}`}
+            >
+              <tab.icon className="h-4 w-4" /> {tab.label}
+              {activeTab === tab.id && <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-yellow-400" />}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {activeTab === 'episodes' && (
+      <section
+        id="detail-panel-episodes"
+        role="tabpanel"
+        aria-labelledby="detail-tab-episodes"
+        data-testid="detail-panel-episodes"
+        className="mx-auto grid grid-cols-1 max-w-[1440px] gap-6 px-4 pb-12 pt-7 sm:px-6 lg:grid-cols-12 lg:gap-10 lg:px-10 lg:pb-14 lg:pt-8"
+      >
+        {/* Desktop View: Full Uncollapsed Article (lg+) */}
+        <article className="hidden lg:block lg:col-span-5 xl:col-span-4">
+          <p className="mb-3 text-xs font-black uppercase tracking-[0.22em] text-yellow-300">{text.introduction}</p>
+          <h2 className="text-3xl font-black tracking-tight sm:text-4xl">{media.title}</h2>
+          {media.originalTitle && media.originalTitle !== media.title && (
+            <p className="mt-2 text-base text-white/42">{media.originalTitle}</p>
+          )}
+
+          <div data-testid="media-metadata" className="mt-6 flex flex-wrap items-center gap-3">
+            <span data-testid="tmdb-score" className="rounded-md border border-sky-400/50 bg-sky-400/10 px-2.5 py-1 text-xs font-black text-sky-300">TMDb {effectiveVoteAverage.toFixed(1)}</span>
+            {releaseDate && (
+              <span data-testid="release-date" className="inline-flex items-center gap-2 text-sm font-semibold text-white/55">
+                <CalendarDaysIcon className="h-5 w-5 text-white/40" />
+                {releaseDate}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            {media.genres.map((genre) => (
+              <span key={genre} className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 text-xs font-semibold text-white/70">{genre}</span>
+            ))}
+          </div>
+
+          <p className="mt-6 text-[15px] leading-7 text-white/62">{media.description || text.noOverview}</p>
+          <dl className="mt-7 grid gap-3 border-t border-white/[0.08] pt-6 text-sm">
+            {media.creator && (
+              <div className="flex gap-3"><dt className="w-24 shrink-0 text-white/35">{text.director}</dt><dd className="font-semibold text-white/75">{media.creator}</dd></div>
+            )}
+            {media.countries.length > 0 && (
+              <div data-testid="media-country" className="flex gap-3"><dt className="w-24 shrink-0 text-white/35">{text.country}</dt><dd className="font-semibold text-white/75">{media.countries.join(', ')}</dd></div>
+            )}
+            {media.duration && (
+              <div className="flex gap-3"><dt className="w-24 shrink-0 text-white/35">{text.duration}</dt><dd className="font-semibold text-white/75">{media.duration}</dd></div>
+            )}
+          </dl>
+        </article>
+
+        {/* iPad / Tablet View: Compact Collapsible Bar (sm to lg) */}
+        <div className="hidden sm:block lg:hidden col-span-1 rounded-2xl border border-white/[0.08] bg-[#111318] p-4 shadow-xl sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-yellow-300">
+              <InformationCircleIcon className="h-4 w-4" />
+              <span className="text-xs font-black uppercase tracking-[0.2em]">{text.movieInfo}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsOverviewExpanded((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3.5 py-1.5 text-xs font-bold text-white/80 transition hover:border-yellow-400/40 hover:bg-white/10 hover:text-yellow-300"
+            >
+              <span>{isOverviewExpanded ? text.showLess : text.seeMore}</span>
+              {isOverviewExpanded ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+
+          {isOverviewExpanded && (
+            <div className="mt-4 border-t border-white/[0.08] pt-4 transition-all duration-300">
+              <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">{media.title}</h2>
+              {media.originalTitle && media.originalTitle !== media.title && (
+                <p className="mt-0.5 text-xs text-white/42">{media.originalTitle}</p>
+              )}
+
+              <div data-testid="media-metadata" className="mt-3 flex flex-wrap items-center gap-2.5">
+                <span data-testid="tmdb-score" className="rounded-md border border-sky-400/50 bg-sky-400/10 px-2 py-0.5 text-xs font-black text-sky-300">TMDb {effectiveVoteAverage.toFixed(1)}</span>
+                {releaseDate && (
+                  <span data-testid="release-date" className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/55">
+                    <CalendarDaysIcon className="h-4 w-4 text-white/40" />
+                    {releaseDate}
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {media.genres.map((genre) => (
+                  <span key={genre} className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-0.5 text-[11px] font-semibold text-white/70">{genre}</span>
+                ))}
+              </div>
+
+              <p className="mt-3 text-xs leading-6 text-white/65 sm:text-sm">
+                {media.description || text.noOverview}
+              </p>
+
+              <dl className="mt-3 grid gap-2 border-t border-white/[0.08] pt-3 text-xs">
+                {media.creator && (
+                  <div className="flex gap-3"><dt className="w-20 shrink-0 text-white/35">{text.director}</dt><dd className="font-semibold text-white/75">{media.creator}</dd></div>
+                )}
+                {media.countries.length > 0 && (
+                  <div data-testid="media-country" className="flex gap-3"><dt className="w-20 shrink-0 text-white/35">{text.country}</dt><dd className="font-semibold text-white/75">{media.countries.join(', ')}</dd></div>
+                )}
+                {media.duration && (
+                  <div className="flex gap-3"><dt className="w-20 shrink-0 text-white/35">{text.duration}</dt><dd className="font-semibold text-white/75">{media.duration}</dd></div>
+                )}
+              </dl>
+            </div>
+          )}
+        </div>
+
+        <div className="col-span-1 lg:col-span-7 xl:col-span-8">
+          {type === 'tv' ? (
+            <div className="rounded-2xl border border-white/[0.08] bg-[#111318] p-3 shadow-2xl shadow-black/20 sm:rounded-3xl sm:p-6">
+              {/* Dedicated Server & Audio Selectors Container */}
+              <div className="mb-4 flex flex-col justify-between gap-2.5 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3 backdrop-blur-xl relative z-30 sm:p-4 sm:flex-row sm:items-center sm:gap-3.5">
+                <div className="flex flex-col gap-2.5 w-full sm:flex-row sm:items-center sm:gap-3.5 sm:w-auto">
+                  {/* Server Custom Dropdown */}
+                  <div ref={serverPickerRef} className="relative w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isServerMenuOpen) updateServerCoords()
+                        setIsServerMenuOpen(!isServerMenuOpen)
+                        setIsAudioMenuOpen(false)
+                      }}
+                      className={`inline-flex w-full items-center justify-between gap-2.5 whitespace-nowrap rounded-xl border px-3.5 py-2.5 text-xs font-black text-white shadow-lg shadow-black/15 outline-none transition sm:w-auto sm:px-4 sm:text-sm ${
+                        isServerMenuOpen
+                          ? 'border-yellow-400/70 bg-yellow-400/[0.08] ring-2 ring-yellow-400/10'
+                          : 'border-white/10 bg-[#17191f] hover:border-white/20 hover:bg-[#1f222a]'
+                      }`}
+                    >
+                      <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                        <ServerIcon className="h-4 w-4 shrink-0 text-yellow-300 sm:h-5 sm:w-5" />
+                        {tWatch(selectedServer) || (selectedServer === 'server1' ? 'Máy chủ 1' : selectedServer === 'server2' ? 'Máy chủ 2' : 'Máy chủ 3')}
+                      </span>
+                      <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 text-white/45 transition-transform sm:h-4 sm:w-4 ${isServerMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                  </div>
+
+                  {/* Audio Custom Dropdown */}
+                  <div ref={audioPickerRef} className="relative w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!hasAudioOptions) return
+                        if (!isAudioMenuOpen) updateAudioCoords()
+                        setIsAudioMenuOpen(!isAudioMenuOpen)
+                        setIsServerMenuOpen(false)
+                      }}
+                      className={`inline-flex w-full items-center justify-between gap-2.5 whitespace-nowrap rounded-xl border px-3.5 py-2.5 text-xs font-black shadow-lg shadow-black/15 outline-none transition sm:w-auto sm:px-4 sm:text-sm ${
+                        hasAudioOptions
+                          ? isAudioMenuOpen
+                            ? 'border-pink-500/50 bg-pink-500/[0.08] text-white ring-2 ring-pink-500/10'
+                            : 'border-white/10 bg-[#17191f] text-white hover:border-white/20 hover:bg-[#1f222a]'
+                          : 'border-white/10 bg-[#17191f]/60 text-white/40 cursor-default'
+                      }`}
+                    >
+                      <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                        <SpeakerWaveIcon className={`h-4 w-4 shrink-0 sm:h-5 sm:w-5 ${hasAudioOptions ? 'text-pink-400' : 'text-white/30'}`} />
+                        {audioLabel}
+                      </span>
+                      {hasAudioOptions && (
+                        <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 text-white/45 transition-transform sm:h-4 sm:w-4 ${isAudioMenuOpen ? 'rotate-180' : ''}`} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <span className="hidden md:inline-block text-xs font-bold uppercase tracking-wider text-white/40 whitespace-nowrap">
+                  {tWatch('serverAndAudio')}
+                </span>
+              </div>
+
+              {/* Server Dropdown Portal */}
+              {isMounted && isServerMenuOpen && createPortal(
+                <div
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  style={{
+                    position: 'fixed',
+                    top: `${serverCoords.top}px`,
+                    left: `${serverCoords.left}px`,
+                    minWidth: `${serverCoords.minWidth}px`,
+                  }}
+                  className="z-[9999] overflow-hidden rounded-xl border border-white/10 bg-[#17191f]/98 p-1.5 shadow-[0_22px_55px_rgba(0,0,0,0.8)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100"
+                >
+                  {[
+                    { key: 'server1', label: tWatch('server1') || 'Máy chủ 1' },
+                    { key: 'server2', label: tWatch('server2') || 'Máy chủ 2' },
+                    { key: 'server3', label: tWatch('server3') || 'Máy chủ 3' },
+                  ].map((srv) => {
+                    const isSelected = selectedServer === srv.key
+                    return (
+                      <button
+                        key={srv.key}
+                        type="button"
+                        onClick={() => {
+                          setSelectedServer(srv.key as 'server1' | 'server2' | 'server3')
+                          setIsServerMenuOpen(false)
+                        }}
+                        className={`flex w-full items-center justify-between whitespace-nowrap rounded-lg px-3.5 py-2 text-left text-xs font-bold transition sm:text-sm ${
+                          isSelected
+                            ? 'bg-yellow-400/15 text-yellow-300 font-black'
+                            : 'text-white/70 hover:bg-white/[0.08] hover:text-white'
+                        }`}
+                      >
+                        <span>{srv.label}</span>
+                        {isSelected && <CheckIcon className="ml-2 h-4 w-4 shrink-0 text-yellow-300" />}
+                      </button>
+                    )
+                  })}
+                </div>,
+                document.body
+              )}
+
+              {/* Audio Dropdown Portal */}
+              {isMounted && isAudioMenuOpen && hasAudioOptions && createPortal(
+                <div
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  style={{
+                    position: 'fixed',
+                    top: `${audioCoords.top}px`,
+                    left: `${audioCoords.left}px`,
+                    minWidth: `${audioCoords.minWidth}px`,
+                  }}
+                  className="z-[9999] overflow-hidden rounded-xl border border-white/10 bg-[#17191f]/98 p-1.5 shadow-[0_22px_55px_rgba(0,0,0,0.8)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100"
+                >
+                  {audioOptions.hasVietsub && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAudio('vietsub')
+                        setIsAudioMenuOpen(false)
+                      }}
+                      className={`flex w-full items-center justify-between whitespace-nowrap rounded-lg px-3.5 py-2 text-left text-xs font-bold transition sm:text-sm ${
+                        selectedAudio === 'vietsub' || !selectedAudio
+                          ? 'bg-pink-500/15 text-pink-300 font-black'
+                          : 'text-white/70 hover:bg-white/[0.08] hover:text-white'
+                      }`}
+                    >
+                      <span>{tWatch('vietsub') || 'Vietsub'}</span>
+                      {(selectedAudio === 'vietsub' || !selectedAudio) && <CheckIcon className="ml-2 h-4 w-4 shrink-0 text-pink-400" />}
+                    </button>
+                  )}
+                  {audioOptions.hasDubbed && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAudio('dubbed')
+                        setIsAudioMenuOpen(false)
+                      }}
+                      className={`flex w-full items-center justify-between whitespace-nowrap rounded-lg px-3.5 py-2 text-left text-xs font-bold transition sm:text-sm ${
+                        selectedAudio === 'dubbed'
+                          ? 'bg-pink-500/15 text-pink-300 font-black'
+                          : 'text-white/70 hover:bg-white/[0.08] hover:text-white'
+                      }`}
+                    >
+                      <span>{tWatch('dubbed') || 'Thuyết minh'}</span>
+                      {selectedAudio === 'dubbed' && <CheckIcon className="ml-2 h-4 w-4 shrink-0 text-pink-400" />}
+                    </button>
+                  )}
+                </div>,
+                document.body
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.07] pb-4 sm:gap-3 sm:pb-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div ref={seasonPickerRef} data-testid="season-picker" className="relative">
+                    <button
+                      type="button"
+                      data-testid="season-picker-trigger"
+                      aria-haspopup="listbox"
+                      aria-expanded={isSeasonMenuOpen}
+                      onClick={() => {
+                        if (!isSeasonMenuOpen) updateSeasonCoords()
+                        setIsSeasonMenuOpen((current) => !current)
+                      }}
+                      className={`inline-flex min-w-[126px] items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs font-black text-white shadow-lg shadow-black/15 outline-none transition sm:min-w-[148px] sm:gap-3 sm:px-4 sm:py-2.5 sm:text-sm ${
+                        isSeasonMenuOpen
+                          ? 'border-yellow-400/70 bg-yellow-400/[0.08] ring-2 ring-yellow-400/10'
+                          : 'border-white/10 bg-[#17191f] hover:border-white/20 hover:bg-[#1f222a]'
+                      }`}
+                    >
+                      <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                        <Bars3Icon className="h-4 w-4 text-yellow-300 sm:h-5 sm:w-5" />
+                        {text.season} {selectedSeason}
+                      </span>
+                      <ChevronDownIcon className={`h-3.5 w-3.5 text-white/45 transition-transform sm:h-4 sm:w-4 ${isSeasonMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isMounted && isSeasonMenuOpen && createPortal(
+                      <div
+                        ref={seasonPortalRef}
+                        role="listbox"
+                        aria-label={text.season}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        style={{
+                          position: 'fixed',
+                          top: `${seasonCoords.top}px`,
+                          left: `${seasonCoords.left}px`,
+                          minWidth: `${seasonCoords.minWidth}px`,
+                        }}
+                        className="season-dropdown z-[9999] max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-[#17191f]/98 p-1.5 shadow-[0_22px_55px_rgba(0,0,0,0.8)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100"
+                      >
+                        {seasonOptions.map((season) => {
+                          const isSelected = season.seasonNumber === selectedSeason
+                          return (
+                            <button
+                              key={season.id}
+                              type="button"
+                              role="option"
+                              aria-selected={isSelected}
+                              data-testid={`season-option-${season.seasonNumber}`}
+                              onMouseDown={(e) => {
+                                e.stopPropagation()
+                                setSelectedSeason(season.seasonNumber)
+                                setIsSeasonMenuOpen(false)
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedSeason(season.seasonNumber)
+                                setIsSeasonMenuOpen(false)
+                              }}
+                              className={`flex w-full items-center justify-between gap-4 rounded-lg px-3.5 py-2 text-left text-xs font-bold transition sm:text-sm ${
+                                isSelected
+                                  ? 'bg-yellow-400/15 text-yellow-300 font-black'
+                                  : 'text-white/70 hover:bg-white/[0.08] hover:text-white'
+                              }`}
+                            >
+                              <span className="whitespace-nowrap">
+                                {text.season} {season.seasonNumber}
+                              </span>
+                              {isSelected && <CheckIcon className="ml-2 h-4 w-4 shrink-0 text-yellow-300" />}
+                            </button>
+                          )
+                        })}
+                      </div>,
+                      document.body
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    data-testid="episode-view-toggle"
+                    onClick={() => setIsEpisodesCompact((current) => !current)}
+                    aria-expanded={!isEpisodesCompact}
+                    title={isEpisodesCompact ? text.expand : text.compact}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] p-2 sm:px-3 sm:py-2.5 text-[10px] sm:text-xs font-black text-white/70 transition hover:border-yellow-400/35 hover:bg-white/10 hover:text-yellow-300 whitespace-nowrap"
+                  >
+                    {isEpisodesCompact ? <ArrowsPointingOutIcon className="h-4 w-4" /> : <ArrowsPointingInIcon className="h-4 w-4" />}
+                    <span className="hidden sm:inline">{isEpisodesCompact ? text.expand : text.compact}</span>
+                  </button>
+                </div>
+              </div>
+
+              {episodeRanges.length > 1 && (
+                <div className="mt-3.5 flex gap-2 overflow-x-auto pb-2.5 range-scrollbar sm:mt-4">
+                  {episodeRanges.map((range, index) => (
+                    <button
+                      key={range.start}
+                      type="button"
+                      onClick={() => setEpisodeRange(index)}
+                      className={`shrink-0 rounded-xl px-3 py-1.5 text-[11px] font-black transition-all sm:px-3.5 sm:py-1.5 sm:text-xs ${
+                        episodeRange === index
+                          ? 'bg-yellow-400 text-black shadow-md shadow-yellow-400/20'
+                          : 'border border-white/10 bg-white/[0.06] text-white/70 hover:bg-white/12 hover:text-white'
+                      }`}
+                    >
+                      {text.episode} {range.start} - {range.end}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {episodesLoading ? (
+                <div className="flex h-48 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-yellow-400" /></div>
+              ) : (
+                <div
+                  data-testid={isEpisodesCompact ? 'episode-grid-compact' : 'episode-grid-expanded'}
+                  className={isEpisodesCompact
+                    ? 'mt-5 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-6 xl:grid-cols-8'
+                    : 'mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:gap-3 xl:grid-cols-3'}
+                >
+                  {visibleEpisodeNumbers.map((episodeNumber) => {
+                    const episode = episodeByNumber.get(episodeNumber)
+                    const episodeParams = new URLSearchParams()
+                    episodeParams.set('season', String(selectedSeason))
+                    episodeParams.set('episode', String(episodeNumber))
+                    episodeParams.set('server', selectedServer)
+                    if (selectedServer !== 'server2') {
+                      episodeParams.set('audio', selectedAudio)
+                    }
+                    const episodeHref = `${basePath}/watch?${episodeParams.toString()}`
+
+                    if (isEpisodesCompact) {
+                      return (
+                        <Link
+                          key={episodeNumber}
+                          href={episodeHref}
+                          className="group flex min-h-12 items-center justify-center gap-1 overflow-hidden rounded-xl border border-white/[0.07] bg-[#1a1d23] px-1 text-[10px] font-bold text-white/68 transition hover:-translate-y-0.5 hover:border-yellow-400/45 hover:bg-yellow-400 hover:text-black sm:min-h-14 sm:gap-1.5 sm:px-2 sm:text-[11px] xl:text-xs"
+                        >
+                          <PlayIcon className="h-2.5 w-2.5 shrink-0 text-yellow-300 group-hover:text-black sm:h-3 sm:w-3 xl:h-3.5 xl:w-3.5" />
+                          <span className="whitespace-nowrap leading-none">{text.episodeShort} {episodeNumber}</span>
+                        </Link>
+                      )
+                    }
+
+                    return (
+                      <Link
+                        key={episodeNumber}
+                        href={episodeHref}
+                        className="group min-w-0 overflow-hidden rounded-xl border border-white/[0.08] bg-[#1a1d23] transition duration-300 hover:-translate-y-1 hover:border-yellow-400/40 hover:shadow-[0_16px_35px_rgba(0,0,0,0.35)] sm:rounded-2xl"
+                      >
+                        <div className="relative aspect-video overflow-hidden bg-[radial-gradient(circle_at_top,#2a2d35,#111318_72%)]">
+                          {episode?.still_path ? (
+                            <Image
+                              src={`https://image.tmdb.org/t/p/w500${episode.still_path}`}
+                              alt={episode.name || `${text.episode} ${episodeNumber}`}
+                              fill
+                              className="object-cover transition duration-500 group-hover:scale-105"
+                              sizes="(max-width: 1280px) 50vw, 33vw"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center"><FilmIcon className="h-7 w-7 text-white/15 sm:h-10 sm:w-10" /></div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+                          <span className="absolute left-2 top-2 rounded-md border border-white/10 bg-black/65 px-1.5 py-0.5 text-[8px] font-black text-white backdrop-blur-md sm:left-3 sm:top-3 sm:rounded-lg sm:px-2.5 sm:py-1 sm:text-[10px]">
+                            S{selectedSeason} · E{episodeNumber}
+                          </span>
+                          <span className="absolute bottom-2 left-2 flex h-7 w-7 items-center justify-center rounded-full bg-yellow-400 text-black shadow-lg shadow-black/30 transition group-hover:scale-110 sm:bottom-3 sm:left-3 sm:h-9 sm:w-9">
+                            <PlayIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                          </span>
+                        </div>
+                        <div className="p-2.5 sm:p-3">
+                          <h3 className="truncate text-xs font-black text-white sm:text-sm">{episode?.name || `${text.episode} ${episodeNumber}`}</h3>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[#111318] p-8 sm:p-10">
+              <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-yellow-400/10 blur-3xl" />
+              <FilmIcon className="h-10 w-10 text-yellow-300" />
+              <h3 className="mt-5 text-2xl font-black">{text.movieExperienceTitle}</h3>
+              <p className="mt-3 max-w-xl text-sm leading-7 text-white/50">{text.movieExperienceDescription}</p>
+              <Link href={watchHref} className={`${watchButtonClass} w-full justify-center sm:w-auto mt-7 px-5 py-3 text-sm`}>
+                <PlayIcon className="h-5 w-5" /> {text.watchNow}
+              </Link>
+            </div>
+          )}
+        </div>
+      </section>
+      )}
+
+      {activeTab === 'gallery' && (
+      <section
+        id="detail-panel-gallery"
+        role="tabpanel"
+        aria-labelledby="detail-tab-gallery"
+        data-testid="detail-panel-gallery"
+        className="mx-auto min-h-[480px] max-w-[1440px] px-4 pb-12 pt-7 sm:px-6 lg:px-10 lg:pb-14 lg:pt-8"
+      >
+        <div className="mb-6 flex items-center gap-3"><PhotoIcon className="h-6 w-6 text-yellow-300" /><h2 className="text-2xl font-black">{text.gallery}</h2></div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {media.scenes.slice(0, 6).map((scene, index) => (
+            <button
+              key={scene}
+              type="button"
+              data-testid={`gallery-image-${index}`}
+              aria-label={`${text.gallery} ${index + 1}`}
+              onClick={() => setActiveScene(index)}
+              className={`group relative cursor-zoom-in overflow-hidden rounded-2xl border border-white/[0.08] bg-[#121419] text-left ${index === 0 ? 'aspect-video sm:col-span-2 lg:col-span-2 lg:row-span-2' : 'aspect-video'}`}
+            >
+              <Image src={scene} alt={`${media.title} gallery ${index + 1}`} fill className="object-cover transition duration-700 hover:scale-105" sizes="(max-width: 768px) 100vw, 50vw" />
+              <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition duration-300 group-hover:bg-black/35 group-hover:opacity-100">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white backdrop-blur-md">
+                  <ArrowsPointingOutIcon className="h-5 w-5" />
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+      )}
+
+      {activeTab === 'cast' && (
+      <section
+        id="detail-panel-cast"
+        role="tabpanel"
+        aria-labelledby="detail-tab-cast"
+        data-testid="detail-panel-cast"
+        className="mx-auto min-h-[480px] max-w-[1440px] px-4 pb-12 pt-7 sm:px-6 lg:px-10 lg:pb-14 lg:pt-8"
+      >
+        <div className="mb-7 flex items-center gap-3"><UserGroupIcon className="h-6 w-6 text-yellow-300" /><h2 className="text-2xl font-black">{text.cast}</h2></div>
+        <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-9">
+          {media.cast.map((person) => (
+            <article
+              key={person.id}
+              className="group flex flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-[#111318] p-1.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-yellow-400/40 hover:bg-[#161920] hover:shadow-lg hover:shadow-yellow-400/5"
+            >
+              <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg bg-white/5">
+                {person.profilePath ? (
+                  <Image
+                    src={person.profilePath}
+                    alt={person.name}
+                    fill
+                    className="object-cover transition-transform duration-500 group-hover:scale-105"
+                    sizes="(max-width: 640px) 33vw, (max-width: 768px) 25vw, (max-width: 1024px) 16vw, 11vw"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-white/[0.03]">
+                    <UserGroupIcon className="h-8 w-8 text-white/20" />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity group-hover:opacity-40" />
+              </div>
+              <div className="flex flex-col justify-center px-1 pb-0.5 pt-2">
+                <h3 className="line-clamp-1 text-xs font-bold text-white group-hover:text-yellow-300 transition-colors">
+                  {person.name}
+                </h3>
+                {person.character && (
+                  <p className="mt-0.5 line-clamp-1 text-[10px] font-medium text-white/45">
+                    {person.character}
+                  </p>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+      )}
+
+      {activeTab === 'suggestions' && (
+      <section
+        id="detail-panel-suggestions"
+        role="tabpanel"
+        aria-labelledby="detail-tab-suggestions"
+        data-testid="detail-panel-suggestions"
+        className="min-h-[480px] border-t border-white/[0.06] bg-[#0b0c0f]"
+      >
+        <RelatedContent id={media.id} type={type} title={media.title} />
+      </section>
+      )}
+
+      <section
+        id="comments"
+        data-testid="detail-comments"
+        className="relative z-10 border-t border-white/[0.06] bg-[#08090b]/95"
+      >
+        <Comments movieId={media.id} type={type === 'tv' ? 'tvshow' : 'movie'} title={media.title} />
+      </section>
+
+      {activeScene !== null && media.scenes[activeScene] && (
+        <div
+          data-testid="gallery-lightbox"
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 p-3 backdrop-blur-sm sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${text.gallery} ${activeScene + 1}`}
+          onClick={() => setActiveScene(null)}
+        >
+          <div className="relative flex max-h-full w-full max-w-6xl flex-col" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <h3 className="text-base font-black text-white sm:text-lg">{text.gallery} <span className="text-white/45">{activeScene + 1} / {media.scenes.length}</span></h3>
+              <button
+                type="button"
+                data-testid="gallery-lightbox-close"
+                onClick={() => setActiveScene(null)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/20"
+                aria-label={text.closeImage}
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-[#08090b] shadow-2xl shadow-black">
+              <div className="relative h-[62vh] min-h-[260px] w-full sm:h-[68vh]">
+                <Image
+                  data-testid="gallery-lightbox-image"
+                  src={media.scenes[activeScene]}
+                  alt={`${media.title} gallery ${activeScene + 1}`}
+                  fill
+                  className="object-contain"
+                  sizes="100vw"
+                  priority
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                data-testid="gallery-previous"
+                onClick={() => setActiveScene((current) => current === null || current === 0 ? media.scenes.length - 1 : current - 1)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/20"
+                aria-label={text.previousImage}
+              >
+                <ChevronLeftIcon className="h-5 w-5" />
+              </button>
+
+              <div className="flex max-w-[70vw] gap-2 overflow-x-auto px-1 py-2">
+                {media.scenes.map((scene, index) => (
+                  <button
+                    key={`${scene}-${index}`}
+                    type="button"
+                    data-testid={`gallery-thumbnail-${index}`}
+                    onClick={() => setActiveScene(index)}
+                    className={`relative h-10 w-16 shrink-0 overflow-hidden rounded-md transition ${activeScene === index ? 'scale-105 ring-2 ring-red-500' : 'opacity-45 hover:opacity-100'}`}
+                    aria-label={`${text.gallery} ${index + 1}`}
+                    aria-current={activeScene === index ? 'true' : undefined}
+                  >
+                    <Image src={scene} alt="" fill className="object-cover" sizes="64px" />
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                data-testid="gallery-next"
+                onClick={() => setActiveScene((current) => current === null || current === media.scenes.length - 1 ? 0 : current + 1)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white transition hover:bg-white/20"
+                aria-label={text.nextImage}
+              >
+                <ChevronRightIcon className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTrailer && media.trailer && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4" role="dialog" aria-modal="true" aria-label={text.trailer} onClick={() => setShowTrailer(false)}>
+          <div className="relative w-full max-w-5xl" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              data-testid="trailer-close-button"
+              className="absolute -top-14 right-0 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-red-400/35 bg-[#17191f]/95 text-white shadow-[0_0_24px_rgba(239,68,68,0.28)] backdrop-blur-xl transition hover:scale-105 hover:border-red-300/70 hover:bg-red-500 hover:shadow-[0_0_30px_rgba(239,68,68,0.48)]"
+              onClick={() => setShowTrailer(false)}
+              aria-label={text.closeTrailer}
+            >
+              <XMarkIcon className="h-6 w-6" />
+            </button>
+            <div className="aspect-video overflow-hidden rounded-2xl border border-white/10 bg-black">
+              <iframe src={media.trailer} className="h-full w-full" title={`${media.title} trailer`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
   )
 }

@@ -20,7 +20,7 @@ import { extractOriginalUrl, prepareHlsPlayerSource } from '@/lib/hlsProxy'
 import WatchNowMoviesServer1 from './WatchNowMoviesServer1'
 import WatchNowMoviesServer2 from './WatchNowMoviesServer2'
 import WatchNowMoviesServer3 from './WatchNowMoviesServer3'
-import { SignalIcon as Radio, ArrowPathIcon as Loader2 } from '@heroicons/react/24/outline'
+import { SignalIcon as Radio, ArrowPathIcon as Loader2, ServerIcon } from '@heroicons/react/24/outline'
 import { useTranslations } from 'next-intl'
 import api from '@/lib/axios'
 
@@ -451,401 +451,472 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-white">
-      <h2 className="text-3xl font-bold mb-6">{t('watchNow')}</h2>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 text-white">
 
-      {/* Server 1 Component */}
-      <WatchNowMoviesServer1
-        movie={movie}
-        onLinksChange={(links) => setMovieLinks(links)}
-        onLoadingChange={setMovieLinksLoading}
-        onSearchComplete={setApiSearchCompleted}
-      />
-
-      {/* Server 2 Component */}
-      <WatchNowMoviesServer2
-        movie={movie}
-        onLinkChange={setServer2Link}
-      />
-
-      {/* Server 3 Component - Load tự động sau Server 1 */}
-      <WatchNowMoviesServer3
-        movie={movie}
-        server1Ready={apiSearchCompleted}
-        onLinksChange={setServer3Links}
-        onLoadingChange={setServer3Loading}
-        onSearchComplete={setServer3SearchCompleted}
-      />
-
-      <div className="mb-4">
-        {/* Server Buttons Row */}
-        <div className="flex flex-wrap items-center gap-3 mb-3">
-          <button
-            className={`whitespace-nowrap px-4 py-2 rounded-md text-sm font-semibold transition-colors ${selectedServer === 'server1' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-            onClick={() => handleServerChange('server1')}
-          >
-            {t('server1')}
-          </button>
-
-          <button
-            className={`whitespace-nowrap px-4 py-2 rounded-md text-sm font-semibold transition-colors ${selectedServer === 'server2' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-            onClick={() => handleServerChange('server2')}
-          >
-            {t('server2')}
-          </button>
-
-          <button
-            className={`whitespace-nowrap px-4 py-2 rounded-md text-sm font-semibold transition-colors ${selectedServer === 'server3' ? 'bg-amber-700 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-            onClick={() => handleServerChange('server3')}
-          >
-            {t('server3')}
-          </button>
-        </div>
-
-        {/* Active Server Options Area */}
-        <div className="min-h-[32px]">
-          <div className="flex flex-wrap items-center gap-2">
-          {selectedServer === 'server1' && (movieLinks.vietsub || movieLinks.dubbed) && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-300">{t('audio')}</span>
-              {movieLinks.vietsub && (
-                <button
-                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${selectedAudio === 'vietsub' ? 'bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-                  onClick={() => {
-                    setSelectedAudio('vietsub');
-                    const params = new URLSearchParams(searchParams.toString());
-                    params.set('audio', 'vietsub');
-                    router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
-                  }}
-                >
-                  {t('vietsub')}
-                </button>
-              )}
-              {movieLinks.dubbed && (
-                <button
-                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${selectedAudio === 'dubbed' ? 'bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-                  onClick={() => {
-                    setSelectedAudio('dubbed');
-                    const params = new URLSearchParams(searchParams.toString());
-                    params.set('audio', 'dubbed');
-                    router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
-                  }}
-                >
-                  {t('dubbed')}
-                </button>
-              )}
-            </div>
-          )}
-
-          {selectedServer === 'server2' && (
-            <span className="text-xs text-yellow-300 bg-yellow-900/40 px-2 py-1 rounded">
-              {t('adsWarning')}
-            </span>
-          )}
-
-          {selectedServer === 'server3' && (server3Links.vietsub || server3Links.dubbed) && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-300">{t('audio')}</span>
-              {server3Links.vietsub && (
-                <button
-                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${selectedAudio === 'vietsub' ? 'bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-                  onClick={() => {
-                    setSelectedAudio('vietsub');
-                    const params = new URLSearchParams(searchParams.toString());
-                    params.set('audio', 'vietsub');
-                    router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
-                  }}
-                >
-                  {t('vietsub')}
-                </button>
-              )}
-              {server3Links.dubbed && (
-                <button
-                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${selectedAudio === 'dubbed' ? 'bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-                  onClick={() => {
-                    setSelectedAudio('dubbed');
-                    const params = new URLSearchParams(searchParams.toString());
-                    params.set('audio', 'dubbed');
-                    router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
-                  }}
-                >
-                  {t('dubbed')}
-                </button>
-              )}
-            </div>
-          )}
-          </div>
-
-        </div>
+      {/* Hidden Server Loaders */}
+      <div className="hidden">
+        <WatchNowMoviesServer1
+          movie={movie}
+          onLinksChange={(links) => setMovieLinks(links)}
+          onLoadingChange={setMovieLinksLoading}
+          onSearchComplete={setApiSearchCompleted}
+        />
+        <WatchNowMoviesServer2
+          movie={movie}
+          onLinkChange={setServer2Link}
+        />
+        <WatchNowMoviesServer3
+          movie={movie}
+          server1Ready={apiSearchCompleted}
+          onLinksChange={setServer3Links}
+          onLoadingChange={setServer3Loading}
+          onSearchComplete={setServer3SearchCompleted}
+        />
       </div>
 
-      {/* Header ngoài player, co giãn theo khung hình */}
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <h3 className="text-white text-xs sm:text-sm md:text-base font-semibold truncate" title={movie.title}>{movie.title}</h3>
-          {((selectedServer === 'server1' || selectedServer === 'server3') && effectiveAudio) && (
-            <span className="px-2 py-0.5 text-[10px] sm:text-xs font-semibold rounded bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white whitespace-nowrap">
-              {effectiveAudio === 'vietsub' ? t('vietsub') : t('vietnameseDubbed')}
-            </span>
-          )}
-        </div>
+      {/* 2-Column Responsive Layout on Desktop / Stacked on Mobile */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-6 items-start">
+        {/* Left Column: Player & Title */}
+        <div className="lg:col-span-8 space-y-2">
+          {/* Header ngoài player */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <h3 className="text-white text-xs sm:text-sm md:text-base font-bold truncate" title={movie.title}>{movie.title}</h3>
+              {((selectedServer === 'server1' || selectedServer === 'server3') && effectiveAudio) && (
+                <span className="px-2 py-0.5 text-[10px] sm:text-xs font-bold rounded bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white whitespace-nowrap">
+                  {effectiveAudio === 'vietsub' ? t('vietsub') : t('vietnameseDubbed')}
+                </span>
+              )}
+            </div>
 
-        {/* Stream Button — chỉ hiện khi Server 1 đã load xong m3u8 */}
-        {selectedServer === 'server1' && effectiveStreamUrl && (
-          <div className="relative" ref={streamBtnRef}>
-              <button
-              onClick={handleStreamClick}
-              disabled={isCheckingStream}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs sm:text-sm font-semibold hover:from-yellow-400 hover:to-amber-400 disabled:opacity-70 transition-all duration-300 shadow-lg shadow-yellow-500/20 hover:shadow-yellow-500/40 whitespace-nowrap"
-              title={t('startWatchParty')}
-            >
-              {isCheckingStream ? <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" /> : <Radio className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
-              <span className="hidden sm:inline">{t('stream')}</span>
-            </button>
+            {/* Stream Button — chỉ hiện khi Server 1 đã load xong m3u8 */}
+            {selectedServer === 'server1' && effectiveStreamUrl && (
+              <div className="relative" ref={streamBtnRef}>
+                  <button
+                  onClick={handleStreamClick}
+                  disabled={isCheckingStream}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs sm:text-sm font-bold hover:from-yellow-400 hover:to-amber-400 disabled:opacity-70 transition-all duration-300 shadow-lg shadow-yellow-500/20 whitespace-nowrap"
+                  title={t('startWatchParty')}
+                >
+                  {isCheckingStream ? <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" /> : <Radio className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+                  <span className="hidden sm:inline">{t('stream')}</span>
+                </button>
 
-            {/* Auth/Duplicate notification dropdown */}
-            {streamPopup && (
-              <div className="absolute top-full right-0 mt-2 p-3 bg-gray-900/95 backdrop-blur-sm border border-yellow-500/30 rounded-xl shadow-2xl z-50 w-64 md:w-72">
-                {streamPopup.type === 'auth' ? (
-                  <>
-                    <p className="text-sm text-white mb-2.5">{t('signInRequired')}</p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => router.push('/login')}
-                        className="flex-1 px-3 py-1.5 bg-yellow-500 text-black text-xs font-semibold rounded-lg hover:bg-yellow-400 transition-colors"
-                      >
-                        {t('signIn')}
-                      </button>
-                      <button
-                        onClick={() => setStreamPopup(null)}
-                        className="px-3 py-1.5 bg-gray-700 text-white text-xs font-semibold rounded-lg hover:bg-gray-600 transition-colors"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm text-red-400 mb-2.5 font-medium leading-tight">{tStreaming('duplicateRoomError')}</p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => router.push(`/streaming-room?room=${streamPopup.roomId}`)}
-                        className="flex-1 px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-semibold rounded-lg hover:from-yellow-400 hover:to-amber-400 transition-colors flex items-center justify-center gap-1.5"
-                      >
-                        <Radio className="w-3 h-3" />
-                        {tStreaming('goToExistingRoom')}
-                      </button>
-                      <button
-                        onClick={() => setStreamPopup(null)}
-                        className="px-3 py-1.5 bg-gray-700 text-white text-xs font-semibold rounded-lg hover:bg-gray-600 transition-colors"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </>
+                {/* Auth/Duplicate notification dropdown */}
+                {streamPopup && (
+                  <div className="absolute top-full right-0 mt-2 p-3 bg-gray-900/95 backdrop-blur-sm border border-yellow-500/30 rounded-xl shadow-2xl z-50 w-64 md:w-72">
+                    {streamPopup.type === 'auth' ? (
+                      <>
+                        <p className="text-sm text-white mb-2.5">{t('signInRequired')}</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => router.push('/login')}
+                            className="flex-1 px-3 py-1.5 bg-yellow-500 text-black text-xs font-semibold rounded-lg hover:bg-yellow-400 transition-colors"
+                          >
+                            {t('signIn')}
+                          </button>
+                          <button
+                            onClick={() => setStreamPopup(null)}
+                            className="px-3 py-1.5 bg-gray-700 text-white text-xs font-semibold rounded-lg hover:bg-gray-600 transition-colors"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-red-400 mb-2.5 font-medium leading-tight">{tStreaming('duplicateRoomError')}</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => router.push(`/streaming-room?room=${streamPopup.roomId}`)}
+                            className="flex-1 px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-semibold rounded-lg hover:from-yellow-400 hover:to-amber-400 transition-colors flex items-center justify-center gap-1.5"
+                          >
+                            <Radio className="w-3 h-3" />
+                            {tStreaming('goToExistingRoom')}
+                          </button>
+                          <button
+                            onClick={() => setStreamPopup(null)}
+                            className="px-3 py-1.5 bg-gray-700 text-white text-xs font-semibold rounded-lg hover:bg-gray-600 transition-colors"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             )}
           </div>
-        )}
-      </div>
 
-      <div className="relative w-full rounded-lg bg-black/50 aspect-video">
-        {selectedServer === 'server1' && (
-          (() => {
-            const currentAudio = selectedAudio || (audioFromUrl === 'dubbed' || audioFromUrl === 'vietsub' ? audioFromUrl : null);
-            let videoSrc = '';
-            let effectiveAudio: 'vietsub' | 'dubbed' | null = null;
-            if (currentAudio === 'vietsub' && movieLinks.vietsub) {
-              videoSrc = movieLinks.vietsub;
-              effectiveAudio = 'vietsub';
-            } else if (currentAudio === 'dubbed' && movieLinks.dubbed) {
-              videoSrc = movieLinks.dubbed;
-              effectiveAudio = 'dubbed';
-            } else if (!currentAudio && movieLinks.vietsub) {
-              videoSrc = movieLinks.vietsub;
-              effectiveAudio = 'vietsub';
-            } else if (!currentAudio && movieLinks.dubbed) {
-              videoSrc = movieLinks.dubbed;
-              effectiveAudio = 'dubbed';
-            } else if (movieLinks.vietsub) {
-              videoSrc = movieLinks.vietsub;
-              effectiveAudio = 'vietsub';
-            } else if (movieLinks.dubbed) {
-              videoSrc = movieLinks.dubbed;
-              effectiveAudio = 'dubbed';
-            } else {
-              videoSrc = movieLinks.m3u8;
-              effectiveAudio = null;
-            }
-
-            const canPlaySaved = activeWatchUrl && !isSavedLinkFatalError;
-
-            if (!hasLoadedSavedProgress || (!canPlaySaved && (!apiSearchCompleted || movieLinksLoading))) {
-              if (isSavedLinkFatalError) {
-                return (
-                  <div className="flex items-center justify-center h-full text-white">
-                    <div className="flex flex-col items-center gap-4">
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
-                        className="w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full"
-                      />
-                      <p className="text-sm text-gray-400">{t('oldSourceExpired')}</p>
-                    </div>
-                  </div>
-                );
-              }
-              return (
-                <div className="flex items-center justify-center h-full text-white">
-                  <div className="flex flex-col items-center gap-4">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
-                      className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full"
-                    />
-                    <p className="text-sm text-gray-400">{t('pleaseWait')}</p>
-                  </div>
-                </div>
-              );
-            }
-
-            const playUrl = activeWatchUrl || videoSrc;
-            const hasVideoSource = playUrl || movieLinks.vietsub || movieLinks.dubbed || movieLinks.m3u8;
-
-            if (!hasVideoSource) {
-              return (
-                <div className="flex items-center justify-center h-full text-white">
-                  <div className="flex flex-col items-center gap-4">
-                    <svg className="w-12 h-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p className="text-lg font-semibold">{t('noVideoSource')}</p>
-                    <p className="text-sm text-gray-400">{t('tryAnotherServer')}</p>
-                  </div>
-                </div>
-              );
-            }
-
-            const playerAudio = effectiveAudio || currentAudio || 'vietsub';
-
-            return playUrl ? (
+          <div className="relative w-full rounded-2xl overflow-hidden bg-black/50 aspect-video shadow-2xl border border-white/10">
+            {selectedServer === 'server1' && (
               (() => {
-                const preparedPlaySource = prepareHlsPlayerSource(playUrl);
+                const currentAudio = selectedAudio || (audioFromUrl === 'dubbed' || audioFromUrl === 'vietsub' ? audioFromUrl : null);
+                let videoSrc = '';
+                let effectiveAudio: 'vietsub' | 'dubbed' | null = null;
+                if (currentAudio === 'vietsub' && movieLinks.vietsub) {
+                  videoSrc = movieLinks.vietsub;
+                  effectiveAudio = 'vietsub';
+                } else if (currentAudio === 'dubbed' && movieLinks.dubbed) {
+                  videoSrc = movieLinks.dubbed;
+                  effectiveAudio = 'dubbed';
+                } else if (!currentAudio && movieLinks.vietsub) {
+                  videoSrc = movieLinks.vietsub;
+                  effectiveAudio = 'vietsub';
+                } else if (!currentAudio && movieLinks.dubbed) {
+                  videoSrc = movieLinks.dubbed;
+                  effectiveAudio = 'dubbed';
+                } else if (movieLinks.vietsub) {
+                  videoSrc = movieLinks.vietsub;
+                  effectiveAudio = 'vietsub';
+                } else if (movieLinks.dubbed) {
+                  videoSrc = movieLinks.dubbed;
+                  effectiveAudio = 'dubbed';
+                } else {
+                  videoSrc = movieLinks.m3u8;
+                  effectiveAudio = null;
+                }
 
-                return (
-              <EnhancedMoviePlayer
-                key={`${movie.id}-${playerAudio}`}
-                ref={handlePlayerRef}
-                src={preparedPlaySource.src}
-                poster={movie.poster}
-                autoPlay={false}
-                movieId={movie.id}
-                server={selectedServer}
-                audio={playerAudio}
-                title={movie.title}
-                userId={typeof userId === 'string' ? userId : undefined}
-                watchUrl={preparedPlaySource.watchUrl}
-                cleanHlsInBrowser={preparedPlaySource.cleanHlsInBrowser}
-                latestWatchUrl={apiSearchCompleted ? extractOriginalUrl(videoSrc) : undefined}
-                savedTime={savedProgress?.currentTime}
-                savedWatchUrl={savedProgress?.watchUrl}
-                hasLoadedSavedProgress={hasLoadedSavedProgress}
-                onUpdateSource={(newUrl) => {
-                  const rawUrl = extractOriginalUrl(newUrl);
-                  setActiveWatchUrl(rawUrl);
-                  setSavedProgress(prev => prev ? { ...prev, watchUrl: rawUrl, currentTime: 0 } : { watchUrl: rawUrl, currentTime: 0 });
-                }}
-                onError={() => {
-                  if (activeWatchUrl && !apiSearchCompleted) {
-                    setIsSavedLinkFatalError(true);
+                const canPlaySaved = activeWatchUrl && !isSavedLinkFatalError;
+
+                if (!hasLoadedSavedProgress || (!canPlaySaved && (!apiSearchCompleted || movieLinksLoading))) {
+                  if (isSavedLinkFatalError) {
+                    return (
+                      <div className="flex items-center justify-center h-full text-white">
+                        <div className="flex flex-col items-center gap-4">
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
+                            className="w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full"
+                          />
+                          <p className="text-sm text-gray-400">{t('oldSourceExpired')}</p>
+                        </div>
+                      </div>
+                    );
                   }
-                }}
-                audioSettings={selectedServer === 'server1' ? audioSettings : undefined}
-                onAudioSettingsChange={selectedServer === 'server1' ? setAudioSettings : undefined}
-              />
+                  return (
+                    <div className="flex items-center justify-center h-full text-white">
+                      <div className="flex flex-col items-center gap-4">
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
+                          className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full"
+                        />
+                        <p className="text-sm text-gray-400">{t('pleaseWait')}</p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const playUrl = activeWatchUrl || videoSrc;
+                const hasVideoSource = playUrl || movieLinks.vietsub || movieLinks.dubbed || movieLinks.m3u8;
+
+                if (!hasVideoSource) {
+                  return (
+                    <div className="flex items-center justify-center h-full text-white">
+                      <div className="flex flex-col items-center gap-4">
+                        <svg className="w-12 h-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="text-lg font-semibold">{t('noVideoSource')}</p>
+                        <p className="text-sm text-gray-400">{t('tryAnotherServer')}</p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const playerAudio = effectiveAudio || currentAudio || 'vietsub';
+
+                return playUrl ? (
+                  (() => {
+                    const preparedPlaySource = prepareHlsPlayerSource(playUrl);
+
+                    return (
+                  <EnhancedMoviePlayer
+                    key={`${movie.id}-${playerAudio}`}
+                    ref={handlePlayerRef}
+                    src={preparedPlaySource.src}
+                    poster={movie.poster}
+                    autoPlay={false}
+                    movieId={movie.id}
+                    server={selectedServer}
+                    audio={playerAudio}
+                    title={movie.title}
+                    userId={typeof userId === 'string' ? userId : undefined}
+                    watchUrl={preparedPlaySource.watchUrl}
+                    cleanHlsInBrowser={preparedPlaySource.cleanHlsInBrowser}
+                    latestWatchUrl={apiSearchCompleted ? extractOriginalUrl(videoSrc) : undefined}
+                    savedTime={savedProgress?.currentTime}
+                    savedWatchUrl={savedProgress?.watchUrl}
+                    hasLoadedSavedProgress={hasLoadedSavedProgress}
+                    onUpdateSource={(newUrl) => {
+                      const rawUrl = extractOriginalUrl(newUrl);
+                      setActiveWatchUrl(rawUrl);
+                      setSavedProgress(prev => prev ? { ...prev, watchUrl: rawUrl, currentTime: 0 } : { watchUrl: rawUrl, currentTime: 0 });
+                    }}
+                    onError={() => {
+                      if (activeWatchUrl && !apiSearchCompleted) {
+                        setIsSavedLinkFatalError(true);
+                      }
+                    }}
+                    audioSettings={selectedServer === 'server1' ? audioSettings : undefined}
+                    onAudioSettingsChange={selectedServer === 'server1' ? setAudioSettings : undefined}
+                  />
+                    );
+                  })()
+                ) : (
+                  <div className="flex items-center justify-center h-full text-white text-lg font-semibold">
+                    {t('noVideoSource')}
+                  </div>
                 );
               })()
-            ) : (
-              <div className="flex items-center justify-center h-full text-white text-lg font-semibold">
-                {t('noVideoSource')}
-              </div>
-            );
-          })()
-        )}
-        {selectedServer === 'server2' && (
-          <iframe
-            src={server2Link}
-            className="w-full h-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            title={movie.title + ' - Server 2'}
-            referrerPolicy="origin"
-          />
-        )}
-        {selectedServer === 'server3' && (
-          (() => {
-            if (!server3SearchCompleted || server3Loading) {
-              return (
-                <div className="flex items-center justify-center h-full text-white">
-                  <div className="flex flex-col items-center gap-4">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
-                      className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full"
-                    />
-                    <p className="text-sm text-gray-400">{t('pleaseWait')}</p>
-                  </div>
-                </div>
-              );
-            }
-
-            const hasVideoSource = server3Links.vietsub || server3Links.dubbed || server3Links.m3u8;
-            if (!hasVideoSource) {
-              return (
-                <div className="flex items-center justify-center h-full text-white">
-                  <div className="flex flex-col items-center gap-4">
-                    <svg className="w-12 h-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p className="text-lg font-semibold">{t('noVideoSource')}</p>
-                    <p className="text-sm text-gray-400">{t('tryAnotherServer')}</p>
-                  </div>
-                </div>
-              );
-            }
-
-            // Server 3 sử dụng iframe 100%
-            let embedSrc = '';
-            if (selectedAudio === 'vietsub' && server3Links.vietsub) {
-              embedSrc = server3Links.vietsub;
-            } else if (selectedAudio === 'dubbed' && server3Links.dubbed) {
-              embedSrc = server3Links.dubbed;
-            } else if (server3Links.vietsub) {
-              embedSrc = server3Links.vietsub;
-            } else if (server3Links.dubbed) {
-              embedSrc = server3Links.dubbed;
-            } else {
-              embedSrc = server3Links.m3u8;
-            }
-
-            return embedSrc ? (
+            )}
+            {selectedServer === 'server2' && (
               <iframe
-                key={embedSrc}
-                src={embedSrc}
+                src={server2Link}
                 className="w-full h-full"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
-                title={movie.title + ' - Server 3'}
-                referrerPolicy="no-referrer"
+                title={movie.title + ' - Server 2'}
+                referrerPolicy="origin"
               />
-            ) : (
-              <div className="flex items-center justify-center h-full text-white text-lg font-semibold">
-                {t('noVideoSource')}
+            )}
+            {selectedServer === 'server3' && (
+              (() => {
+                if (!server3SearchCompleted || server3Loading) {
+                  return (
+                    <div className="flex items-center justify-center h-full text-white">
+                      <div className="flex flex-col items-center gap-4">
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
+                          className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full"
+                        />
+                        <p className="text-sm text-gray-400">{t('pleaseWait')}</p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const hasVideoSource = server3Links.vietsub || server3Links.dubbed || server3Links.m3u8;
+                if (!hasVideoSource) {
+                  return (
+                    <div className="flex items-center justify-center h-full text-white">
+                      <div className="flex flex-col items-center gap-4">
+                        <svg className="w-12 h-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="text-lg font-semibold">{t('noVideoSource')}</p>
+                        <p className="text-sm text-gray-400">{t('tryAnotherServer')}</p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                let embedSrc = '';
+                if (selectedAudio === 'vietsub' && server3Links.vietsub) {
+                  embedSrc = server3Links.vietsub;
+                } else if (selectedAudio === 'dubbed' && server3Links.dubbed) {
+                  embedSrc = server3Links.dubbed;
+                } else if (server3Links.vietsub) {
+                  embedSrc = server3Links.vietsub;
+                } else if (server3Links.dubbed) {
+                  embedSrc = server3Links.dubbed;
+                } else {
+                  embedSrc = server3Links.m3u8;
+                }
+
+                return embedSrc ? (
+                  <iframe
+                    key={embedSrc}
+                    src={embedSrc}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title={movie.title + ' - Server 3'}
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-white text-lg font-semibold">
+                    {t('noVideoSource')}
+                  </div>
+                );
+              })()
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Sleek Server & Audio Control Sidebar Card */}
+        <div className="mt-3 lg:mt-6 lg:col-span-4">
+          <div className="rounded-2xl border border-white/[0.08] bg-[#111318] p-4 sm:p-5 shadow-2xl shadow-black/40 space-y-4">
+            {/* Header Bar */}
+            <div className="flex items-center gap-2 border-b border-white/[0.07] pb-3">
+              <ServerIcon className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-300 shrink-0" />
+              <h3 className="text-sm sm:text-base font-black text-white">{t('serverSelection')}</h3>
+            </div>
+
+            {/* Server Buttons */}
+            <div>
+              <div className="mb-2 text-xs font-bold text-white/60">
+                {t('servers')}
               </div>
-            );
-          })()
-        )}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                    selectedServer === 'server1'
+                      ? 'border border-yellow-400/70 bg-yellow-400/15 text-yellow-300 shadow-lg shadow-yellow-400/10'
+                      : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                  }`}
+                  onClick={() => handleServerChange('server1')}
+                >
+                  {t('server1')}
+                </button>
+
+                <button
+                  type="button"
+                  className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                    selectedServer === 'server2'
+                      ? 'border border-yellow-400/70 bg-yellow-400/15 text-yellow-300 shadow-lg shadow-yellow-400/10'
+                      : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                  }`}
+                  onClick={() => handleServerChange('server2')}
+                >
+                  {t('server2')}
+                </button>
+
+                <button
+                  type="button"
+                  className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                    selectedServer === 'server3'
+                      ? 'border border-yellow-400/70 bg-yellow-400/15 text-yellow-300 shadow-lg shadow-yellow-400/10'
+                      : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                  }`}
+                  onClick={() => handleServerChange('server3')}
+                >
+                  {t('server3')}
+                </button>
+              </div>
+            </div>
+
+            {/* Audio Options */}
+            {selectedServer === 'server1' && (
+              <div>
+                <div className="mb-2 text-xs font-bold text-white/60">
+                  {t('audio')}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {movieLinks.vietsub && (
+                    <button
+                      type="button"
+                      className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                        (selectedAudio === 'vietsub' || (!selectedAudio && (audioFromUrl === 'vietsub' || !audioFromUrl)))
+                          ? 'border border-pink-500/50 bg-pink-500/[0.08] text-pink-300 shadow-lg shadow-pink-500/10'
+                          : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                      }`}
+                      onClick={() => {
+                        setSelectedAudio('vietsub');
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set('audio', 'vietsub');
+                        router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+                      }}
+                    >
+                      {t('vietsub')}
+                    </button>
+                  )}
+                  {movieLinks.dubbed && (
+                    <button
+                      type="button"
+                      className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                        (selectedAudio === 'dubbed' || (!selectedAudio && audioFromUrl === 'dubbed'))
+                          ? 'border border-pink-500/50 bg-pink-500/[0.08] text-pink-300 shadow-lg shadow-pink-500/10'
+                          : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                      }`}
+                      onClick={() => {
+                        setSelectedAudio('dubbed');
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set('audio', 'dubbed');
+                        router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+                      }}
+                    >
+                      {t('dubbed')}
+                    </button>
+                  )}
+                  {!movieLinks.vietsub && !movieLinks.dubbed && (
+                    <span className="rounded-xl px-3.5 py-2 text-xs font-black bg-[#1b1e24] text-white/40 border border-white/10">
+                      None
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {selectedServer === 'server2' && (
+              <div className="space-y-3">
+                <div>
+                  <div className="mb-2 text-xs font-bold text-white/60">
+                    {t('audio')}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-xl px-3.5 py-2 text-xs font-black bg-[#1b1e24] text-white/40 border border-white/10">
+                      None
+                    </span>
+                  </div>
+                </div>
+                <span className="inline-block text-xs text-yellow-300 bg-yellow-400/10 border border-yellow-400/20 px-3 py-1.5 rounded-xl font-bold">
+                  {t('adsWarning')}
+                </span>
+              </div>
+            )}
+
+            {selectedServer === 'server3' && (server3Links.vietsub || server3Links.dubbed) && (
+              <div>
+                <div className="mb-2 text-xs font-bold text-white/60">
+                  {t('audio')}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {server3Links.vietsub && (
+                    <button
+                      type="button"
+                      className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                        (selectedAudio === 'vietsub' || (!selectedAudio && (audioFromUrl === 'vietsub' || !audioFromUrl)))
+                          ? 'border border-pink-500/50 bg-pink-500/[0.08] text-pink-300 shadow-lg shadow-pink-500/10'
+                          : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                      }`}
+                      onClick={() => {
+                        setSelectedAudio('vietsub');
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set('audio', 'vietsub');
+                        router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+                      }}
+                    >
+                      {t('vietsub')}
+                    </button>
+                  )}
+                  {server3Links.dubbed && (
+                    <button
+                      type="button"
+                      className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                        (selectedAudio === 'dubbed' || (!selectedAudio && audioFromUrl === 'dubbed'))
+                          ? 'border border-pink-500/50 bg-pink-500/[0.08] text-pink-300 shadow-lg shadow-pink-500/10'
+                          : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                      }`}
+                      onClick={() => {
+                        setSelectedAudio('dubbed');
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set('audio', 'dubbed');
+                        router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+                      }}
+                    >
+                      {t('dubbed')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -20,7 +20,7 @@ import { extractOriginalUrl, prepareHlsPlayerSource } from '@/lib/hlsProxy'
 import WatchNowTVShowsServer1 from './WatchNowTVShowsServer1'
 import WatchNowTVShowsServer2 from './WatchNowTVShowsServer2'
 import WatchNowTVShowsServer3 from './WatchNowTVShowsServer3'
-import { SignalIcon as Radio, ForwardIcon as SkipForward, ArrowPathIcon as Loader2 } from '@heroicons/react/24/outline'
+import { SignalIcon as Radio, ForwardIcon as SkipForward, ArrowPathIcon as Loader2, ServerIcon } from '@heroicons/react/24/outline'
 import { useTranslations } from 'next-intl'
 import api from '@/lib/axios'
 
@@ -568,165 +568,67 @@ export default function WatchNowTVShows({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-white">
-      <h2 className="text-3xl font-bold mb-6">{t('watchNow')}</h2>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 text-white">
 
-      {/* Server 1 Component */}
-      <WatchNowTVShowsServer1
-        tvShow={tvShow}
-        selectedSeason={selectedSeason}
-        selectedEpisode={selectedEpisode}
-        onLinksChange={(links) => {
-          setTVShowLinks(prev => ({ ...prev, ...links }))
-        }}
-        onLoadingChange={(loading) => {
-          setTVShowLinksLoading(loading)
-        }}
-        onSearchComplete={(completed) => {
-          setApiSearchCompleted(completed)
-        }}
-        onDataReadyChange={(ready) => {
-          setDataReady(ready)
-        }}
-        onEpisodeStreamsChange={(episodes) => {
-          if (typeof window !== 'undefined' && Array.isArray(episodes) && episodes.length > 0) {
-            const key = `watch-party-tvshow-${tvShow.id}-${selectedSeason}-${Date.now()}`;
-            sessionStorage.setItem(key, JSON.stringify({
-              season: selectedSeason,
-              currentEpisode: selectedEpisode,
-              episodes: episodes,
-              title: tvShow.name,
-            }));
-          }
-        }}
-      />
+      {/* Hidden Server Loaders */}
+      <div className="hidden">
+        <WatchNowTVShowsServer1
+          tvShow={tvShow}
+          selectedSeason={selectedSeason}
+          selectedEpisode={selectedEpisode}
+          onLinksChange={(links) => {
+            setTVShowLinks(prev => ({ ...prev, ...links }))
+          }}
+          onLoadingChange={(loading) => {
+            setTVShowLinksLoading(loading)
+          }}
+          onSearchComplete={(completed) => {
+            setApiSearchCompleted(completed)
+          }}
+          onDataReadyChange={(ready) => {
+            setDataReady(ready)
+          }}
+          onEpisodeStreamsChange={(episodes) => {
+            if (typeof window !== 'undefined' && Array.isArray(episodes) && episodes.length > 0) {
+              const key = `watch-party-tvshow-${tvShow.id}-${selectedSeason}-${Date.now()}`;
+              sessionStorage.setItem(key, JSON.stringify({
+                season: selectedSeason,
+                currentEpisode: selectedEpisode,
+                episodes: episodes,
+                title: tvShow.name,
+              }));
+            }
+          }}
+        />
 
-      {/* Server 2 Component */}
-      <WatchNowTVShowsServer2
-        tvShow={tvShow}
-        selectedSeason={selectedSeason}
-        selectedEpisode={selectedEpisode}
-        onLinkChange={setServer2Link}
-      />
+        <WatchNowTVShowsServer2
+          tvShow={tvShow}
+          selectedSeason={selectedSeason}
+          selectedEpisode={selectedEpisode}
+          onLinkChange={setServer2Link}
+        />
 
-      {/* Server 3 Component - Load tự động sau Server 1 */}
-      <WatchNowTVShowsServer3
-        tvShow={tvShow}
-        selectedSeason={selectedSeason}
-        selectedEpisode={selectedEpisode}
-        server1Ready={apiSearchCompleted}
-        onLinksChange={(links) => {
-          setServer3Links(links)
-        }}
-        onLoadingChange={(loading) => {
-          setServer3Loading(loading)
-        }}
-        onSearchComplete={(completed) => {
-          setServer3SearchCompleted(completed)
-        }}
-      />
-
-      <div className="mb-4">
-        {/* Server Buttons Row */}
-        <div className="flex flex-wrap items-center gap-3 mb-3">
-          <button
-            className={`whitespace-nowrap px-4 py-2 rounded-md text-sm font-semibold transition-colors ${selectedServer === 'server1' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-            onClick={() => handleServerChange('server1')}
-          >
-            {t('server1')}
-          </button>
-
-          <button
-            className={`whitespace-nowrap px-4 py-2 rounded-md text-sm font-semibold transition-colors ${selectedServer === 'server2' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-            onClick={() => handleServerChange('server2')}
-          >
-            {t('server2')}
-          </button>
-
-          <button
-            className={`whitespace-nowrap px-4 py-2 rounded-md text-sm font-semibold transition-colors ${selectedServer === 'server3' ? 'bg-amber-700 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-            onClick={() => handleServerChange('server3')}
-          >
-            {t('server3')}
-          </button>
-        </div>
-
-        {/* Active Server Options Area */}
-        <div className="min-h-[32px]">
-          <div className="flex flex-wrap items-center gap-2">
-          {selectedServer === 'server1' && (tvShowLinks.vietsub || tvShowLinks.dubbed) && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-300">{t('audio')}</span>
-              {tvShowLinks.vietsub && (
-                <button
-                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${selectedAudio === 'vietsub' ? 'bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-                  onClick={() => {
-                    setSelectedAudio('vietsub');
-                    const params = new URLSearchParams(searchParams.toString());
-                    params.set('audio', 'vietsub');
-                    router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
-                  }}
-                >
-                  {t('vietsub')}
-                </button>
-              )}
-              {tvShowLinks.dubbed && (
-                <button
-                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${selectedAudio === 'dubbed' ? 'bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-                  onClick={() => {
-                    setSelectedAudio('dubbed');
-                    const params = new URLSearchParams(searchParams.toString());
-                    params.set('audio', 'dubbed');
-                    router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
-                  }}
-                >
-                  {t('dubbed')}
-                </button>
-              )}
-            </div>
-          )}
-
-          {selectedServer === 'server2' && (
-            <span className="text-xs text-yellow-300 bg-yellow-900/40 px-2 py-1 rounded">
-              {t('adsWarning')}
-            </span>
-          )}
-
-          {selectedServer === 'server3' && (server3Links.vietsub || server3Links.dubbed) && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-300">{t('audio')}</span>
-              {server3Links.vietsub && (
-                <button
-                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${selectedAudio === 'vietsub' ? 'bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-                  onClick={() => {
-                    setSelectedAudio('vietsub');
-                    const params = new URLSearchParams(searchParams.toString());
-                    params.set('audio', 'vietsub');
-                    router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
-                  }}
-                >
-                  {t('vietsub')}
-                </button>
-              )}
-              {server3Links.dubbed && (
-                <button
-                  className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${selectedAudio === 'dubbed' ? 'bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-                  onClick={() => {
-                    setSelectedAudio('dubbed');
-                    const params = new URLSearchParams(searchParams.toString());
-                    params.set('audio', 'dubbed');
-                    router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
-                  }}
-                >
-                  {t('dubbed')}
-                </button>
-              )}
-            </div>
-          )}
-          </div>
-
-        </div>
+        <WatchNowTVShowsServer3
+          tvShow={tvShow}
+          selectedSeason={selectedSeason}
+          selectedEpisode={selectedEpisode}
+          server1Ready={apiSearchCompleted}
+          onLinksChange={(links) => {
+            setServer3Links(links)
+          }}
+          onLoadingChange={(loading) => {
+            setServer3Loading(loading)
+          }}
+          onSearchComplete={(completed) => {
+            setServer3SearchCompleted(completed)
+          }}
+        />
       </div>
+
+      {/* 2-Column Responsive Layout on Desktop / Stacked on Mobile */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-6 items-start">
+        {/* Left Column: Player & Title */}
+        <div className="lg:col-span-8 space-y-2">
 
       {/* Header ngoài player, co giãn theo khung hình */}
       {selectedEpisode > 0 && (
@@ -1117,6 +1019,179 @@ export default function WatchNowTVShows({
             </div>
           </div>
         )}
+      </div>
+        </div>
+
+        {/* Right Column: Sleek Server & Audio Control Sidebar Card */}
+        <div className="mt-3 lg:mt-6 lg:col-span-4">
+          <div className="rounded-2xl border border-white/[0.08] bg-[#111318] p-4 sm:p-5 shadow-2xl shadow-black/40 space-y-4">
+            {/* Header Bar */}
+            <div className="flex items-center gap-2 border-b border-white/[0.07] pb-3">
+              <ServerIcon className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-300 shrink-0" />
+              <h3 className="text-sm sm:text-base font-black text-white">{t('serverSelection')}</h3>
+            </div>
+
+            {/* Server Buttons */}
+            <div>
+              <div className="mb-2 text-xs font-bold text-white/60">
+                {t('servers')}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                    selectedServer === 'server1'
+                      ? 'border border-yellow-400/70 bg-yellow-400/15 text-yellow-300 shadow-lg shadow-yellow-400/10'
+                      : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                  }`}
+                  onClick={() => handleServerChange('server1')}
+                >
+                  {t('server1')}
+                </button>
+
+                <button
+                  type="button"
+                  className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                    selectedServer === 'server2'
+                      ? 'border border-yellow-400/70 bg-yellow-400/15 text-yellow-300 shadow-lg shadow-yellow-400/10'
+                      : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                  }`}
+                  onClick={() => handleServerChange('server2')}
+                >
+                  {t('server2')}
+                </button>
+
+                <button
+                  type="button"
+                  className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                    selectedServer === 'server3'
+                      ? 'border border-yellow-400/70 bg-yellow-400/15 text-yellow-300 shadow-lg shadow-yellow-400/10'
+                      : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                  }`}
+                  onClick={() => handleServerChange('server3')}
+                >
+                  {t('server3')}
+                </button>
+              </div>
+            </div>
+
+            {/* Audio Options */}
+            {selectedServer === 'server1' && (
+              <div>
+                <div className="mb-2 text-xs font-bold text-white/60">
+                  {t('audio')}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {tvShowLinks.vietsub && (
+                    <button
+                      type="button"
+                      className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                        (selectedAudio === 'vietsub' || (!selectedAudio && (audioFromUrl === 'vietsub' || !audioFromUrl)))
+                          ? 'border border-pink-500/50 bg-pink-500/[0.08] text-pink-300 shadow-lg shadow-pink-500/10'
+                          : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                      }`}
+                      onClick={() => {
+                        setSelectedAudio('vietsub');
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set('audio', 'vietsub');
+                        router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+                      }}
+                    >
+                      {t('vietsub')}
+                    </button>
+                  )}
+                  {tvShowLinks.dubbed && (
+                    <button
+                      type="button"
+                      className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                        (selectedAudio === 'dubbed' || (!selectedAudio && audioFromUrl === 'dubbed'))
+                          ? 'border border-pink-500/50 bg-pink-500/[0.08] text-pink-300 shadow-lg shadow-pink-500/10'
+                          : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                      }`}
+                      onClick={() => {
+                        setSelectedAudio('dubbed');
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set('audio', 'dubbed');
+                        router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+                      }}
+                    >
+                      {t('dubbed')}
+                    </button>
+                  )}
+                  {!tvShowLinks.vietsub && !tvShowLinks.dubbed && (
+                    <span className="rounded-xl px-3.5 py-2 text-xs font-black bg-[#1b1e24] text-white/40 border border-white/10">
+                      None
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {selectedServer === 'server2' && (
+              <div className="space-y-3">
+                <div>
+                  <div className="mb-2 text-xs font-bold text-white/60">
+                    {t('audio')}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-xl px-3.5 py-2 text-xs font-black bg-[#1b1e24] text-white/40 border border-white/10">
+                      None
+                    </span>
+                  </div>
+                </div>
+                <span className="inline-block text-xs text-yellow-300 bg-yellow-400/10 border border-yellow-400/20 px-3 py-1.5 rounded-xl font-bold">
+                  {t('adsWarning')}
+                </span>
+              </div>
+            )}
+
+            {selectedServer === 'server3' && (server3Links.vietsub || server3Links.dubbed) && (
+              <div>
+                <div className="mb-2 text-xs font-bold text-white/60">
+                  {t('audio')}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {server3Links.vietsub && (
+                    <button
+                      type="button"
+                      className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                        (selectedAudio === 'vietsub' || (!selectedAudio && (audioFromUrl === 'vietsub' || !audioFromUrl)))
+                          ? 'border border-pink-500/50 bg-pink-500/[0.08] text-pink-300 shadow-lg shadow-pink-500/10'
+                          : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                      }`}
+                      onClick={() => {
+                        setSelectedAudio('vietsub');
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set('audio', 'vietsub');
+                        router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+                      }}
+                    >
+                      {t('vietsub')}
+                    </button>
+                  )}
+                  {server3Links.dubbed && (
+                    <button
+                      type="button"
+                      className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                        (selectedAudio === 'dubbed' || (!selectedAudio && audioFromUrl === 'dubbed'))
+                          ? 'border border-pink-500/50 bg-pink-500/[0.08] text-pink-300 shadow-lg shadow-pink-500/10'
+                          : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                      }`}
+                      onClick={() => {
+                        setSelectedAudio('dubbed');
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set('audio', 'dubbed');
+                        router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+                      }}
+                    >
+                      {t('dubbed')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

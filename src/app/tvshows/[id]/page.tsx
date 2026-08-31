@@ -22,7 +22,8 @@ async function getTVShowData(id: string) {
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const resolvedParams = await params;
-  const show = await getTVShowData(resolvedParams.id);
+  const cleanId = (resolvedParams.id || '').replace(/-(vietsub|dubbed)$/i, '');
+  const show = await getTVShowData(cleanId);
   
   if (!show) {
     return {
@@ -57,10 +58,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function TVShowDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const messages = await getMessages();
+  const resolvedParams = await params;
+  const cleanId = (resolvedParams.id || '').replace(/-(vietsub|dubbed)$/i, '');
   return (
-    <NextIntlClientProvider messages={{ TVShows: messages.TVShows, Watch: messages.Watch, Comments: messages.Comments, Watchlist: messages.Watchlist, StreamingLobby: messages.StreamingLobby }}>
-      <TVShowDetailClient params={params} />
+    <NextIntlClientProvider messages={{ TVShows: messages.TVShows, MediaDetail: messages.MediaDetail, RelatedContent: messages.RelatedContent, Watch: messages.Watch, Comments: messages.Comments, Watchlist: messages.Watchlist, StreamingLobby: messages.StreamingLobby }}>
+      <TVShowDetailClient id={cleanId} />
     </NextIntlClientProvider>
   );
 }
-

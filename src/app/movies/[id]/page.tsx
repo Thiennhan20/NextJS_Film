@@ -58,10 +58,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function MovieDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const messages = await getMessages();
+  const resolvedParams = await params;
+  const cleanId = (resolvedParams.id || '').replace(/-(vietsub|dubbed)$/i, '');
   return (
-    <NextIntlClientProvider messages={{ Movies: messages.Movies, Watch: messages.Watch, Comments: messages.Comments, Watchlist: messages.Watchlist, StreamingLobby: messages.StreamingLobby }}>
-      <MovieDetailClient params={params} />
+    <NextIntlClientProvider messages={{ Movies: messages.Movies, MediaDetail: messages.MediaDetail, RelatedContent: messages.RelatedContent, Watch: messages.Watch, Comments: messages.Comments, Watchlist: messages.Watchlist, StreamingLobby: messages.StreamingLobby }}>
+      <MovieDetailClient id={cleanId} />
     </NextIntlClientProvider>
   );
 }
-

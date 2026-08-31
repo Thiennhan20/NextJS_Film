@@ -646,45 +646,40 @@ select {
   line-clamp: unset;
 }
 
-/* Season dropdown specific styles */
+/* Compact scrollbar for the custom season picker */
 .season-dropdown {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
+  scrollbar-gutter: stable;
 }
 
 .season-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.season-dropdown::-webkit-scrollbar-track {
+  margin-block: 8px;
+  background: transparent;
+}
+
+.season-dropdown::-webkit-scrollbar-thumb {
+  min-height: 32px;
+  border: 1px solid rgba(250, 204, 21, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: padding-box;
+}
+
+.season-dropdown::-webkit-scrollbar-thumb:hover {
+  background: rgba(250, 204, 21, 0.55);
+}
+
+.season-dropdown::-webkit-scrollbar-button,
+.season-dropdown::-webkit-scrollbar-corner {
   display: none;
-}
-
-.season-dropdown option {
-  background-color: #374151;
-  color: white;
-  padding: 8px 12px;
-}
-
-.season-dropdown option:hover {
-  background-color: #4b5563;
-}
-
-.season-dropdown option:checked {
-  background-color: #ef4444;
-}
-
-/* Limit dropdown height to show max 5 options */
-.season-dropdown {
-  max-height: 200px; /* Height for approximately 5 options */
-}
-
-/* For webkit browsers, limit the dropdown list height */
-.season-dropdown:focus {
-  max-height: 200px;
-}
-
-/* Ensure options are properly sized */
-.season-dropdown option {
-  height: 40px; /* Fixed height for each option */
-  line-height: 24px;
-  padding: 8px 12px;
+  width: 0;
+  height: 0;
+  background: transparent;
 }
 
 /* Adaptive Navigation Transitions */
@@ -823,4 +818,30 @@ select {
 
 .player-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.45);
+}
+
+/* Sleek, ultra-thin horizontal scrollbar for episode range tabs */
+.range-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) rgba(255, 255, 255, 0.04);
+}
+
+.range-scrollbar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.range-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 9999px;
+  margin-inline: 4px;
+}
+
+.range-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+
+.range-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(250, 204, 21, 0.7);
 }

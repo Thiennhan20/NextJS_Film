@@ -31,6 +31,7 @@ export default getRequestConfig(async () => {
   const commentsNs = (await import(`./messages/${locale}/comments.json`)).default;
   const friendsNs = (await import(`./messages/${locale}/friends.json`)).default;
   const notFoundNs = (await import(`./messages/${locale}/notFound.json`)).default;
+  const mediaNs = (await import(`./messages/${locale}/media.json`)).default;
 
   return {
     locale,
@@ -47,6 +48,7 @@ export default getRequestConfig(async () => {
       ...commentsNs,
       ...friendsNs,
       ...notFoundNs,
+      ...mediaNs,
     }
   };
 });

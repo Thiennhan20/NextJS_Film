@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import axios from 'axios';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import CardWithHover from '@/components/common/CardWithHover';
@@ -28,6 +29,7 @@ interface RelatedContentProps {
 }
 
 export default function RelatedContent({ id, type, title }: RelatedContentProps) {
+  const t = useTranslations('RelatedContent');
   const router = useRouter();
   const [relatedItems, setRelatedItems] = useState<RelatedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,12 +117,11 @@ export default function RelatedContent({ id, type, title }: RelatedContentProps)
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <h2 className="text-2xl sm:text-3xl font-bold text-white mb-6">Related {type === 'movie' ? 'Movies' : 'TV Shows'}</h2>
-        <div className="flex gap-4 overflow-hidden">
+        <div className="h-7 w-44 rounded-lg bg-white/10 animate-pulse mb-6" />
+        <div className="flex gap-3 sm:gap-4 overflow-hidden">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="flex-shrink-0 w-[140px] sm:w-[160px]">
-              <div className="aspect-[2/3] bg-gray-700 rounded-lg animate-pulse" />
-              <div className="mt-2 h-4 bg-gray-700 rounded animate-pulse" />
+            <div key={i} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-[180px]">
+              <div className="aspect-[2/3] rounded-xl border border-white/10 bg-[#1b1e24] animate-pulse" />
             </div>
           ))}
         </div>
@@ -137,7 +138,7 @@ export default function RelatedContent({ id, type, title }: RelatedContentProps)
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <h2 className="text-2xl sm:text-3xl font-bold text-white mb-6">
-        More Like &quot;{title}&quot;
+        {t('moreLike', { title })}
       </h2>
       
       <div className="relative group/row">
@@ -149,7 +150,7 @@ export default function RelatedContent({ id, type, title }: RelatedContentProps)
           }`}
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
-          aria-label="Scroll left"
+          aria-label={t('scrollLeft')}
         >
           <ChevronLeftIcon className="w-5 h-5 sm:w-6 sm:h-6" />
         </motion.button>
@@ -180,7 +181,7 @@ export default function RelatedContent({ id, type, title }: RelatedContentProps)
                       {item.poster_path ? (
                         <Image
                           src={`https://image.tmdb.org/t/p/w400${item.poster_path}`}
-                          alt={item.title || item.name || 'Poster'}
+                          alt={item.title || item.name || t('poster')}
                           fill
                           className="object-cover group-hover:scale-110 transition-transform duration-500"
                           sizes="(max-width: 640px) 140px, (max-width: 768px) 160px, 180px"
@@ -199,7 +200,7 @@ export default function RelatedContent({ id, type, title }: RelatedContentProps)
                         {item.title || item.name}
                       </h3>
                       <div className="text-gray-300 text-xs mt-1 font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">
-                        {type === 'movie' ? 'Movie' : 'TV Show'}
+                        {t(type === 'movie' ? 'movie' : 'tvShow')}
                       </div>
                     </div>
                   </motion.div>
@@ -217,7 +218,7 @@ export default function RelatedContent({ id, type, title }: RelatedContentProps)
           }`}
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
-          aria-label="Scroll right"
+          aria-label={t('scrollRight')}
         >
           <ChevronRightIcon className="w-5 h-5 sm:w-6 sm:h-6" />
         </motion.button>

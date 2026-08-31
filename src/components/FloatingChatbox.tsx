@@ -35,6 +35,8 @@ export default function FloatingChatbox() {
   const [isLoadingChat, setIsLoadingChat] = useState(false)
   const dragControls = useDragControls()
   const [showScrollTop, setShowScrollTop] = useState(false)
+  const isChatDraggingRef = useRef(false)
+  const isScrollTopDraggingRef = useRef(false)
   const { isAppModalOpen } = useUIStore()
 
   // Add a check for a global variable to hide the scroll-to-top arrow when watching full movie
@@ -223,37 +225,48 @@ export default function FloatingChatbox() {
       {/* Scroll to Top Arrow */}
       {showScrollTop && !isWatchingFullMovie && !isOpen && !isAppModalOpen && (
         <motion.button
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 20 }}
+          drag
+          dragMomentum={false}
+          dragElastic={0.1}
+          dragConstraints={typeof window !== 'undefined' ? {
+            top: -(window.innerHeight - 120),
+            left: -(window.innerWidth - 100),
+            right: 0,
+            bottom: 0
+          } : undefined}
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0 }}
           whileHover={{ scale: 1.15 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          whileTap={{ scale: 0.9 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+          onDragStart={() => {
+            isScrollTopDraggingRef.current = true;
+          }}
+          onDragEnd={() => {
+            setTimeout(() => {
+              isScrollTopDraggingRef.current = false;
+            }, 150);
+          }}
+          onClick={() => {
+            if (isScrollTopDraggingRef.current) return;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className="fixed bottom-24 right-6 z-[1001] cursor-move select-none flex items-center justify-center rounded-full shadow-lg hover:shadow-xl transition-shadow"
           style={{
-            position: 'fixed',
-            right: position.x + 24 + 'px',
-            bottom: position.y + 104 + 'px',
-            zIndex: 1001,
             background: 'linear-gradient(135deg, #f59e42 0%, #f43f5e 100%)',
-            border: 'none',
-            borderRadius: '50%',
             width: 52,
             height: 52,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
             boxShadow: '0 0 16px 4px #f43f5e55, 0 2px 16px rgba(0,0,0,0.18)',
-            cursor: 'pointer',
-            transition: 'background 0.2s, box-shadow 0.2s',
+            border: 'none',
             outline: 'none',
-            borderWidth: 0,
           }}
           aria-label="Lên đầu trang"
         >
           <motion.span
-            animate={{ y: [0, -8, 0] }}
+            animate={{ y: [0, -4, 0] }}
             transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            className="flex items-center justify-center pointer-events-none"
           >
             <ChevronUpIcon className="w-7 h-7 text-white drop-shadow-lg" />
           </motion.span>
@@ -269,7 +282,19 @@ export default function FloatingChatbox() {
         }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
-        onClick={() => setIsOpen(true)}
+        onDragStart={() => {
+          isChatDraggingRef.current = true;
+        }}
+        onDragEnd={(event, info) => {
+          handleDragEnd(event, info);
+          setTimeout(() => {
+            isChatDraggingRef.current = false;
+          }, 150);
+        }}
+        onClick={() => {
+          if (isChatDraggingRef.current) return;
+          setIsOpen(true);
+        }}
         drag
         dragControls={dragControls}
         dragMomentum={false}
@@ -280,7 +305,6 @@ export default function FloatingChatbox() {
           right: 0,
           bottom: 0
         } : undefined}
-        onDragEnd={handleDragEnd}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-red-600 to-red-500 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-shadow duration-300 cursor-move"
       >

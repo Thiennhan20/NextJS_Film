@@ -599,14 +599,14 @@ export default function AutocompleteSearch({
     if (item.type === 'season') {
       return (
         <div>
-          <div className="font-medium text-sm leading-tight">{item.tvShowName}</div>
-          <div className="text-xs text-gray-500">{item.name}</div>
+          <div className="font-bold text-sm leading-tight text-gray-900">{item.tvShowName}</div>
+          <div className="text-xs text-gray-500 font-medium">{item.name}</div>
         </div>
       );
     }
     return (
       <div 
-        className="font-medium text-sm leading-tight line-clamp-2 hover:line-clamp-none transition-all duration-200"
+        className="font-bold text-sm leading-tight text-gray-900 line-clamp-2 hover:line-clamp-none transition-all duration-200"
         title={getTitle(item)}
       >
         {getTitle(item)}

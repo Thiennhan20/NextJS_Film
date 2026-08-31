@@ -701,18 +701,12 @@ export default function Navigation() {
       )}
 
       {/* Mobile menu, show/hide based on menu state. */}
-      <motion.div
-        className="pointer-events-auto overflow-hidden bg-gray-950/85 backdrop-blur-2xl text-white shadow-2xl shadow-black/90 rounded-2xl min-[700px]:hidden mt-3 mx-3 border border-white/15 ring-1 ring-white/10"
-        initial={false}
-        animate={{
-          height: isOpen ? 'auto' : 0,
-          opacity: isOpen ? 1 : 0
-        }}
-        transition={{
-          duration: 0.3,
-          ease: [0.4, 0, 0.2, 1],
-          opacity: { duration: 0.2 }
-        }}
+      <div
+        className={`pointer-events-auto overflow-hidden bg-[#0a0c10]/95 backdrop-blur-lg text-white shadow-2xl shadow-black/90 rounded-2xl min-[700px]:hidden mx-3 border border-white/15 ring-1 ring-white/10 transition-all duration-300 ease-out origin-top ${
+          isOpen
+            ? 'mt-3 max-h-[85vh] opacity-100 scale-100'
+            : 'mt-0 max-h-0 opacity-0 scale-95 border-transparent ring-0 pointer-events-none'
+        }`}
       >
         <div className="overflow-y-auto max-h-[calc(100vh-4rem)]">
           <div className="px-2.5 pt-2.5 pb-3 space-y-1.5 sm:px-3">
@@ -723,22 +717,22 @@ export default function Navigation() {
                   key={item.key}
                   href={item.href}
                   onClick={() => setIsOpen(false)}
-                  className={`block px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 ${
+                  className={`block px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 active:scale-[0.98] ${
                     isActive
                       ? 'bg-white text-gray-900 shadow-sm'
                       : 'text-white/90 hover:bg-white/10 hover:text-white'
                   }`}
                 >
-                  <motion.div className="flex items-center space-x-2.5" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                  <div className="flex items-center space-x-2.5">
                     <item.icon className="h-5 w-5 stroke-[2.5]" />
                     <span>{t(`items.${item.key}`)}</span>
-                  </motion.div>
+                  </div>
                 </Link>
               );
             })}
             {/* More dropdown for mobile */}
             <button
-              className={`flex items-center w-full px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 ${
+              className={`flex items-center w-full px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 active:scale-[0.98] ${
                 isMoreActive
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-white/90 hover:bg-white/10 hover:text-white'
@@ -755,28 +749,21 @@ export default function Navigation() {
             >
               <QueueListIcon className="h-5 w-5" />
               <span>{t('more')}</span>
-              <svg className={`ml-auto h-4 w-4 transition-transform ${isMobileMoreDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              <svg className={`ml-auto h-4 w-4 transition-transform duration-200 ${isMobileMoreDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
             </button>
-            <motion.div
-              initial={false}
-              animate={{
-                height: isMobileMoreDropdownOpen ? 'auto' : 0,
-                opacity: isMobileMoreDropdownOpen ? 1 : 0
-              }}
-              transition={{
-                duration: 0.2,
-                ease: [0.4, 0, 0.2, 1]
-              }}
-              className="overflow-hidden"
+            <div
+              className={`overflow-hidden transition-all duration-200 ease-out ${
+                isMobileMoreDropdownOpen ? 'max-h-96 opacity-100 mt-1.5' : 'max-h-0 opacity-0'
+              }`}
             >
-              <div className="bg-gray-950/70 backdrop-blur-xl border border-white/15 divide-y divide-white/10 rounded-2xl shadow-xl p-1.5 space-y-1 mt-1.5 ml-3">
+              <div className="bg-gray-950/80 backdrop-blur-md border border-white/15 divide-y divide-white/10 rounded-2xl shadow-xl p-1.5 space-y-1 ml-3">
                 {moreNavItems.map((item) => {
                   const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
                   return item.key === 'game' ? (
                     <button
                       key={item.key}
                       onClick={handleGameClick}
-                      className={`w-full flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl text-base font-bold text-left cursor-pointer transition-all duration-200 ${
+                      className={`w-full flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl text-base font-bold text-left cursor-pointer transition-all duration-200 active:scale-[0.98] ${
                         isActive
                           ? 'bg-white text-gray-900 shadow-sm'
                           : 'text-white/90 hover:bg-white/15 hover:text-white'
@@ -790,7 +777,7 @@ export default function Navigation() {
                       key={item.key}
                       href={item.href}
                       onClick={() => { setIsOpen(false); setIsMobileMoreDropdownOpen(false); }}
-                      className={`flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 ${
+                      className={`flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 active:scale-[0.98] ${
                         isActive
                           ? 'bg-white text-gray-900 shadow-sm'
                           : 'text-white/90 hover:bg-white/15 hover:text-white'
@@ -802,7 +789,7 @@ export default function Navigation() {
                   );
                 })}
               </div>
-            </motion.div>
+            </div>
             {/* Mobile Watchlist, User/Login, Logout */}
             {!hydrated || isLoading ? (
               <div className="w-full px-3 mt-4">
@@ -840,23 +827,16 @@ export default function Navigation() {
                   <span className="min-w-0 flex-1 truncate text-left">{user?.name || 'User'}</span>
                   <svg className={`ml-auto h-4 w-4 transition-transform ${isMobileUserDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                 </button>
-                <motion.div
-                  initial={false}
-                  animate={{
-                    height: isMobileUserDropdownOpen ? 'auto' : 0,
-                    opacity: isMobileUserDropdownOpen ? 1 : 0
-                  }}
-                  transition={{
-                    duration: 0.2,
-                    ease: [0.4, 0, 0.2, 1]
-                  }}
-                  className="overflow-hidden"
+                <div
+                  className={`overflow-hidden transition-all duration-200 ease-out ${
+                    isMobileUserDropdownOpen ? 'max-h-96 opacity-100 mt-1.5' : 'max-h-0 opacity-0'
+                  }`}
                 >
-                  <div className="bg-gray-950/70 backdrop-blur-xl border border-white/15 divide-y divide-white/10 rounded-2xl shadow-xl p-1.5 space-y-1 mt-1.5">
+                  <div className="bg-gray-950/80 backdrop-blur-md border border-white/15 divide-y divide-white/10 rounded-2xl shadow-xl p-1.5 space-y-1">
                     <Link
                       href="/watchlist"
                       onClick={() => { setIsOpen(false); setIsMobileUserDropdownOpen(false); }}
-                      className={`flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 ${
+                      className={`flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 active:scale-[0.98] ${
                         pathname?.startsWith('/watchlist')
                           ? 'bg-white text-gray-900 shadow-sm'
                           : 'text-white/90 hover:bg-white/15 hover:text-white'
@@ -868,7 +848,7 @@ export default function Navigation() {
                     <Link
                       href="/profile"
                       onClick={() => { setIsOpen(false); setIsMobileUserDropdownOpen(false); }}
-                      className={`flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 ${
+                      className={`flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 active:scale-[0.98] ${
                         pathname?.startsWith('/profile')
                           ? 'bg-white text-gray-900 shadow-sm'
                           : 'text-white/90 hover:bg-white/15 hover:text-white'
@@ -880,7 +860,7 @@ export default function Navigation() {
                     <Link
                       href="/settings"
                       onClick={() => { setIsOpen(false); setIsMobileUserDropdownOpen(false); }}
-                      className={`flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 ${
+                      className={`flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 active:scale-[0.98] ${
                         pathname?.startsWith('/settings')
                           ? 'bg-white text-gray-900 shadow-sm'
                           : 'text-white/90 hover:bg-white/15 hover:text-white'
@@ -896,7 +876,7 @@ export default function Navigation() {
                         setIsOpen(false);
                         setIsMobileUserDropdownOpen(false);
                       }}
-                      className="block w-full text-left px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 text-red-400 hover:bg-red-600/20 hover:text-red-300"
+                      className="block w-full text-left px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 text-red-400 hover:bg-red-600/20 hover:text-red-300 active:scale-[0.98]"
                     >
                       <div className="flex items-center space-x-2.5">
                         <LogOut className="h-5 w-5 stroke-[2.5]" />
@@ -904,7 +884,7 @@ export default function Navigation() {
                       </div>
                     </button>
                   </div>
-                </motion.div>
+                </div>
               </div>
             ) : (
               <div className="px-3 mt-4 space-y-2">
@@ -945,7 +925,7 @@ export default function Navigation() {
             </div>
           </div>
         </div>
-      </motion.div>
+      </div>
       </nav>
       <AnimatePresence>{isAppModalOpen && <AppDownloadModal />}</AnimatePresence>
     </>

@@ -10,6 +10,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Suspense } from 'react'
 import CardWithHover from '@/components/common/CardWithHover'
+import MediaPageLoading from '@/components/common/MediaPageLoading'
 import { useTranslations } from 'next-intl'
 import apiCache from '@/hooks/useApiCache'
 import {
@@ -548,14 +549,7 @@ function TVShowsPageContent({ initialTVShows }: { initialTVShows: TVShow[] }) {
         </div>
         {/* TV Shows Grid + Loading + Pagination */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-24">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
-              className="w-16 h-16 border-4 border-red-500 border-t-transparent rounded-full"
-            />
-            <p className="mt-4 text-gray-400 text-lg">{t('loading')}</p>
-          </div>
+          <MediaPageLoading label={t('loading')} />
         ) : (
           <AnimatePresence mode="wait">
             <motion.div
