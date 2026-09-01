@@ -684,6 +684,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
             )}
             {selectedServer === 'server2' && (
               <iframe
+                key={server2Link || movie.id}
                 src={server2Link}
                 className="w-full h-full"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

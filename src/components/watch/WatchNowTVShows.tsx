@@ -950,6 +950,7 @@ export default function WatchNowTVShows({
           })()
         ) : selectedServer === 'server2' && server2Link ? (
           <iframe
+            key={server2Link}
             src={server2Link}
             className="w-full h-full"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
