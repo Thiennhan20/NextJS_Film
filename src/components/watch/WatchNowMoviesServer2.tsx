@@ -43,7 +43,7 @@ export default function WatchNowMoviesServer2({
     const domainToUse = activeDomain || 'https://vidsrcme.su';
     if (typeof id === 'string' && id) {
       const cleanDomain = domainToUse.replace(/\/$/, '');
-      const rawServer2Url = `${cleanDomain}/embed/movie?tmdb=${id}&ds_lang=vi,en&autoplay=1`;
+      const rawServer2Url = `${cleanDomain}/embed/movie?tmdb=${id}&ds_lang=vi&autoplay=1`;
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
       const proxiedUrl = `${apiUrl}/vidsrc/embed-proxy?url=${encodeURIComponent(rawServer2Url)}`;
       onLinkChange(proxiedUrl);
