@@ -22,7 +22,7 @@ export default function WatchNowTVShowsServer2({
   onLinkChange
 }: WatchNowTVShowsServer2Props) {
   const { id } = useParams();
-  const [activeDomain, setActiveDomain] = useState<string>('');
+  const [activeDomain, setActiveDomain] = useState<string>('https://vidsrcme.su');
 
   useEffect(() => {
     let active = true;
@@ -40,12 +40,15 @@ export default function WatchNowTVShowsServer2({
     return () => { active = false; };
   }, []);
 
-  // Set Server 2 embed URL once active domain is loaded from API
+  // Set Server 2 embed URL once active domain is loaded or defaulted
   useEffect(() => {
-    if (typeof id === 'string' && id && selectedSeason && selectedEpisode > 0 && activeDomain) {
-      const cleanDomain = activeDomain.replace(/\/$/, '');
-      const server2Url = `${cleanDomain}/embed/tv?tmdb=${id}&season=${selectedSeason}&episode=${selectedEpisode}&ds_lang=vi&autoplay=1&autonext=1`;
-      onLinkChange(server2Url);
+    const domainToUse = activeDomain || 'https://vidsrcme.su';
+    if (typeof id === 'string' && id && selectedSeason && selectedEpisode > 0) {
+      const cleanDomain = domainToUse.replace(/\/$/, '');
+      const rawServer2Url = `${cleanDomain}/embed/tv?tmdb=${id}&season=${selectedSeason}&episode=${selectedEpisode}&ds_lang=vi&autoplay=1&autonext=1`;
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const proxiedUrl = `${apiUrl}/vidsrc/embed-proxy?url=${encodeURIComponent(rawServer2Url)}`;
+      onLinkChange(proxiedUrl);
     }
   }, [id, selectedSeason, selectedEpisode, activeDomain, onLinkChange]);
 

@@ -955,7 +955,7 @@ export default function WatchNowTVShows({
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
             title={`${tvShow.name} - Season ${selectedSeason} Episode ${selectedEpisode} - Server 2`}
-            referrerPolicy="origin"
+            referrerPolicy="no-referrer"
           />
         ) : selectedServer === 'server3' ? (
           (() => {
@@ -1180,9 +1180,6 @@ export default function WatchNowTVShows({
                     </span>
                   </div>
                 </div>
-                <span className="inline-block text-xs text-yellow-300 bg-yellow-400/10 border border-yellow-400/20 px-3 py-1.5 rounded-xl font-bold">
-                  {t('adsWarning')}
-                </span>
               </div>
             )}
 
