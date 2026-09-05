@@ -17,6 +17,7 @@ interface WatchNowTVShowsServer2Props {
 }
 
 export default function WatchNowTVShowsServer2({
+  tvShow,
   selectedSeason,
   selectedEpisode,
   onLinkChange
@@ -43,14 +44,15 @@ export default function WatchNowTVShowsServer2({
   // Set Server 2 embed URL once active domain is loaded or defaulted
   useEffect(() => {
     const domainToUse = activeDomain || 'https://vidsrcme.su';
-    if (typeof id === 'string' && id && selectedSeason && selectedEpisode > 0) {
+    const rawId = tvShow?.id ? String(tvShow.id) : (typeof id === 'string' ? id.replace(/-(vietsub|dubbed)$/i, '') : '');
+    if (rawId && selectedSeason && selectedEpisode > 0) {
       const cleanDomain = domainToUse.replace(/\/$/, '');
-      const rawServer2Url = `${cleanDomain}/embed/tv?tmdb=${id}&season=${selectedSeason}&episode=${selectedEpisode}&ds_lang=vi&autoplay=1&autonext=1`;
+      const rawServer2Url = `${cleanDomain}/embed/tv?tmdb=${rawId}&season=${selectedSeason}&episode=${selectedEpisode}&ds_lang=vi&autoplay=1&autonext=1`;
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
       const proxiedUrl = `${apiUrl}/vidsrc/embed-proxy?url=${encodeURIComponent(rawServer2Url)}`;
       onLinkChange(proxiedUrl);
     }
-  }, [id, selectedSeason, selectedEpisode, activeDomain, onLinkChange]);
+  }, [id, tvShow?.id, selectedSeason, selectedEpisode, activeDomain, onLinkChange]);
 
   return null;
 }

@@ -687,10 +687,11 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
                 key={server2Link || movie.id}
                 src={server2Link}
                 className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
                 allowFullScreen
                 title={movie.title + ' - Server 2'}
-                referrerPolicy="no-referrer"
+                referrerPolicy="origin"
+                style={{ minWidth: '100%', minHeight: '100%', border: 'none' }}
               />
             )}
             {selectedServer === 'server3' && (

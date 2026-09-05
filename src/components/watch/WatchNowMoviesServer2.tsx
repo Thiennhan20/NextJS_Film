@@ -41,14 +41,15 @@ export default function WatchNowMoviesServer2({
   // Set Server 2 embed URL once active domain is loaded or defaulted
   useEffect(() => {
     const domainToUse = activeDomain || 'https://vidsrcme.su';
-    if (typeof id === 'string' && id) {
+    const rawId = movie?.id ? String(movie.id) : (typeof id === 'string' ? id.replace(/-(vietsub|dubbed)$/i, '') : '');
+    if (rawId) {
       const cleanDomain = domainToUse.replace(/\/$/, '');
-      const rawServer2Url = `${cleanDomain}/embed/movie?tmdb=${id}&ds_lang=vi&autoplay=1`;
+      const rawServer2Url = `${cleanDomain}/embed/movie?tmdb=${rawId}&ds_lang=vi&autoplay=1`;
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
       const proxiedUrl = `${apiUrl}/vidsrc/embed-proxy?url=${encodeURIComponent(rawServer2Url)}`;
       onLinkChange(proxiedUrl);
     }
-  }, [id, movie?.title, movie?.year, activeDomain, onLinkChange]);
+  }, [id, movie?.id, movie?.title, movie?.year, activeDomain, onLinkChange]);
 
   return null;
 }
