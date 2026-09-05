@@ -20,7 +20,7 @@ import { extractOriginalUrl, prepareHlsPlayerSource } from '@/lib/hlsProxy'
 import WatchNowTVShowsServer1 from './WatchNowTVShowsServer1'
 import WatchNowTVShowsServer2 from './WatchNowTVShowsServer2'
 import WatchNowTVShowsServer3 from './WatchNowTVShowsServer3'
-import { SignalIcon as Radio, ForwardIcon as SkipForward, ArrowPathIcon as Loader2, ServerIcon } from '@heroicons/react/24/outline'
+import { SignalIcon as Radio, ForwardIcon as SkipForward, ArrowPathIcon as Loader2, ServerIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 import { useTranslations } from 'next-intl'
 import api from '@/lib/axios'
 
@@ -1182,6 +1182,12 @@ export default function WatchNowTVShows({
                       None
                     </span>
                   </div>
+                </div>
+
+                {/* Server 2 Subtitle Tip */}
+                <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/[0.07] p-2.5 text-xs text-amber-200/90 backdrop-blur-md">
+                  <InformationCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <span className="leading-relaxed">{t('server2SubtitleTip')}</span>
                 </div>
               </div>
             )}

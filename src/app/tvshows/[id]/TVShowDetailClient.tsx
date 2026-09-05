@@ -836,6 +836,14 @@ export default function TVShowDetailClient({ id }: TVShowDetailClientProps) {
                 </span>
               </div>
 
+              {/* Server 2 Subtitle Tip */}
+              {selectedServer === 'server2' && (
+                <div className="-mt-2 mb-4 flex items-start gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/[0.07] px-3.5 py-2.5 text-xs text-amber-200/90 backdrop-blur-md">
+                  <InformationCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <span className="leading-relaxed">{tWatch('server2SubtitleTip')}</span>
+                </div>
+              )}
+
               {/* Server Dropdown Portal */}
               {isMounted && isServerMenuOpen && createPortal(
                 <div
