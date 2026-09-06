@@ -341,33 +341,41 @@ export default function AnimeFrame() {
       <AnimatePresence>
         {showTrailer && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Anime Trailer"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => { setShowTrailer(false); setCurrentTrailer(''); }}
           >
             <motion.div
-              className="relative w-[90vw] max-w-4xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl"
-              initial={{ scale: 0.8, opacity: 0 }}
+              className="relative w-full max-w-5xl"
+              initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
+              exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
               onClick={(e) => e.stopPropagation()}
             >
               <button
+                type="button"
+                data-testid="trailer-close-button"
                 onClick={() => { setShowTrailer(false); setCurrentTrailer(''); }}
-                className="absolute top-3 right-3 z-10 w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center text-white transition-colors"
+                className="absolute -top-14 right-0 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-red-400/35 bg-[#17191f]/95 text-white shadow-[0_0_24px_rgba(239,68,68,0.28)] backdrop-blur-xl transition hover:scale-105 hover:border-red-300/70 hover:bg-red-500 hover:shadow-[0_0_30px_rgba(239,68,68,0.48)]"
+                aria-label="Close trailer"
               >
-                <XMarkIcon className="w-5 h-5" />
+                <XMarkIcon className="h-6 w-6" />
               </button>
-              <iframe
-                src={currentTrailer}
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                title="Trailer"
-              />
+              <div className="aspect-video overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl">
+                <iframe
+                  src={currentTrailer}
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  title="Trailer"
+                />
+              </div>
             </motion.div>
           </motion.div>
         )}

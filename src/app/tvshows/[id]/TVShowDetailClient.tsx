@@ -34,6 +34,7 @@ import { useWatchlistStore } from '@/store/store'
 import RelatedContent from '@/components/RelatedContent'
 import Comments from '@/components/Comments'
 import MediaPageLoading from '@/components/common/MediaPageLoading'
+import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 import {
   fetchSeasonEpisodes,
   type MediaEpisode,
@@ -124,6 +125,9 @@ export default function TVShowDetailClient({ id }: TVShowDetailClientProps) {
   const { addToWatchlist, removeFromWatchlist, isInWatchlist, fetchWatchlistFromServer } = useWatchlistStore()
   const { isAuthenticated, token } = useAuthStore()
   const isBookmarked = media ? isInWatchlist(media.id) : false
+
+  const navTabsRef = useRef<HTMLDivElement>(null)
+  const { dragScrollProps: navTabsDragScrollProps } = useHorizontalDragScroll(navTabsRef)
 
   useEffect(() => {
     if (!media || type !== 'tv') return
@@ -643,7 +647,12 @@ export default function TVShowDetailClient({ id }: TVShowDetailClientProps) {
       </section>
 
       <nav className="border-y border-white/[0.08] bg-[#08090b]/95 backdrop-blur-xl" aria-label={text.contentNavLabel}>
-        <div className="mx-auto flex max-w-[1440px] gap-8 overflow-x-auto px-4 pl-4 sm:px-6 sm:pl-[250px] lg:px-10 lg:pl-[286px]" role="tablist">
+        <div
+          ref={navTabsRef}
+          {...navTabsDragScrollProps}
+          className="mx-auto flex max-w-[1440px] gap-8 overflow-x-auto detail-tab-scrollbar pb-1 px-4 pl-4 sm:px-6 sm:pl-[250px] lg:px-10 lg:pl-[286px]"
+          role="tablist"
+        >
           {[
             { id: 'episodes' as DetailTab, label: type === 'tv' ? text.episodes : text.overview, icon: FilmIcon },
             { id: 'gallery' as DetailTab, label: text.gallery, icon: PhotoIcon },
@@ -1277,7 +1286,7 @@ export default function TVShowDetailClient({ id }: TVShowDetailClientProps) {
                 <ChevronLeftIcon className="h-5 w-5" />
               </button>
 
-              <div className="flex max-w-[70vw] gap-2 overflow-x-auto px-1 py-2">
+              <div className="flex max-w-[70vw] gap-2 overflow-x-auto detail-tab-scrollbar px-1 py-2">
                 {media.scenes.map((scene, index) => (
                   <button
                     key={`${scene}-${index}`}

@@ -39,9 +39,6 @@ const nextConfig: NextConfig = {
   experimental: {
     // Enable optimizations for better performance
     optimizePackageImports: [
-      '@react-three/fiber', 
-      '@react-three/drei', 
-      'three', 
       'framer-motion',
       '@heroicons/react'
     ],

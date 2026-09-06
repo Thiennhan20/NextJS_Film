@@ -845,3 +845,49 @@ select {
 .range-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(250, 204, 21, 0.7);
 }
+
+.range-scrollbar::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Sleek, ultra-thin modern horizontal scrollbar for detail page tabs & galleries */
+.detail-tab-scrollbar,
+.sleek-scrollbar-x {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) rgba(255, 255, 255, 0.03);
+  -webkit-overflow-scrolling: touch;
+}
+
+.detail-tab-scrollbar::-webkit-scrollbar,
+.sleek-scrollbar-x::-webkit-scrollbar {
+  height: 4px;
+}
+
+.detail-tab-scrollbar::-webkit-scrollbar-track,
+.sleek-scrollbar-x::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 9999px;
+  margin-inline: 8px;
+}
+
+.detail-tab-scrollbar::-webkit-scrollbar-thumb,
+.sleek-scrollbar-x::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 9999px;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.detail-tab-scrollbar::-webkit-scrollbar-thumb:hover,
+.sleek-scrollbar-x::-webkit-scrollbar-thumb:hover {
+  background: rgba(250, 204, 21, 0.85);
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.4);
+}
+
+.detail-tab-scrollbar::-webkit-scrollbar-button,
+.sleek-scrollbar-x::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
