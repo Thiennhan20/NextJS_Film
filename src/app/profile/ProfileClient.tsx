@@ -272,9 +272,9 @@ export default function ProfilePage() {
       return
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Image size must be less than 10MB')
+    // Validate file size (max 20MB)
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('Image size must be less than 20MB')
       return
     }
 
@@ -311,17 +311,20 @@ export default function ProfilePage() {
       })
 
       const canvas = document.createElement('canvas')
-      canvas.width = 400
-      canvas.height = 400
+      canvas.width = 600
+      canvas.height = 600
       const ctx = canvas.getContext('2d')
 
       if (ctx) {
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
+
         // Center the transform point on the canvas center
-        ctx.translate(200, 200)
+        ctx.translate(300, 300)
         ctx.scale(cropZoom, cropZoom)
 
         // Translate using visual offset scaled to canvas size
-        const scaleFactor = 400 / 250
+        const scaleFactor = 600 / 250
         ctx.translate((cropPosition.x * scaleFactor) / cropZoom, (cropPosition.y * scaleFactor) / cropZoom)
 
         // Draw image centered to cover
@@ -338,19 +341,19 @@ export default function ProfilePage() {
         ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
       }
 
-      const croppedBase64 = canvas.toDataURL('image/jpeg', 0.9)
+      const croppedBase64 = canvas.toDataURL('image/jpeg', 0.95)
 
       // Convert base64 to File object to compress
       const resBlob = await fetch(croppedBase64).then((res) => res.blob())
       const croppedFile = new File([resBlob], 'avatar.jpg', { type: 'image/jpeg' })
 
-      // Compress image
+      // Compress image with high quality
       const options = {
-        maxSizeMB: 0.5, // 500KB
-        maxWidthOrHeight: 400,
+        maxSizeMB: 1, // 1MB
+        maxWidthOrHeight: 600,
         useWebWorker: true,
         fileType: 'image/jpeg',
-        initialQuality: 0.85,
+        initialQuality: 0.92,
       }
       
       const compressedFile = await imageCompression(croppedFile, options)

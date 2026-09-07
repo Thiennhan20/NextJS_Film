@@ -86,7 +86,7 @@
     "actionError": "Error performing action",
     "errors": {
       "selectImage": "Please select an image file",
-      "sizeLimit": "Image size must be less than 10MB",
+      "sizeLimit": "Image size must be less than 20MB",
       "uploadSuccess": "Avatar updated successfully!",
       "uploadFailed": "Failed to upload avatar",
       "noAvatarToRemove": "No avatar to remove",

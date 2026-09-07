@@ -28,6 +28,10 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'phimapi.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'pub-1467e531e309456995512f4ba47320c6.r2.dev',
+      },
     ],
     localPatterns: [
       {
