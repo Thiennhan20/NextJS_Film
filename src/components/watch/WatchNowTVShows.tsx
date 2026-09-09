@@ -1006,7 +1006,17 @@ export default function WatchNowTVShows({
               embedSrc = server3Links.m3u8;
             }
 
-            // On iOS: use native <video> with proxied M3U8 URL
+            // Unwrap embed-proxy if present (ensures direct player playback even with cached proxy links)
+            let finalEmbedSrc = embedSrc;
+            if (embedSrc && embedSrc.includes('/api/server3/embed-proxy')) {
+              try {
+                const u = new URL(embedSrc, typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+                const original = u.searchParams.get('url');
+                if (original) finalEmbedSrc = original;
+              } catch {}
+            }
+
+            // On iOS: use native <video> with proxied M3U8 URL if available
             if (isIOS) {
               let m3u8Src = '';
               if (selectedAudio === 'vietsub' && server3M3u8Proxy.vietsub) {
@@ -1034,16 +1044,18 @@ export default function WatchNowTVShows({
               }
             }
 
-            // Desktop: use iframe with embed-proxy
-            return embedSrc ? (
+            // Embed iframe for Server 3
+            return finalEmbedSrc ? (
               <iframe
-                key={`${selectedSeason}-${selectedEpisode}-${embedSrc}`}
-                src={embedSrc}
+                key={`${selectedSeason}-${selectedEpisode}-${finalEmbedSrc}`}
+                src={finalEmbedSrc}
                 className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
                 allowFullScreen
                 title={`${tvShow.name} - Season ${selectedSeason} Episode ${selectedEpisode} - Server 3`}
-                referrerPolicy="no-referrer"
+                referrerPolicy="origin"
+                style={{ minWidth: '100%', minHeight: '100%', border: 'none' }}
               />
             ) : (
               <div className="flex items-center justify-center h-full text-white text-lg font-semibold">
