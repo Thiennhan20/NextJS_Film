@@ -32,6 +32,7 @@ interface Movie {
   genre?: string;
   release_date?: string;
   country?: string;
+  vote_average?: number;
 }
 
 // Type for TMDB API movie response
@@ -286,18 +287,19 @@ function MoviesPageContent({ initialMovies }: { initialMovies: Movie[] }) {
       appendCountryCodeFilter(params, selectedCountry);
     }
     const response = await axios.get(`/api/tmdb-proxy?endpoint=/discover/movie&${params.toString()}`);
-    let fetchedMovies = response.data.results
+    let fetchedMovies = response.data?.results || [];
     fetchedMovies = fetchedMovies.map((movie: TMDBMovie) => ({
       id: movie.id,
       title: movie.title,
-      
-      year: movie.release_date ? Number(movie.release_date.slice(0, 4)) : '',
-      image: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : '',
-      genre: [],
+      vote_average: movie.vote_average,
+      year: movie.release_date ? Number(movie.release_date.slice(0, 4)) : undefined,
+      // Tối ưu băng thông: Dùng w342 cho grid cards thay vì w500
+      image: movie.poster_path ? `https://image.tmdb.org/t/p/w342${movie.poster_path}` : '',
+      genre: '',
       release_date: movie.release_date,
       country: getCountryDisplayName(movie.original_language, movie.origin_country?.[0]),
-    }))
-    return fetchedMovies
+    }));
+    return fetchedMovies;
   }
 
   // Khi page thay đổi, nếu chưa có trong cache thì fetch
@@ -324,28 +326,39 @@ function MoviesPageContent({ initialMovies }: { initialMovies: Movie[] }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, selectedYear, selectedCategory, selectedCountry]);
 
-  // Hàm load thêm 10 trang tiếp theo (khi bấm vào 1 trong 2 trang kế tiếp)
+  // Nạp trước an toàn (Bounded Concurrency 3 trang, chống nghẽn API và chống treo loading vĩnh viễn)
   const loadNext10Pages = async (startPage: number) => {
-    const promises = [];
-    for (let p = startPage; p < startPage + 10; p++) {
+    const pagesToFetch: number[] = [];
+    const maxTarget = Math.min(startPage + 2, 500);
+    for (let p = startPage; p <= maxTarget; p++) {
       if (!getCurrentFilterCache()[p]) {
-        promises.push(fetchMoviesPage(p).then(movies => ({ p, movies })));
+        pagesToFetch.push(p);
       }
     }
-    
-    if (promises.length > 0) {
-      setLoading(true);
-      const results = await Promise.all(promises);
-      results.forEach(({ p, movies }) => {
-        setCurrentFilterCache(p, movies);
+
+    if (pagesToFetch.length === 0) return;
+
+    setLoading(true);
+    try {
+      const results = await Promise.allSettled(
+        pagesToFetch.map(p => fetchMoviesPage(p).then(movies => ({ p, movies })))
+      );
+
+      results.forEach(result => {
+        if (result.status === 'fulfilled') {
+          setCurrentFilterCache(result.value.p, result.value.movies);
+        }
       });
-      
+
       const currentPages = getCurrentFilterLoadedPages();
       const newPages = [...currentPages];
-      for (let p = startPage; p < startPage + 10; p++) {
+      pagesToFetch.forEach(p => {
         if (!newPages.includes(p)) newPages.push(p);
-      }
+      });
       setCurrentFilterLoadedPages(newPages.sort((a, b) => a - b));
+    } catch (err) {
+      console.error('Error prefetching movie pages:', err);
+    } finally {
       setLoading(false);
     }
   }
@@ -486,7 +499,7 @@ function MoviesPageContent({ initialMovies }: { initialMovies: Movie[] }) {
 
         
         {/* Filter and Dice Layout */}
-        <div className="flex items-center justify-between gap-1 sm:gap-2 md:gap-4 mb-6 md:mb-8 px-2 md:px-4">
+        <div className="flex items-center justify-between gap-1 sm:gap-2 md:gap-4 mb-4 md:mb-6 px-2 md:px-0">
           {/* Filter Icon - Left Side */}
           <div className="flex-1 min-w-0">
             <FilterIcon
@@ -515,21 +528,22 @@ function MoviesPageContent({ initialMovies }: { initialMovies: Movie[] }) {
               className="relative"
             >
               {/* Bubble */}
-              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg px-1.5 py-0.5 shadow-lg">
-                <span className="text-white text-[10px] sm:text-xs font-medium leading-tight whitespace-pre-line">
+              <div className="bg-zinc-900/90 backdrop-blur-md border border-white/15 rounded-lg px-2 py-1 shadow-lg">
+                <span className="text-zinc-200 text-[10px] sm:text-xs font-medium leading-tight whitespace-pre-line">
                   {thoughtText}
                 </span>
               </div>
               
               {/* Arrow pointing to dice */}
-              <div className="absolute right-0 top-1/2 transform translate-x-1/2 -translate-y-1/2 w-0 h-0 border-l-[4px] sm:border-l-[6px] border-l-white/20 border-t-[3px] sm:border-t-[4px] border-t-transparent border-b-[3px] sm:border-b-[4px] border-b-transparent"></div>
+              <div className="absolute right-0 top-1/2 transform translate-x-1/2 -translate-y-1/2 w-0 h-0 border-l-[4px] sm:border-l-[6px] border-l-zinc-900/90 border-t-[3px] sm:border-t-[4px] border-t-transparent border-b-[3px] sm:border-b-[4px] border-b-transparent"></div>
             </motion.div>
             
             <motion.button
               onClick={handleRandomFilter}
-              className="group relative p-2 sm:p-3 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
-              whileHover={{ scale: 1.1, rotate: 5 }}
-              whileTap={{ scale: 0.9 }}
+              className="group relative p-2 sm:p-2.5 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-black rounded-xl shadow-lg shadow-amber-500/20 hover:shadow-amber-500/35 transition-all duration-300"
+              whileHover={{ scale: 1.08, rotate: 5 }}
+              whileTap={{ scale: 0.92 }}
+              aria-label="Random movie"
             >
               <motion.div
                 animate={{ rotate: isRolling ? 360 : 0 }}
@@ -537,13 +551,59 @@ function MoviesPageContent({ initialMovies }: { initialMovies: Movie[] }) {
                   duration: isRolling ? 0.8 : 0.3,
                   ease: "easeInOut"
                 }}
-                className="text-lg sm:text-xl md:text-2xl"
+                className="text-lg sm:text-xl"
               >
                 🎲
               </motion.div>
             </motion.button>
           </div>
         </div>
+
+        {/* Active Filter Chips Bar */}
+        {(selectedYear !== 'All' || selectedCategory !== 'All' || selectedCountry !== 'All') && (
+          <div className="flex flex-wrap items-center gap-2 mb-6 px-2 md:px-0">
+            <span className="text-xs text-zinc-400 font-medium">Đang lọc:</span>
+            {selectedCategory !== 'All' && (
+              <button
+                onClick={() => handleCategoryChange('All')}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors"
+              >
+                <span>{selectedCategory}</span>
+                <span className="text-amber-400/80 hover:text-amber-200 text-xs">✕</span>
+              </button>
+            )}
+            {selectedYear !== 'All' && (
+              <button
+                onClick={() => handleYearChange('All')}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors"
+              >
+                <span>Năm: {selectedYear}</span>
+                <span className="text-amber-400/80 hover:text-amber-200 text-xs">✕</span>
+              </button>
+            )}
+            {selectedCountry !== 'All' && (
+              <button
+                onClick={() => handleCountryChange('All')}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors"
+              >
+                <span>Quốc gia: {selectedCountry}</span>
+                <span className="text-amber-400/80 hover:text-amber-200 text-xs">✕</span>
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setSelectedYear('All');
+                setSelectedCategory('All');
+                setSelectedCountry('All');
+                setPage(1);
+              }}
+              className="text-xs text-zinc-400 hover:text-amber-300 underline transition-colors ml-1"
+            >
+              Xóa tất cả
+            </button>
+          </div>
+        )}
+
         {/* Movie Grid + Loading + Pagination */}
         {loading ? (
           <MediaPageLoading label={t('loading')} />
@@ -571,41 +631,44 @@ function MoviesPageContent({ initialMovies }: { initialMovies: Movie[] }) {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="col-span-full text-center text-gray-400 py-12 text-xl"
+                  className="col-span-full text-center text-zinc-400 py-16 text-lg"
                 >
                   {t('noMovies')}
                 </motion.div>
               )}
-                             {pagedMovies.map((movie: Movie) => (
-                 <motion.div
-                   key={movie.id}
-                   variants={itemVariants}
-                 >
-                   <CardWithHover
-                     id={movie.id}
-                     type="movie"
-                     title={movie.title}
-                     posterPath={movie.image || '/window.svg'}
-                     onWatchClick={() => router.push(`/movies/${movie.id}?page=${page}&year=${selectedYear}&category=${selectedCategory}&country=${selectedCountry}`)}
-                     onDetailsClick={() => router.push(`/movies/${movie.id}?page=${page}&year=${selectedYear}&category=${selectedCategory}&country=${selectedCountry}`)}
-                   >
-                     <Link href={`/movies/${movie.id}?page=${page}&year=${selectedYear}&category=${selectedCategory}&country=${selectedCountry}`} className="block">
-                      <div className="border border-gray-700 rounded-lg overflow-hidden relative group bg-gray-800 hover:bg-gray-700 transition-colors duration-200">
-                        <div className="relative w-full h-[240px] md:h-[300px] lg:h-[360px] overflow-hidden bg-gray-900">
+              {pagedMovies.map((movie: Movie) => (
+                <motion.div
+                  key={movie.id}
+                  variants={itemVariants}
+                >
+                  <CardWithHover
+                    id={movie.id}
+                    type="movie"
+                    title={movie.title}
+                    posterPath={movie.image || '/window.svg'}
+                    onWatchClick={() => router.push(`/movies/${movie.id}?page=${page}&year=${selectedYear}&category=${selectedCategory}&country=${selectedCountry}`)}
+                    onDetailsClick={() => router.push(`/movies/${movie.id}?page=${page}&year=${selectedYear}&category=${selectedCategory}&country=${selectedCountry}`)}
+                  >
+                    <Link href={`/movies/${movie.id}?page=${page}&year=${selectedYear}&category=${selectedCategory}&country=${selectedCountry}`} className="block">
+                      <div className="border border-white/10 hover:border-white/20 rounded-xl overflow-hidden relative group bg-zinc-950 transition-all duration-300">
+                        {/* Cinema Aspect Ratio 2:3 */}
+                        <div className="relative w-full aspect-[2/3] overflow-hidden bg-zinc-950">
                           <Image
                             src={(movie.image && movie.image.length > 0) ? movie.image : '/window.svg'}
                             alt={movie.title}
                             fill
                             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
-                            className="object-cover"
+                            className="object-cover group-hover:scale-105 transition-transform duration-300"
                             priority={false}
                           />
                         </div>
-                        <div className="p-2 md:p-3 bg-gray-900">
-                          <h3 className="text-white font-semibold text-xs md:text-sm mb-1 md:mb-2 truncate leading-tight">
+
+                        {/* Card Meta */}
+                        <div className="p-2.5 md:p-3 bg-zinc-950">
+                          <h3 className="text-zinc-300 group-hover:text-white font-semibold text-xs md:text-sm mb-1.5 md:mb-2 truncate leading-tight transition-colors duration-200">
                             {movie.title}
                           </h3>
-                          <div className="flex items-center justify-between text-[10px] md:text-xs text-gray-400">
+                          <div className="flex items-center justify-between text-[10px] md:text-xs text-zinc-400">
                             <span className="truncate">
                               {movie.release_date ? new Date(movie.release_date).toLocaleDateString('en-US', {
                                 year: 'numeric',
@@ -613,14 +676,18 @@ function MoviesPageContent({ initialMovies }: { initialMovies: Movie[] }) {
                                 day: 'numeric'
                               }) : t('tba')}
                             </span>
-                            <span className="truncate ml-1">{movie.country}</span>
+                            {movie.country && (
+                              <span className="ml-1.5 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-white/5 border border-white/10 text-zinc-300 tracking-wide">
+                                {movie.country}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
                     </Link>
-                   </CardWithHover>
-                 </motion.div>
-               ))}
+                  </CardWithHover>
+                </motion.div>
+              ))}
             </motion.div>
           </AnimatePresence>
         )}

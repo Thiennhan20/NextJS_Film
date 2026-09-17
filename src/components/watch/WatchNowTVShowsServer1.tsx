@@ -152,6 +152,22 @@ export default function WatchNowTVShowsServer1({
 }: WatchNowTVShowsServer1Props) {
   const { id } = useParams();
 
+  // Stable refs for callback props to prevent ping-pong re-render loops
+  const onLinksChangeRef = useRef(onLinksChange);
+  onLinksChangeRef.current = onLinksChange;
+
+  const onLoadingChangeRef = useRef(onLoadingChange);
+  onLoadingChangeRef.current = onLoadingChange;
+
+  const onSearchCompleteRef = useRef(onSearchComplete);
+  onSearchCompleteRef.current = onSearchComplete;
+
+  const onDataReadyChangeRef = useRef(onDataReadyChange);
+  onDataReadyChangeRef.current = onDataReadyChange;
+
+  const onEpisodeStreamsChangeRef = useRef(onEpisodeStreamsChange);
+  onEpisodeStreamsChangeRef.current = onEpisodeStreamsChange;
+
   const [episodesData, setEpisodesData] = useState<EpisodeServer[] | null>(null);
 
   const [tvShowLinks, setTVShowLinks] = useState({
@@ -232,16 +248,16 @@ export default function WatchNowTVShowsServer1({
         };
 
         setTVShowLinks(cachedLinks);
-        onLinksChange({
+        onLinksChangeRef.current?.({
           embed: '',
           m3u8: m3u8Link,
           vietsub: vietsubLink,
           dubbed: dubbedLink
         });
-        onLoadingChange(false);
-        onSearchComplete(true);
-        onDataReadyChange(true);
-        onEpisodeStreamsChange?.(buildEpisodePlaylist(episodesData || undefined));
+        onLoadingChangeRef.current?.(false);
+        onSearchCompleteRef.current?.(true);
+        onDataReadyChangeRef.current?.(true);
+        onEpisodeStreamsChangeRef.current?.(buildEpisodePlaylist(episodesData || undefined));
         return;
       }
 
@@ -256,15 +272,15 @@ export default function WatchNowTVShowsServer1({
           currentSeason: 0
         }));
         setEpisodesData(null);
-        onEpisodeStreamsChange?.([]);
-        onDataReadyChange(false);
+        onEpisodeStreamsChangeRef.current?.([]);
+        onDataReadyChangeRef.current?.(false);
         return;
       }
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
-      onLoadingChange(true);
-      onSearchComplete(false);
-      onDataReadyChange(false);
+      onLoadingChangeRef.current?.(true);
+      onSearchCompleteRef.current?.(false);
+      onDataReadyChangeRef.current?.(false);
 
 
       timeoutId = setTimeout(() => {
@@ -536,7 +552,7 @@ export default function WatchNowTVShowsServer1({
         }
 
         if (!slug) {
-          onEpisodeStreamsChange?.([]);
+          onEpisodeStreamsChangeRef.current?.([]);
           return;
         }
 
@@ -682,7 +698,7 @@ export default function WatchNowTVShowsServer1({
         if (cancelled) return;
         const finalEpisodesData = Array.isArray(finalDetailData.episodes) ? finalDetailData.episodes : null;
         setEpisodesData(finalEpisodesData);
-        onEpisodeStreamsChange?.(buildEpisodePlaylist(finalEpisodesData || undefined));
+        onEpisodeStreamsChangeRef.current?.(buildEpisodePlaylist(finalEpisodesData || undefined));
 
         // Cập nhật tvShowLinks với tất cả audio options
 
@@ -702,7 +718,7 @@ export default function WatchNowTVShowsServer1({
         setTVShowLinks(updatedLinks);
 
         // Notify parent
-        onLinksChange({
+        onLinksChangeRef.current?.({
           embed: '',
           m3u8: defaultEmbed,
           vietsub: vietsubLink,
@@ -713,9 +729,9 @@ export default function WatchNowTVShowsServer1({
       } finally {
         if (timeoutId) clearTimeout(timeoutId);
         if (!cancelled) {
-          onLoadingChange(false);
-          onSearchComplete(true);
-          onDataReadyChange(true);
+          onLoadingChangeRef.current?.(false);
+          onSearchCompleteRef.current?.(true);
+          onDataReadyChangeRef.current?.(true);
         }
       }
     }

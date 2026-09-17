@@ -888,25 +888,29 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                   : ''
               }`}
             >
-              <div className="flex gap-3 sm:gap-4">
-                <div className="flex-shrink-0">
+              <div className="flex items-start gap-3 sm:gap-4">
+                <Link
+                  href={`/profile/${comment.userId?._id || comment.userId}`}
+                  className="flex-shrink-0 self-start block w-8 h-8 sm:w-10 sm:h-10 rounded-full overflow-hidden hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-red-500/50 cursor-pointer"
+                  aria-label={comment.userId?.name || t('unknownUser')}
+                >
                   {comment.userId?.avatar ? (
                     <Image
                       src={comment.userId.avatar}
                       alt={comment.userId.name}
                       width={40}
                       height={40}
-                      className="rounded-full object-cover"
+                      className="w-full h-full rounded-full object-cover"
                       unoptimized={comment.userId.avatar.startsWith('http')} // Nếu avatar từ URL bên ngoài
                     />
                   ) : (
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-r from-red-500 to-pink-500 flex items-center justify-center">
+                    <div className="w-full h-full rounded-full bg-gradient-to-r from-red-500 to-pink-500 flex items-center justify-center">
                       <span className="text-white font-bold text-sm sm:text-base">
                         {comment.userId?.name?.charAt(0).toUpperCase() || '?'}
                       </span>
                     </div>
                   )}
-                </div>
+                </Link>
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start sm:items-center justify-between gap-2 mb-2">
@@ -1047,7 +1051,7 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                           <div
                             key={reply._id}
                             id={`comment-${reply._id}`}
-                            className={`flex gap-2 sm:gap-3 rounded-lg border-l-2 scroll-mt-24 transition-colors duration-500 ${
+                            className={`flex items-start gap-2 sm:gap-3 rounded-lg border-l-2 scroll-mt-24 transition-colors duration-500 ${
                               isBranchReply
                                 ? 'ml-5 border-sky-500/70 bg-sky-500/[0.03] pl-3 sm:ml-8 sm:pl-4'
                                 : 'border-gray-700 pl-2 sm:pl-4'
@@ -1057,24 +1061,28 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                                 : ''
                             }`}
                           >
-                            <div className="flex-shrink-0">
+                            <Link
+                              href={`/profile/${reply.userId?._id || reply.userId}`}
+                              className="flex-shrink-0 self-start block w-6 h-6 sm:w-8 sm:h-8 rounded-full overflow-hidden hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-red-500/50 cursor-pointer"
+                              aria-label={reply.userId?.name || t('unknownUser')}
+                            >
                               {reply.userId?.avatar ? (
                                 <Image
                                   src={reply.userId.avatar}
                                   alt={reply.userId.name}
                                   width={32}
                                   height={32}
-                                  className="rounded-full object-cover"
+                                  className="w-full h-full rounded-full object-cover"
                                   unoptimized={reply.userId.avatar.startsWith('http')}
                                 />
                               ) : (
-                                <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-red-500 to-pink-500 flex items-center justify-center">
+                                <div className="w-full h-full rounded-full bg-gradient-to-r from-red-500 to-pink-500 flex items-center justify-center">
                                   <span className="text-white font-bold text-xs sm:text-sm">
                                     {reply.userId?.name?.charAt(0).toUpperCase() || '?'}
                                   </span>
                                 </div>
                               )}
-                            </div>
+                            </Link>
                             
                             <div className="flex-1 min-w-0">
                               <div className="mb-1 flex items-start justify-between gap-2">

@@ -21,6 +21,7 @@ export interface RoomStatus {
   season?: number | null;
   current_episode?: number | null;
   episode_playlist?: EpisodePlaylistItem[];
+  movie_id?: string;
   members?: {
     user_id: string;
     username: string;

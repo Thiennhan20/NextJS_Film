@@ -454,6 +454,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
       title: movie.title,
       movieId: String(movie.id),
       poster: movie.poster || '',
+      type: 'movie',
       audio: streamAudio,
     });
     router.push(`/streaming-lobby?${params.toString()}`);
@@ -927,48 +928,58 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
               </div>
             )}
 
-            {selectedServer === 'server3' && (server3Links.vietsub || server3Links.dubbed) && (
-              <div>
-                <div className="mb-2 text-xs font-bold text-white/60">
-                  {t('audio')}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {server3Links.vietsub && (
-                    <button
-                      type="button"
-                      className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
-                        (selectedAudio === 'vietsub' || (!selectedAudio && (audioFromUrl === 'vietsub' || !audioFromUrl)))
-                          ? 'border border-pink-500/50 bg-pink-500/[0.08] text-pink-300 shadow-lg shadow-pink-500/10'
-                          : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
-                      }`}
-                      onClick={() => {
-                        setSelectedAudio('vietsub');
-                        const params = new URLSearchParams(searchParams.toString());
-                        params.set('audio', 'vietsub');
-                        router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
-                      }}
-                    >
-                      {t('vietsub')}
-                    </button>
-                  )}
-                  {server3Links.dubbed && (
-                    <button
-                      type="button"
-                      className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
-                        (selectedAudio === 'dubbed' || (!selectedAudio && audioFromUrl === 'dubbed'))
-                          ? 'border border-pink-500/50 bg-pink-500/[0.08] text-pink-300 shadow-lg shadow-pink-500/10'
-                          : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
-                      }`}
-                      onClick={() => {
-                        setSelectedAudio('dubbed');
-                        const params = new URLSearchParams(searchParams.toString());
-                        params.set('audio', 'dubbed');
-                        router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
-                      }}
-                    >
-                      {t('dubbed')}
-                    </button>
-                  )}
+            {selectedServer === 'server3' && (
+              <div className="space-y-3">
+                {(server3Links.vietsub || server3Links.dubbed) && (
+                  <div>
+                    <div className="mb-2 text-xs font-bold text-white/60">
+                      {t('audio')}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {server3Links.vietsub && (
+                        <button
+                          type="button"
+                          className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                            (selectedAudio === 'vietsub' || (!selectedAudio && (audioFromUrl === 'vietsub' || !audioFromUrl)))
+                              ? 'border border-pink-500/50 bg-pink-500/[0.08] text-pink-300 shadow-lg shadow-pink-500/10'
+                              : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                          }`}
+                          onClick={() => {
+                            setSelectedAudio('vietsub');
+                            const params = new URLSearchParams(searchParams.toString());
+                            params.set('audio', 'vietsub');
+                            router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+                          }}
+                        >
+                          {t('vietsub')}
+                        </button>
+                      )}
+                      {server3Links.dubbed && (
+                        <button
+                          type="button"
+                          className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
+                            (selectedAudio === 'dubbed' || (!selectedAudio && audioFromUrl === 'dubbed'))
+                              ? 'border border-pink-500/50 bg-pink-500/[0.08] text-pink-300 shadow-lg shadow-pink-500/10'
+                              : 'bg-[#1b1e24] text-white/70 hover:bg-[#22252c] hover:text-white border border-white/10'
+                          }`}
+                          onClick={() => {
+                            setSelectedAudio('dubbed');
+                            const params = new URLSearchParams(searchParams.toString());
+                            params.set('audio', 'dubbed');
+                            router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+                          }}
+                        >
+                          {t('dubbed')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Server 3 Adblock Tip */}
+                <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/[0.07] p-2.5 text-xs text-amber-200/90 backdrop-blur-md">
+                  <InformationCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <span className="leading-relaxed">{t('server3AdblockTip')}</span>
                 </div>
               </div>
             )}

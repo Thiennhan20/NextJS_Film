@@ -15,6 +15,50 @@ import { useWatchPartySocket, type RoomStatus, type ChatMessage, type EpisodePla
 import { useTranslations } from 'next-intl';
 import api from '@/lib/axios';
 
+// ─── Helpers: Match Movie Cache by ID & Title ───────────────
+
+function normalizeTitle(raw: string): string {
+  return (raw || '')
+    .replace(/\s+-\s+S\d+\s+E\d+\s*$/i, '')
+    .replace(/\s+-\s+E\d+\s*$/i, '')
+    .replace(/\s+-\s+Tập\s*\d+\s*$/i, '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+}
+
+function isMatchingMovie(params: {
+  targetMovieId?: string | null;
+  targetTitle?: string | null;
+  cachedMovieId?: string | null;
+  cachedTitle?: string | null;
+}): boolean {
+  const targetId = (params.targetMovieId || '').trim();
+  const cachedId = (params.cachedMovieId || '').trim();
+  const targetTitle = normalizeTitle(params.targetTitle || '');
+  const cachedTitle = normalizeTitle(params.cachedTitle || '');
+
+  const hasIdComparison = Boolean(targetId && cachedId);
+  const idMatched = hasIdComparison && targetId === cachedId;
+
+  const hasTitleComparison = Boolean(targetTitle && cachedTitle);
+  const titleMatched = hasTitleComparison && (
+    targetTitle === cachedTitle ||
+    (targetTitle.length >= 3 && cachedTitle.length >= 3 && (targetTitle.includes(cachedTitle) || cachedTitle.includes(targetTitle)))
+  );
+
+  // 1. Ưu tiên so sánh ID trước: nếu cả hai đều có ID và trùng khớp -> Nhận cache
+  if (idMatched) return true;
+
+  // 2. Tiếp theo so sánh tên phim: nếu tên phim trùng khớp -> Nhận cache
+  if (titleMatched) return true;
+
+  // 3. Nếu 2 cái không có / không khớp -> Tuyệt đối KHÔNG nhận cache
+  return false;
+}
+
 // ─── Streaming Room Content ─────────────────────────────────
 
 function StreamingRoomContent() {
@@ -29,6 +73,7 @@ function StreamingRoomContent() {
   const streamUrlFromParams = searchParams.get('streamUrl') || '';
   const titleFromParams = searchParams.get('title') || '';
   const playlistKeyFromParams = searchParams.get('playlistKey') || '';
+  const movieIdFromParams = searchParams.get('movieId') || searchParams.get('movie_id') || '';
   const t = useTranslations('StreamingRoom');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,6 +84,7 @@ function StreamingRoomContent() {
   const [roomStatus, setRoomStatus] = useState<RoomStatus | null>(null);
   const [streamUrl, setStreamUrl] = useState(streamUrlFromParams);
   const [roomTitle, setRoomTitle] = useState(titleFromParams);
+  const [roomMovieId, setRoomMovieId] = useState<string>(movieIdFromParams);
   const preparedStreamSource = useMemo(() => prepareHlsPlayerSource(streamUrl), [streamUrl]);
   const [isHost, setIsHost] = useState(false);
   const [memberCount, setMemberCount] = useState(0);
@@ -165,7 +211,10 @@ function StreamingRoomContent() {
     if (metadata.current_episode) {
       setCurrentEpisode(metadata.current_episode);
     }
-    if (Array.isArray(metadata.episode_playlist) && metadata.episode_playlist.length > 0) {
+    if (metadata.movie_id) {
+      setRoomMovieId(String(metadata.movie_id));
+    }
+    if (Array.isArray(metadata.episode_playlist)) {
       setEpisodePlaylist(metadata.episode_playlist);
     }
   }, []);
@@ -460,11 +509,41 @@ function StreamingRoomContent() {
   useEffect(() => {
     if (episodePlaylist.length > 0 || typeof window === 'undefined') return;
 
+    // Do not load TV episode playlist if room is explicitly a movie
+    if (roomContentType === 'movie') return;
+
     try {
       const mappedPlaylistKey = roomId
         ? sessionStorage.getItem(`watch-party-room-playlist:${roomId}`) || ''
         : '';
-      let effectivePlaylistKey = playlistKeyFromParams || mappedPlaylistKey;
+      let effectivePlaylistKey = playlistKeyFromParams || '';
+
+      // Validate mapped key from sessionStorage: must match current room's ID or Title
+      if (!effectivePlaylistKey && mappedPlaylistKey) {
+        const stored = sessionStorage.getItem(mappedPlaylistKey);
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            const cachedId = String(parsed?.movieId || mappedPlaylistKey.match(/^watch-party-tvshow-([^-]+)-/)?.[1] || '');
+            const cachedTitle = parsed?.title || '';
+            if (isMatchingMovie({
+              targetMovieId: roomMovieId,
+              targetTitle: roomTitle,
+              cachedMovieId: cachedId,
+              cachedTitle: cachedTitle,
+            })) {
+              effectivePlaylistKey = mappedPlaylistKey;
+            } else {
+              // Mismatched or stale cache from a different movie -> purge corrupt mapping
+              sessionStorage.removeItem(`watch-party-room-playlist:${roomId}`);
+            }
+          } catch {
+            sessionStorage.removeItem(`watch-party-room-playlist:${roomId}`);
+          }
+        } else {
+          sessionStorage.removeItem(`watch-party-room-playlist:${roomId}`);
+        }
+      }
 
       if (!effectivePlaylistKey) {
         const titleMatch = roomTitle.match(/\bS(\d+)\s*E(\d+)\b/i);
@@ -482,6 +561,21 @@ function StreamingRoomContent() {
             const storedEpisodes = Array.isArray(parsed?.episodes) ? parsed.episodes : [];
             if (storedEpisodes.length === 0) continue;
 
+            // 1. Check ID and Title match (prioritize ID, then Title)
+            const cachedId = String(parsed?.movieId || key.match(/^watch-party-tvshow-([^-]+)-/)?.[1] || '');
+            const cachedTitle = parsed?.title || '';
+
+            const matchesMovie = isMatchingMovie({
+              targetMovieId: roomMovieId,
+              targetTitle: roomTitle,
+              cachedMovieId: cachedId,
+              cachedTitle: cachedTitle,
+            });
+
+            // If neither matches -> strictly DO NOT accept cache
+            if (!matchesMovie) continue;
+
+            // 2. Check season & episode match
             const storedSeason = Number(parsed?.season) || null;
             const storedCurrentEpisode = Number(parsed?.currentEpisode) || null;
             const hasTargetEpisode = targetEpisode
@@ -517,6 +611,19 @@ function StreamingRoomContent() {
       const storedEpisodes = Array.isArray(parsed?.episodes) ? parsed.episodes : [];
       if (storedEpisodes.length === 0) return;
 
+      // Final safety guard: ensure the candidate playlist matches current movie
+      const cachedId = String(parsed?.movieId || effectivePlaylistKey.match(/^watch-party-tvshow-([^-]+)-/)?.[1] || '');
+      const cachedTitle = parsed?.title || '';
+      if (!isMatchingMovie({
+        targetMovieId: roomMovieId,
+        targetTitle: roomTitle,
+        cachedMovieId: cachedId,
+        cachedTitle: cachedTitle,
+      })) {
+        sessionStorage.removeItem(`watch-party-room-playlist:${roomId}`);
+        return;
+      }
+
       setRoomContentType('tvshow');
       setRoomSeason(Number(parsed?.season) || null);
       setCurrentEpisode(Number(parsed?.currentEpisode) || null);
@@ -531,7 +638,7 @@ function StreamingRoomContent() {
     } catch (error) {
       console.warn('Unable to load local TV episode playlist:', error);
     }
-  }, [currentEpisode, episodePlaylist.length, playlistKeyFromParams, roomId, roomSeason, roomTitle]);
+  }, [currentEpisode, episodePlaylist.length, playlistKeyFromParams, roomContentType, roomId, roomMovieId, roomSeason, roomTitle]);
 
   useEffect(() => {
     const isTVRoom = roomContentType === 'tvshow' || /\bS\d+\s*E\d+\b/i.test(roomTitle);

@@ -90,12 +90,12 @@ export default function FilterIcon({
       {/* Filter Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="group relative flex items-center gap-2 px-4 py-2.5 bg-gray-800/80 backdrop-blur-sm border border-gray-700/50 rounded-lg text-white hover:bg-gray-700/80 hover:border-gray-600/50 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:ring-offset-2 focus:ring-offset-black/50 transition-all duration-200"
+        className="group relative flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 bg-zinc-900/90 backdrop-blur-md border border-zinc-700/60 rounded-xl text-white hover:border-amber-500/50 hover:bg-zinc-800/90 focus:outline-none focus:ring-2 focus:ring-amber-400/50 transition-all duration-200 shadow-md"
       >
         {/* Filter Icon */}
         <div className="relative">
           <svg
-            className="w-4 h-4 text-purple-400 group-hover:text-purple-300 transition-colors"
+            className="w-4 h-4 text-amber-400 group-hover:text-amber-300 transition-colors"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -113,19 +113,19 @@ export default function FilterIcon({
             <motion.div
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="absolute -top-1 -right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center shadow-lg"
+              className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-gradient-to-r from-amber-400 to-amber-500 rounded-full flex items-center justify-center shadow-md shadow-amber-500/40"
             >
-              <span className="text-xs font-bold text-white">{activeFiltersCount}</span>
+              <span className="text-[10px] font-black text-black leading-none">{activeFiltersCount}</span>
             </motion.div>
           )}
         </div>
         
         {/* Button Text */}
-        <span className="text-sm font-medium">{t('filters')}</span>
+        <span className="text-xs sm:text-sm font-semibold tracking-wide">{t('filters')}</span>
         
         {/* Dropdown Arrow */}
         <motion.svg
-          className="w-4 h-4 text-gray-400 group-hover:text-gray-300 transition-colors"
+          className="w-4 h-4 text-zinc-400 group-hover:text-zinc-200 transition-colors"
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: 0.2 }}
           fill="none"
@@ -144,20 +144,20 @@ export default function FilterIcon({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.96 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            className="absolute top-full left-0 sm:left-1/2 sm:-translate-x-1/2 mt-2 w-[calc(100vw-2rem)] sm:w-96 bg-gray-900/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-700/50 z-50 overflow-hidden"
+            className="absolute top-full left-0 sm:left-1/2 sm:-translate-x-1/2 mt-2 w-[calc(100vw-2rem)] sm:w-96 bg-zinc-950/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-zinc-800 z-50 overflow-hidden"
           >
             {/* Header */}
-            <div className="px-3 py-2.5 bg-gradient-to-r from-gray-800/80 to-gray-700/80 border-b border-gray-700/50">
+            <div className="px-3.5 py-2.5 bg-zinc-900/70 border-b border-zinc-800/80">
               <h3 className="text-white font-semibold text-sm">{t('filterOptions')}</h3>
-              <p className="text-gray-400 text-xs">{t('refineSearch')}</p>
+              <p className="text-zinc-400 text-xs">{t('refineSearch')}</p>
             </div>
 
             {/* Filter Options */}
-            <div className="p-2 sm:p-3 space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
+            <div className="p-2.5 sm:p-3 space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
               {/* Content Type Filter (for search page) */}
               {showContentType && onContentTypeChange && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
                     {t('contentType')}
                   </label>
                   <div className="grid grid-cols-3 gap-1.5">
@@ -165,10 +165,10 @@ export default function FilterIcon({
                       <button
                         key={type}
                         onClick={() => onContentTypeChange(type)}
-                        className={`px-2 py-1.5 text-xs rounded-md transition-all duration-200 ${
+                        className={`px-2 py-1.5 text-xs rounded-lg transition-all duration-200 ${
                           selectedContentType === type
-                            ? 'bg-purple-600 text-white font-medium shadow-lg ring-1 ring-purple-400/30'
-                            : 'bg-gray-800/60 text-gray-300 hover:bg-gray-700/80 hover:text-white border border-gray-700/50 hover:border-gray-600/50'
+                            ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-black font-bold shadow-md shadow-amber-500/20'
+                            : 'bg-zinc-900/70 text-zinc-300 hover:bg-zinc-800 hover:text-white border border-zinc-800/80'
                         }`}
                       >
                         {type === 'all' ? t('all') : type === 'movie' ? t('movies') : t('tvShows')}
@@ -181,7 +181,7 @@ export default function FilterIcon({
               {/* Sort Filter (for search page) */}
               {showSort && onSortChange && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
                     {t('sortBy')}
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
@@ -189,10 +189,10 @@ export default function FilterIcon({
                       <button
                         key={sort}
                         onClick={() => onSortChange(sort)}
-                        className={`px-2 py-1.5 text-xs rounded-md transition-all duration-200 ${
+                        className={`px-2 py-1.5 text-xs rounded-lg transition-all duration-200 ${
                           selectedSort === sort
-                            ? 'bg-purple-600 text-white font-medium shadow-lg ring-1 ring-purple-400/30'
-                            : 'bg-gray-800/60 text-gray-300 hover:bg-gray-700/80 hover:text-white border border-gray-700/50 hover:border-gray-600/50'
+                            ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-black font-bold shadow-md shadow-amber-500/20'
+                            : 'bg-zinc-900/70 text-zinc-300 hover:bg-zinc-800 hover:text-white border border-zinc-800/80'
                         }`}
                       >
                         {sort === 'relevance' ? t('relevance') : sort === 'popularity' ? t('popularity') : sort === 'rating' ? t('rating') : t('date')}
@@ -204,7 +204,7 @@ export default function FilterIcon({
 
               {/* Year Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
                   {t('year')}
                 </label>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
@@ -212,10 +212,10 @@ export default function FilterIcon({
                     <button
                       key={year}
                       onClick={() => onYearChange(year === 'All' ? 'All' : Number(year))}
-                      className={`px-2 py-1.5 text-xs rounded-md transition-all duration-200 ${
+                      className={`px-2 py-1.5 text-xs rounded-lg transition-all duration-200 ${
                         String(selectedYear) === String(year)
-                          ? 'bg-purple-600 text-white font-medium shadow-lg ring-1 ring-purple-400/30'
-                          : 'bg-gray-800/60 text-gray-300 hover:bg-gray-700/80 hover:text-white border border-gray-700/50 hover:border-gray-600/50'
+                          ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-black font-bold shadow-md shadow-amber-500/20'
+                          : 'bg-zinc-900/70 text-zinc-300 hover:bg-zinc-800 hover:text-white border border-zinc-800/80'
                       }`}
                     >
                       {year === 'All' ? t('all') : year}
@@ -226,7 +226,7 @@ export default function FilterIcon({
 
               {/* Category Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
                   {t('category')}
                 </label>
                 <div className="flex flex-wrap gap-1.5">
@@ -234,10 +234,10 @@ export default function FilterIcon({
                     <button
                       key={category}
                       onClick={() => onCategoryChange(category)}
-                      className={`px-3 py-1.5 text-xs rounded-md transition-all duration-200 ${
+                      className={`px-3 py-1.5 text-xs rounded-lg transition-all duration-200 ${
                         selectedCategory === category
-                          ? 'bg-purple-600 text-white font-medium shadow-lg ring-1 ring-purple-400/30'
-                          : 'bg-gray-800/60 text-gray-300 hover:bg-gray-700/80 hover:text-white border border-gray-700/50 hover:border-gray-600/50'
+                          ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-black font-bold shadow-md shadow-amber-500/20'
+                          : 'bg-zinc-900/70 text-zinc-300 hover:bg-zinc-800 hover:text-white border border-zinc-800/80'
                       }`}
                     >
                       {category === 'All' ? t('all') : category}
@@ -249,7 +249,7 @@ export default function FilterIcon({
               {/* Country Filter */}
               {countries.length > 1 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
                     {t('country')}
                   </label>
                   <div className="flex flex-wrap gap-1.5">
@@ -257,10 +257,10 @@ export default function FilterIcon({
                       <button
                         key={country}
                         onClick={() => onCountryChange(country)}
-                        className={`px-3 py-1.5 text-xs rounded-md transition-all duration-200 ${
+                        className={`px-3 py-1.5 text-xs rounded-lg transition-all duration-200 ${
                           selectedCountry === country
-                            ? 'bg-purple-600 text-white font-medium shadow-lg ring-1 ring-purple-400/30'
-                            : 'bg-gray-800/60 text-gray-300 hover:bg-gray-700/80 hover:text-white border border-gray-700/50 hover:border-gray-600/50'
+                            ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-black font-bold shadow-md shadow-amber-500/20'
+                            : 'bg-zinc-900/70 text-zinc-300 hover:bg-zinc-800 hover:text-white border border-zinc-800/80'
                         }`}
                       >
                         {country === 'All' ? t('all') : country}
@@ -272,9 +272,9 @@ export default function FilterIcon({
             </div>
 
             {/* Footer */}
-            <div className="px-3 py-2.5 bg-gray-950/80 border-t border-gray-700/50">
+            <div className="px-3.5 py-2.5 bg-zinc-950 border-t border-zinc-800/80">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-zinc-400">
                   {activeFiltersCount > 0 ? (
                     <>
                       {showContentType && selectedContentType !== 'all' && getContentTypeLabel(selectedContentType!)}
@@ -295,7 +295,7 @@ export default function FilterIcon({
                     if (onContentTypeChange) onContentTypeChange('all')
                     if (onSortChange) onSortChange('relevance')
                   }}
-                  className="text-purple-400 hover:text-purple-300 transition-colors duration-200 px-2.5 py-1 rounded-md hover:bg-gray-800/60 text-xs font-medium"
+                  className="text-amber-400 hover:text-amber-300 transition-colors duration-200 px-2.5 py-1 rounded-md hover:bg-zinc-900 text-xs font-semibold"
                 >
                   {t('resetAll')}
                 </button>
@@ -314,11 +314,11 @@ export default function FilterIcon({
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #4b5563;
+          background: #3f3f46;
           border-radius: 2px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #6b7280;
+          background: #71717a;
         }
       `}</style>
     </div>

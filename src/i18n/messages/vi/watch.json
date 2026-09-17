@@ -76,6 +76,7 @@
     "updatePlaybackSourceDesc": "Hệ thống phát hiện nguồn phát mới chất lượng hơn hoặc đã được sửa lỗi cho phim này. Bạn có muốn tải lại nguồn mới ngay không?",
     "updateNewSource": "Cập nhật nguồn mới",
     "continueOldSource": "Tiếp tục xem nguồn cũ",
-    "server2SubtitleTip": "Đổi sang phụ đề khác nếu bản dịch chưa chuẩn, hoặc nếu không có bản dịch bình luận bên dưới giúp tôi."
+    "server2SubtitleTip": "Đổi sang phụ đề khác nếu bản dịch chưa chuẩn, hoặc nếu không có bản dịch bình luận bên dưới giúp tôi.",
+    "server3AdblockTip": "Nếu dùng extension hay các công cụ chặn quảng cáo thì bạn tắt đi nhá."
   }
 }

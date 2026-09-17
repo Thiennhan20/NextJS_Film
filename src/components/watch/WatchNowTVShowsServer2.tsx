@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import api from '@/lib/axios'
 
@@ -24,6 +24,13 @@ export default function WatchNowTVShowsServer2({
 }: WatchNowTVShowsServer2Props) {
   const { id } = useParams();
   const [activeDomain, setActiveDomain] = useState<string>('https://vidsrcme.su');
+
+  // Stable ref for callback to avoid re-render ping-pong loop
+  const onLinkChangeRef = useRef(onLinkChange);
+  onLinkChangeRef.current = onLinkChange;
+
+  // Track last emitted link to prevent redundant updates
+  const lastLinkRef = useRef<string>('');
 
   useEffect(() => {
     let active = true;
@@ -50,9 +57,14 @@ export default function WatchNowTVShowsServer2({
       const rawServer2Url = `${cleanDomain}/embed/tv?tmdb=${rawId}&season=${selectedSeason}&episode=${selectedEpisode}&ds_lang=vi&autoplay=1&autonext=1`;
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
       const proxiedUrl = `${apiUrl}/vidsrc/embed-proxy?url=${encodeURIComponent(rawServer2Url)}`;
-      onLinkChange(proxiedUrl);
+      
+      // Deduplicate: only notify parent if URL actually changed
+      if (lastLinkRef.current !== proxiedUrl) {
+        lastLinkRef.current = proxiedUrl;
+        onLinkChangeRef.current?.(proxiedUrl);
+      }
     }
-  }, [id, tvShow?.id, selectedSeason, selectedEpisode, activeDomain, onLinkChange]);
+  }, [id, tvShow?.id, selectedSeason, selectedEpisode, activeDomain]);
 
   return null;
 }

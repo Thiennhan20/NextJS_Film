@@ -76,6 +76,7 @@
     "updatePlaybackSourceDesc": "The system has detected a new, higher quality or bug-fixed playback source for this title. Would you like to reload with the new source now?",
     "updateNewSource": "Update to New Source",
     "continueOldSource": "Continue with Old Source",
-    "server2SubtitleTip": "Switch to another subtitle if inaccurate, or comment below if no translation is available."
+    "server2SubtitleTip": "Switch to another subtitle if inaccurate, or comment below if no translation is available.",
+    "server3AdblockTip": "If using extensions or ad-blocking tools, please turn them off."
   }
 }

@@ -144,23 +144,27 @@ export default function WatchNowTVShowsServer3({
     onLoadingChange,
     onSearchComplete
 }: WatchNowTVShowsServer3Props) {
+    // Stable refs for callback props to prevent ping-pong re-render loops
+    const onLinksChangeRef = useRef(onLinksChange);
+    onLinksChangeRef.current = onLinksChange;
+
+    const onM3u8ProxyChangeRef = useRef(onM3u8ProxyChange);
+    onM3u8ProxyChangeRef.current = onM3u8ProxyChange;
+
+    const onLoadingChangeRef = useRef(onLoadingChange);
+    onLoadingChangeRef.current = onLoadingChange;
+
+    const onSearchCompleteRef = useRef(onSearchComplete);
+    onSearchCompleteRef.current = onSearchComplete;
+
     // Search state
     const [isSearching, setIsSearching] = useState(false);
-    const [searchCompleted, setSearchCompleted] = useState(false);
     const [autoSearchDone, setAutoSearchDone] = useState(false);
 
-    // Sync outward
+    // Sync outward loading state (without parent callback in dependency array)
     useEffect(() => {
-        if (onLoadingChange) {
-            onLoadingChange(isSearching);
-        }
-    }, [isSearching, onLoadingChange]);
-
-    useEffect(() => {
-        if (onSearchComplete) {
-            onSearchComplete(searchCompleted);
-        }
-    }, [searchCompleted, onSearchComplete]);
+        onLoadingChangeRef.current?.(isSearching);
+    }, [isSearching]);
 
     // Cache episodes data for quick episode switching
     const [cachedEpisodes, setCachedEpisodes] = useState<NguoncEpisodeServer[] | null>(null);
@@ -174,7 +178,6 @@ export default function WatchNowTVShowsServer3({
         if (!keyword.trim()) return;
 
         setIsSearching(true);
-        setSearchCompleted(false);
         setCachedEpisodes(null);
 
         try {
@@ -182,7 +185,6 @@ export default function WatchNowTVShowsServer3({
             const tmdbYear = tvShow?.year || (tvShow?.firstAirDate ? parseInt(tvShow.firstAirDate.substring(0, 4)) : 0);
             const season = selectedSeason || 1;
             const episode = selectedEpisode || 1;
-
 
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
             const res = await fetch(`${apiUrl}/server3/search-tv?keyword=${encodeURIComponent(keyword.trim())}&name=${encodeURIComponent(normalizedTitle)}&year=${tmdbYear}&season=${season}&episode=${episode}`);
@@ -208,19 +210,16 @@ export default function WatchNowTVShowsServer3({
                     m3u8: unwrapUrl(rawLinks.m3u8),
                 };
 
-                if (onLinksChange) onLinksChange(cleanLinks);
-                if (onM3u8ProxyChange) onM3u8ProxyChange({ vietsub: '', dubbed: '' });
-            } else {
+                onLinksChangeRef.current?.(cleanLinks);
+                onM3u8ProxyChangeRef.current?.({ vietsub: '', dubbed: '' });
             }
         } catch {
         } finally {
             setIsSearching(false);
-            setSearchCompleted(true);
-            if (onSearchComplete) onSearchComplete(true);
+            // Single completion trigger in finally, no redundant useEffect
+            onSearchCompleteRef.current?.(true);
         }
-    }, [tvShow?.name, tvShow?.year, tvShow?.firstAirDate, selectedSeason, selectedEpisode, onLinksChange, onM3u8ProxyChange, onSearchComplete]);
-
-
+    }, [tvShow?.name, tvShow?.year, tvShow?.firstAirDate, selectedSeason, selectedEpisode]);
 
     // Auto-search: wait for server1 to finish, then search by TV show name
     useEffect(() => {
@@ -233,7 +232,7 @@ export default function WatchNowTVShowsServer3({
     useEffect(() => {
         if (!autoSearchDone || !tvShow?.name) return;
         setCachedEpisodes(null);
-        if (onLinksChange) onLinksChange({ vietsub: '', dubbed: '', m3u8: '' });
+        onLinksChangeRef.current?.({ vietsub: '', dubbed: '', m3u8: '' });
         searchAndFetch(tvShow.name);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedSeason]);
@@ -292,8 +291,7 @@ export default function WatchNowTVShowsServer3({
         } else {
         }
         
-        if (onLinksChange) onLinksChange(links);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        onLinksChangeRef.current?.(links);
     }, [selectedEpisode, cachedEpisodes]);
 
     return null;
