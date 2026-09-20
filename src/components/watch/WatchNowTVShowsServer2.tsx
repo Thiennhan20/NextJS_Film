@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import api from '@/lib/axios'
 
@@ -14,57 +14,94 @@ interface WatchNowTVShowsServer2Props {
   selectedSeason: number;
   selectedEpisode: number;
   onLinkChange: (link: string) => void;
+  onLoadingChange?: (loading: boolean) => void;
+  onErrorChange?: (hasError: boolean) => void;
 }
 
 export default function WatchNowTVShowsServer2({
   tvShow,
   selectedSeason,
   selectedEpisode,
-  onLinkChange
+  onLinkChange,
+  onLoadingChange,
+  onErrorChange
 }: WatchNowTVShowsServer2Props) {
   const { id } = useParams();
-  const [activeDomain, setActiveDomain] = useState<string>('https://vidsrcme.su');
+  const rawId = tvShow?.id ? String(tvShow.id) : (typeof id === 'string' ? id.replace(/-(vietsub|dubbed)$/i, '') : '');
 
-  // Stable ref for callback to avoid re-render ping-pong loop
+  // Stable refs for callbacks to prevent ping-pong re-render loops
   const onLinkChangeRef = useRef(onLinkChange);
   onLinkChangeRef.current = onLinkChange;
+  const onLoadingChangeRef = useRef(onLoadingChange);
+  onLoadingChangeRef.current = onLoadingChange;
+  const onErrorChangeRef = useRef(onErrorChange);
+  onErrorChangeRef.current = onErrorChange;
 
   // Track last emitted link to prevent redundant updates
   const lastLinkRef = useRef<string>('');
 
   useEffect(() => {
+    // If no episode is selected yet, don't show any error
+    if (!rawId || !selectedSeason || selectedEpisode <= 0) {
+      if (lastLinkRef.current !== '') {
+        lastLinkRef.current = '';
+        onLinkChangeRef.current?.('');
+      }
+      onLoadingChangeRef.current?.(false);
+      onErrorChangeRef.current?.(false);
+      return;
+    }
+
     let active = true;
-    async function fetchDomain() {
+    onLoadingChangeRef.current?.(true);
+    onErrorChangeRef.current?.(false);
+
+    async function checkAndSetStream() {
       try {
         const res = await api.get('/vidsrc/active-domain');
-        if (active && res.data?.active_domain) {
-          setActiveDomain(res.data.active_domain);
-        }
-      } catch {
-        if (active) setActiveDomain('https://vidsrcme.su');
-      }
-    }
-    fetchDomain();
-    return () => { active = false; };
-  }, []);
+        if (!active) return;
 
-  // Set Server 2 embed URL once active domain is loaded or defaulted
-  useEffect(() => {
-    const domainToUse = activeDomain || 'https://vidsrcme.su';
-    const rawId = tvShow?.id ? String(tvShow.id) : (typeof id === 'string' ? id.replace(/-(vietsub|dubbed)$/i, '') : '');
-    if (rawId && selectedSeason && selectedEpisode > 0) {
-      const cleanDomain = domainToUse.replace(/\/$/, '');
-      const rawServer2Url = `${cleanDomain}/embed/tv?tmdb=${rawId}&season=${selectedSeason}&episode=${selectedEpisode}&ds_lang=vi&autoplay=1&autonext=1`;
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const proxiedUrl = `${apiUrl}/vidsrc/embed-proxy?url=${encodeURIComponent(rawServer2Url)}`;
-      
-      // Deduplicate: only notify parent if URL actually changed
-      if (lastLinkRef.current !== proxiedUrl) {
-        lastLinkRef.current = proxiedUrl;
-        onLinkChangeRef.current?.(proxiedUrl);
+        if (res.data?.ok && res.data?.active_domain) {
+          const cleanDomain = res.data.active_domain.replace(/\/$/, '');
+          const rawServer2Url = `${cleanDomain}/embed/tv?tmdb=${rawId}&season=${selectedSeason}&episode=${selectedEpisode}&ds_lang=vi&autoplay=1&autonext=1`;
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+          const proxiedUrl = `${apiUrl}/vidsrc/embed-proxy?url=${encodeURIComponent(rawServer2Url)}`;
+
+          if (lastLinkRef.current !== proxiedUrl) {
+            lastLinkRef.current = proxiedUrl;
+            onLinkChangeRef.current?.(proxiedUrl);
+          }
+          onErrorChangeRef.current?.(false);
+        } else {
+          // All domains were tested and failed
+          if (lastLinkRef.current !== '') {
+            lastLinkRef.current = '';
+            onLinkChangeRef.current?.('');
+          }
+          onErrorChangeRef.current?.(true);
+        }
+      } catch (err) {
+        console.error('Failed to verify Server 2 domains for TV show:', err);
+        if (active) {
+          if (lastLinkRef.current !== '') {
+            lastLinkRef.current = '';
+            onLinkChangeRef.current?.('');
+          }
+          onErrorChangeRef.current?.(true);
+        }
+      } finally {
+        if (active) {
+          onLoadingChangeRef.current?.(false);
+        }
       }
     }
-  }, [id, tvShow?.id, selectedSeason, selectedEpisode, activeDomain]);
+
+    checkAndSetStream();
+
+    return () => {
+      active = false;
+    };
+  }, [rawId, selectedSeason, selectedEpisode]);
 
   return null;
 }

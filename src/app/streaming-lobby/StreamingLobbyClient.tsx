@@ -831,7 +831,8 @@ function StreamingLobbyContent() {
               onClick={() => {
                 if (!requireAuth()) return;
                 if (isInsideModal) setShowAllRoomsModal(false);
-                router.push(`/streaming-room?room=${room.room_id}`);
+                const roomType = isTvShowRoom(room) ? 'tvshow' : 'movie';
+                router.push(`/streaming-room?room=${encodeURIComponent(room.room_id)}&type=${roomType}&title=${encodeURIComponent(room.title || '')}`);
               }}
               disabled={room.member_count >= room.max_users && userId !== room.host_id}
               className="px-3.5 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-bold rounded-lg hover:from-yellow-400 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-400 disabled:cursor-not-allowed transition-all shadow-sm text-center cursor-pointer active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-yellow-400/70 focus-visible:outline-none"
@@ -937,7 +938,8 @@ function StreamingLobbyContent() {
       });
 
       const { room_id } = response.data;
-      router.push(`/streaming-room?room=${room_id}`);
+      const targetType = item.type || 'movie';
+      router.push(`/streaming-room?room=${encodeURIComponent(room_id)}&type=${encodeURIComponent(targetType)}&title=${encodeURIComponent(item.title || '')}`);
     } catch (err: unknown) {
       console.error('Error creating room from recent item:', err);
       const axiosErr = err as { response?: { data?: { error?: string; code?: string; existing_room_id?: string } } };
@@ -998,7 +1000,11 @@ function StreamingLobbyContent() {
         room: createdRoom.roomId,
         streamUrl: createdRoom.streamUrl,
         title: createdRoom.title,
+        type: typeFromParams || (createdRoom.playlistKey ? 'tvshow' : 'movie'),
       });
+      if (movieIdFromParams) {
+        params.set('movieId', movieIdFromParams);
+      }
       if (createdRoom.playlistKey) {
         params.set('playlistKey', createdRoom.playlistKey);
       }

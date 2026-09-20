@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import api from '@/lib/axios'
 
@@ -13,43 +13,77 @@ interface Movie {
 interface WatchNowMoviesServer2Props {
   movie: Movie;
   onLinkChange: (link: string) => void;
+  onLoadingChange?: (loading: boolean) => void;
+  onErrorChange?: (hasError: boolean) => void;
 }
 
 export default function WatchNowMoviesServer2({
   movie,
-  onLinkChange
+  onLinkChange,
+  onLoadingChange,
+  onErrorChange
 }: WatchNowMoviesServer2Props) {
   const { id } = useParams();
-  const [activeDomain, setActiveDomain] = useState<string>('https://vidsrcme.su');
+  const rawId = movie?.id ? String(movie.id) : (typeof id === 'string' ? id.replace(/-(vietsub|dubbed)$/i, '') : '');
+
+  // Stable refs for callbacks to prevent unnecessary re-render loops
+  const onLinkChangeRef = useRef(onLinkChange);
+  onLinkChangeRef.current = onLinkChange;
+  const onLoadingChangeRef = useRef(onLoadingChange);
+  onLoadingChangeRef.current = onLoadingChange;
+  const onErrorChangeRef = useRef(onErrorChange);
+  onErrorChangeRef.current = onErrorChange;
 
   useEffect(() => {
+    // If movie doesn't have a link/ID yet, don't prematurely report an error
+    if (!rawId) {
+      onLinkChangeRef.current?.('');
+      onLoadingChangeRef.current?.(false);
+      onErrorChangeRef.current?.(false);
+      return;
+    }
+
     let active = true;
-    async function fetchDomain() {
+    onLoadingChangeRef.current?.(true);
+    onErrorChangeRef.current?.(false);
+
+    async function checkAndSetStream() {
       try {
         const res = await api.get('/vidsrc/active-domain');
-        if (active && res.data?.active_domain) {
-          setActiveDomain(res.data.active_domain);
+        if (!active) return;
+
+        if (res.data?.ok && res.data?.active_domain) {
+          const cleanDomain = res.data.active_domain.replace(/\/$/, '');
+          const rawServer2Url = `${cleanDomain}/embed/movie?tmdb=${rawId}&ds_lang=vi&autoplay=1`;
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+          const proxiedUrl = `${apiUrl}/vidsrc/embed-proxy?url=${encodeURIComponent(rawServer2Url)}`;
+          
+          onLinkChangeRef.current?.(proxiedUrl);
+          onErrorChangeRef.current?.(false);
+        } else {
+          // All domains were tested and failed
+          onLinkChangeRef.current?.('');
+          onErrorChangeRef.current?.(true);
         }
-      } catch {
-        if (active) setActiveDomain('https://vidsrcme.su');
+      } catch (err) {
+        console.error('Failed to verify Server 2 domains:', err);
+        if (active) {
+          onLinkChangeRef.current?.('');
+          onErrorChangeRef.current?.(true);
+        }
+      } finally {
+        if (active) {
+          onLoadingChangeRef.current?.(false);
+        }
       }
     }
-    fetchDomain();
-    return () => { active = false; };
-  }, []);
 
-  // Set Server 2 embed URL once active domain is loaded or defaulted
-  useEffect(() => {
-    const domainToUse = activeDomain || 'https://vidsrcme.su';
-    const rawId = movie?.id ? String(movie.id) : (typeof id === 'string' ? id.replace(/-(vietsub|dubbed)$/i, '') : '');
-    if (rawId) {
-      const cleanDomain = domainToUse.replace(/\/$/, '');
-      const rawServer2Url = `${cleanDomain}/embed/movie?tmdb=${rawId}&ds_lang=vi&autoplay=1`;
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const proxiedUrl = `${apiUrl}/vidsrc/embed-proxy?url=${encodeURIComponent(rawServer2Url)}`;
-      onLinkChange(proxiedUrl);
-    }
-  }, [id, movie?.id, movie?.title, movie?.year, activeDomain, onLinkChange]);
+    checkAndSetStream();
+
+    return () => {
+      active = false;
+    };
+  }, [rawId]);
 
   return null;
 }

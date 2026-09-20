@@ -5,13 +5,15 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import {
-  ClipboardDocumentIcon as Copy, CheckIcon as Check, ArrowLeftIcon as ArrowLeft, UsersIcon as Users, HashtagIcon as Hash, PaperAirplaneIcon as Send, FaceSmileIcon as Smile,
+  ClipboardDocumentIcon as Copy, CheckIcon as Check, ArrowLeftIcon as ArrowLeft, UsersIcon as Users, HashtagIcon as Hash,
   StarIcon as Crown, LockClosedIcon as Lock, LockOpenIcon as Unlock, ArrowRightOnRectangleIcon as LogOut, SignalIcon as Radio, ClockIcon as Clock, ExclamationTriangleIcon as AlertTriangle, ShareIcon as Share2, ChevronDownIcon as ChevronDown
 } from '@heroicons/react/24/outline';
 import useAuthStore from '@/store/useAuthStore';
 import EnhancedMoviePlayer from '@/components/common/video-player/EnhancedMoviePlayer';
 import { prepareHlsPlayerSource } from '@/lib/hlsProxy';
 import { useWatchPartySocket, type RoomStatus, type ChatMessage, type EpisodePlaylistItem } from '@/hooks/useWatchPartySocket';
+import { RoomChatInput } from '@/components/streaming/RoomChatInput';
+import { RoomFloatingEmojis, type RoomFloatingEmojisRef } from '@/components/streaming/RoomFloatingEmojis';
 import { useTranslations } from 'next-intl';
 import api from '@/lib/axios';
 
@@ -74,6 +76,7 @@ function StreamingRoomContent() {
   const titleFromParams = searchParams.get('title') || '';
   const playlistKeyFromParams = searchParams.get('playlistKey') || '';
   const movieIdFromParams = searchParams.get('movieId') || searchParams.get('movie_id') || '';
+  const typeFromParams = (searchParams.get('type') || searchParams.get('contentType') || searchParams.get('content_type') || '') as RoomStatus['content_type'];
   const t = useTranslations('StreamingRoom');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -90,13 +93,11 @@ function StreamingRoomContent() {
   const [memberCount, setMemberCount] = useState(0);
   const [forceSync, setForceSync] = useState(true);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState('');
   const [copied, setCopied] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [notification, setNotification] = useState('');
   const [roomClosed, setRoomClosed] = useState(false);
-  const [showEmojis, setShowEmojis] = useState(false);
-  const [floatingEmojis, setFloatingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([]);
+  const floatingEmojisRef = useRef<RoomFloatingEmojisRef>(null);
   const [showChat, setShowChat] = useState(true);
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [hostHasPlayed, setHostHasPlayed] = useState(false);
@@ -108,27 +109,32 @@ function StreamingRoomContent() {
   const [roomMembers, setRoomMembers] = useState<{ user_id: string; username: string; avatar?: string; is_host: boolean }[]>([]);
   const [showMembers, setShowMembers] = useState(false);
   const [roomAudio, setRoomAudio] = useState<'vietsub' | 'dubbed' | ''>('');
-  const [roomContentType, setRoomContentType] = useState<RoomStatus['content_type']>('');
+  const [roomContentType, setRoomContentType] = useState<RoomStatus['content_type']>(typeFromParams || '');
   const [roomSeason, setRoomSeason] = useState<number | null>(null);
   const [currentEpisode, setCurrentEpisode] = useState<number | null>(null);
   const [episodePlaylist, setEpisodePlaylist] = useState<EpisodePlaylistItem[]>([]);
   const [changingEpisode, setChangingEpisode] = useState<number | null>(null);
 
+  // Helper to accurately identify TV Show vs Movie (movies NEVER show episode controls/banners)
+  const isTVShow = useMemo(() => {
+    if (roomContentType === 'movie') return false;
+    if (roomContentType === 'tvshow') return true;
+    if (Boolean(roomSeason && roomSeason > 0) || Boolean(currentEpisode && currentEpisode > 0) || episodePlaylist.length > 0) {
+      return true;
+    }
+    const title = roomTitle || '';
+    return /\b(s\d+\s*e\d+|season\s*\d+|tập\s*\d+|episode\s*\d+)\b/i.test(title) ||
+      /[-_\s](s\d+|e\d+|ep\d+|tập\s*\d+)/i.test(title);
+  }, [roomContentType, roomSeason, currentEpisode, episodePlaylist.length, roomTitle]);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const syncLockRef = useRef(false); // Prevents feedback loops
   const syncPositionIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const emojiIdRef = useRef(0);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(false);
   const hostPausePositionRef = useRef<number | null>(null);
   const showChatRef = useRef(showChat);
   const playlistBackfillRef = useRef(false);
-
-  const EMOJIS = [
-    '👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '🎉',
-    '🤣', '😍', '🥺', '😡', '💀', '🤔', '😱', '🙌',
-    '💯', '🫡', '😎', '🤗', '🎬', '🍿', '👀', '💤',
-  ];
 
   // Generate deterministic gradient color for user avatar
   const getAvatarGradient = (id: string) => {
@@ -204,6 +210,8 @@ function StreamingRoomContent() {
     }
     if (metadata.content_type) {
       setRoomContentType(metadata.content_type);
+    } else if (typeFromParams) {
+      setRoomContentType(typeFromParams);
     }
     if (metadata.season) {
       setRoomSeason(metadata.season);
@@ -217,7 +225,7 @@ function StreamingRoomContent() {
     if (Array.isArray(metadata.episode_playlist)) {
       setEpisodePlaylist(metadata.episode_playlist);
     }
-  }, []);
+  }, [typeFromParams]);
 
   // ─── WebSocket ──────────────────────────────────────────
 
@@ -247,8 +255,8 @@ function StreamingRoomContent() {
       if (!status.title) {
         setRoomTitle(titleFromParams);
       }
-      if (!status.content_type) {
-        setRoomContentType('');
+      if (!status.content_type && typeFromParams) {
+        setRoomContentType(typeFromParams);
       }
 
       if (status.stream_url) {
@@ -294,6 +302,7 @@ function StreamingRoomContent() {
       setWaitReason(null);
       hostPausePositionRef.current = null; // Clear pause position limit
       syncLockRef.current = true;
+      if (videoRef.current.playbackRate !== 1.0) videoRef.current.playbackRate = 1.0;
       videoRef.current.currentTime = position_sec;
       videoRef.current.play().catch(() => {});
       setRoomStatus(prev => prev ? { ...prev, status: 'PLAYING' } : prev);
@@ -311,6 +320,7 @@ function StreamingRoomContent() {
       if (!videoRef.current) return;
       hostPausePositionRef.current = position_sec; // Store host pause position
       syncLockRef.current = true;
+      if (videoRef.current.playbackRate !== 1.0) videoRef.current.playbackRate = 1.0;
       videoRef.current.currentTime = position_sec;
       videoRef.current.pause();
       setWaitingForHost(false);
@@ -329,6 +339,7 @@ function StreamingRoomContent() {
     onSeek: ({ position_sec }) => {
       if (!videoRef.current) return;
       syncLockRef.current = true;
+      if (videoRef.current.playbackRate !== 1.0) videoRef.current.playbackRate = 1.0;
       videoRef.current.currentTime = position_sec;
       setTimeout(() => { syncLockRef.current = false; }, 500);
     },
@@ -416,32 +427,45 @@ function StreamingRoomContent() {
     },
 
     // Drift correction: host sends position every 5s
-    // If viewer is more than 1 second ahead, show loading and wait
+    // Smooth Syncing: micro-adjust playbackRate instead of harsh pause + seek
     onSyncPosition: ({ position_sec }) => {
       if (!videoRef.current || isHost) return;
-      const viewerTime = videoRef.current.currentTime;
-      const drift = viewerTime - position_sec; // positive = viewer ahead
+      const video = videoRef.current;
+      const viewerTime = video.currentTime;
+      const drift = viewerTime - position_sec; // positive = viewer ahead, negative = viewer behind
 
-      if (drift > 1) {
-        // Viewer is ahead → show loading, pause, seek to host position
-        setWaitingForHost(true);
-        setWaitReason('syncing');
-        syncLockRef.current = true;
-        videoRef.current.pause();
-        videoRef.current.currentTime = position_sec;
-        setTimeout(() => { syncLockRef.current = false; }, 500);
-      } else if (drift < -2) {
-        // Viewer is behind by more than 2s → seek forward
-        syncLockRef.current = true;
-        videoRef.current.currentTime = position_sec;
-        setTimeout(() => { syncLockRef.current = false; }, 500);
-      } else if (waitingForHost && Math.abs(drift) <= 1) {
-        // Drift resolved → resume
-        setWaitingForHost(false);
-        setWaitReason(null);
-        if (roomStatus?.status === 'PLAYING') {
-          videoRef.current.play().catch(() => {});
+      // 1. Within acceptable drift (+-0.5s): healthy sync
+      if (Math.abs(drift) <= 0.5) {
+        if (video.playbackRate !== 1.0) {
+          video.playbackRate = 1.0;
         }
+        if (waitingForHost && waitReason === 'syncing') {
+          setWaitingForHost(false);
+          setWaitReason(null);
+        }
+        return;
+      }
+
+      // 2. Severe drift (> 4.0s) -> perform hard seek
+      if (Math.abs(drift) > 4.0) {
+        syncLockRef.current = true;
+        video.playbackRate = 1.0;
+        video.currentTime = position_sec;
+        if (waitingForHost && waitReason === 'syncing') {
+          setWaitingForHost(false);
+          setWaitReason(null);
+        }
+        setTimeout(() => { syncLockRef.current = false; }, 500);
+        return;
+      }
+
+      // 3. Moderate drift (0.5s to 4.0s) -> smooth playback rate adjustment
+      // Viewer ahead: subtly slow down (0.94x) so host catches up
+      // Viewer behind: subtly speed up (1.06x) to catch up with host
+      if (drift > 0.5) {
+        video.playbackRate = 0.94;
+      } else if (drift < -0.5) {
+        video.playbackRate = 1.06;
       }
     },
 
@@ -473,7 +497,10 @@ function StreamingRoomContent() {
     },
 
     onChat: (msg) => {
-      setChatMessages(prev => [...prev, { ...msg, type: 'user' }]);
+      setChatMessages(prev => {
+        const trimmed = prev.length >= 150 ? prev.slice(prev.length - 149) : prev;
+        return [...trimmed, { ...msg, type: 'user' }];
+      });
       // Track unread if chat is closed
       if (!showChatRef.current) {
         setUnreadCount(prev => prev + 1);
@@ -483,17 +510,40 @@ function StreamingRoomContent() {
     onEmojiReaction: ({ emoji, username: emojiUser, user_id: senderUserId }) => {
       // Only show floating emoji if it's from another user (sender handles it instantly locally)
       if (senderUserId !== userId) {
-        const id = ++emojiIdRef.current;
-        setFloatingEmojis(prev => [...prev, { id, emoji, x: Math.random() * 80 + 10 }]);
-        setTimeout(() => {
-          setFloatingEmojis(prev => prev.filter(e => e.id !== id));
-        }, 5500); // Float for 5.5 seconds
+        floatingEmojisRef.current?.trigger(emoji);
       }
-      setChatMessages(prev => [...prev, {
-        user_id: 'system', username: t('systemUser'),
-        message: t('reactedWithEmoji', { user: emojiUser, emoji }),
-        sent_at: new Date().toISOString(), type: 'system', systemKind: 'react',
-      }]);
+      setChatMessages(prev => {
+        const lastMsg = prev[prev.length - 1];
+        const now = Date.now();
+        // Gom nhóm các emoji liên tiếp của cùng 1 user trong 4 giây thành dạng "x2, x3" thay vì nhảy dòng spam liên tục
+        if (
+          lastMsg &&
+          lastMsg.type === 'system' &&
+          lastMsg.systemKind === 'react' &&
+          lastMsg.user_id === `react_${senderUserId}` &&
+          now - new Date(lastMsg.sent_at).getTime() < 4000
+        ) {
+          const match = lastMsg.message.match(/^(.*?)\s*\(x(\d+)\)$/);
+          const baseText = match ? match[1] : lastMsg.message;
+          const currentCount = match ? parseInt(match[2], 10) : 1;
+          const updatedMsg = {
+            ...lastMsg,
+            message: `${baseText} (x${currentCount + 1})`,
+            sent_at: new Date().toISOString(),
+          };
+          return [...prev.slice(0, -1), updatedMsg];
+        }
+
+        const trimmed = prev.length >= 150 ? prev.slice(prev.length - 149) : prev;
+        return [...trimmed, {
+          user_id: `react_${senderUserId}`,
+          username: t('systemUser'),
+          message: t('reactedWithEmoji', { user: emojiUser, emoji }),
+          sent_at: new Date().toISOString(),
+          type: 'system',
+          systemKind: 'react',
+        }];
+      });
     },
 
     onError: ({ message }) => {
@@ -509,8 +559,8 @@ function StreamingRoomContent() {
   useEffect(() => {
     if (episodePlaylist.length > 0 || typeof window === 'undefined') return;
 
-    // Do not load TV episode playlist if room is explicitly a movie
-    if (roomContentType === 'movie') return;
+    // Only load TV episode playlist for TV shows, never for movies
+    if (!isTVShow || roomContentType === 'movie') return;
 
     try {
       const mappedPlaylistKey = roomId
@@ -638,10 +688,10 @@ function StreamingRoomContent() {
     } catch (error) {
       console.warn('Unable to load local TV episode playlist:', error);
     }
-  }, [currentEpisode, episodePlaylist.length, playlistKeyFromParams, roomContentType, roomId, roomMovieId, roomSeason, roomTitle]);
+  }, [currentEpisode, episodePlaylist.length, isTVShow, playlistKeyFromParams, roomContentType, roomId, roomMovieId, roomSeason, roomTitle]);
 
   useEffect(() => {
-    const isTVRoom = roomContentType === 'tvshow' || /\bS\d+\s*E\d+\b/i.test(roomTitle);
+    const isTVRoom = isTVShow;
 
     if (!roomId || !isHost || !isTVRoom || episodePlaylist.length === 0 || playlistBackfillRef.current) return;
 
@@ -655,7 +705,7 @@ function StreamingRoomContent() {
       playlistBackfillRef.current = false;
       console.warn('Unable to persist TV episode playlist for room:', error);
     });
-  }, [currentEpisode, episodePlaylist, isHost, roomContentType, roomId, roomSeason, roomTitle]);
+  }, [currentEpisode, episodePlaylist, isHost, isTVShow, roomId, roomSeason]);
 
   useEffect(() => {
     if (!roomId || !isAuthenticated) return;
@@ -729,12 +779,14 @@ function StreamingRoomContent() {
     const handleTimeUpdate = () => {
       const pausePos = hostPausePositionRef.current;
       if (pausePos !== null && roomStatus?.status === 'PAUSED' && video.currentTime >= pausePos) {
-        syncLockRef.current = true;
-        video.currentTime = pausePos;
-        video.pause();
-        setWaitingForHost(true);
-        setWaitReason('host_paused');
-        setTimeout(() => { syncLockRef.current = false; }, 500);
+        if (!video.paused) {
+          syncLockRef.current = true;
+          video.currentTime = pausePos;
+          video.pause();
+          setTimeout(() => { syncLockRef.current = false; }, 500);
+        }
+        setWaitingForHost(prev => prev ? prev : true);
+        setWaitReason(prev => prev === 'host_paused' ? prev : 'host_paused');
       }
     };
 
@@ -821,23 +873,24 @@ function StreamingRoomContent() {
 
   // ─── Handlers ───────────────────────────────────────────
 
-  const handleSendChat = () => {
-    if (!chatInput.trim()) return;
-    emitChat(chatInput.trim());
-    setChatInput('');
-  };
+  const handleSendMessage = useCallback((text: string) => {
+    emitChat(text);
+  }, [emitChat]);
 
-  const handleEmojiReaction = (emoji: string) => {
+  const handleSendEmoji = useCallback((emoji: string) => {
     emitEmoji(emoji);
-    setShowEmojis(false);
+    floatingEmojisRef.current?.trigger(emoji);
+  }, [emitEmoji]);
 
-    // Show floating emoji immediately (local feedback) with no lag
-    const id = ++emojiIdRef.current;
-    setFloatingEmojis(prev => [...prev, { id, emoji, x: Math.random() * 80 + 10 }]);
-    setTimeout(() => {
-      setFloatingEmojis(prev => prev.filter(e => e.id !== id));
-    }, 5500); // Float for 5.5 seconds
-  };
+  const handleToggleChat = useCallback(() => {
+    setShowChat(prev => !prev);
+    setShowPlaylist(false);
+  }, []);
+
+  const handleTogglePlaylist = useCallback(() => {
+    setShowPlaylist(prev => !prev);
+    setShowChat(false);
+  }, []);
 
   const handleCopyInvite = () => {
     const inviteUrl = `${window.location.origin}/streaming-room?room=${roomId}`;
@@ -1137,10 +1190,11 @@ function StreamingRoomContent() {
                   viewerMode={!isHost && forceSync}
                   hostHasPlayed={hostHasPlayed}
                   waitingForHost={waitingForHost}
+                  waitReason={waitReason}
                   chatUnreadCount={unreadCount}
-                  isTVShow={roomContentType === 'tvshow' || /\bS\d+\s*E\d+\b/i.test(roomTitle)}
-                  onToggleChat={() => { setShowChat(prev => !prev); setShowPlaylist(false); }}
-                  onTogglePlaylist={() => { setShowPlaylist(prev => !prev); setShowChat(false); }}
+                  isTVShow={isTVShow && episodePlaylist.length > 0}
+                  onToggleChat={handleToggleChat}
+                  onTogglePlaylist={handleTogglePlaylist}
                   showPlaylist={showPlaylist}
                   isStreamingRoom={true}
                   fullscreenTarget={playerContainerRef as React.RefObject<HTMLDivElement>}
@@ -1155,36 +1209,8 @@ function StreamingRoomContent() {
                 </div>
               )}
 
-              {/* Wobble Sinusoidal reactions floating animation */}
-              <AnimatePresence>
-                {floatingEmojis.map(({ id, emoji, x }) => (
-                  <motion.div
-                    key={id}
-                    initial={{ opacity: 0, y: 0, scale: 0, rotate: 0 }}
-                    animate={{
-                      opacity: [0, 1, 1, 0.8, 0],
-                      scale: [0, 1.4, 1.1, 1.2, 1, 0],
-                      y: [0, -50, -100, -150, -200, -250, -300],
-                      x: [0, Math.sin(id) * 30, Math.sin(id + 1) * -35, Math.sin(id + 2) * 25, Math.sin(id + 3) * -20, 0],
-                      rotate: [0, -10, 10, -5, 5, 0],
-                    }}
-                    exit={{ opacity: 0, scale: 0.3 }}
-                    transition={{
-                      duration: 5,
-                      ease: [0.25, 0.1, 0.25, 1],
-                      opacity: { duration: 5, times: [0, 0.05, 0.8, 0.9, 1] },
-                      scale: { duration: 5, times: [0, 0.05, 0.15, 0.8, 0.9, 1] },
-                      y: { duration: 5, ease: 'easeOut' },
-                      x: { duration: 5, ease: 'easeInOut' },
-                      rotate: { duration: 5, ease: 'easeInOut' },
-                    }}
-                    className="absolute bottom-6 text-4xl pointer-events-none z-50 select-none filter drop-shadow-[0_2px_12px_rgba(0,0,0,0.7)]"
-                    style={{ left: `${x}%` }}
-                  >
-                    {emoji}
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+              {/* Wobble Sinusoidal reactions floating animation (Isolated component) */}
+              <RoomFloatingEmojis ref={floatingEmojisRef} />
 
               {/* Waiting notification pill */}
               <AnimatePresence>
@@ -1196,8 +1222,22 @@ function StreamingRoomContent() {
                     transition={{ duration: 0.3 }}
                     className="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-none"
                   >
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-md border border-gray-600/40 shadow-lg">
-                      <div className="w-3.5 h-3.5 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/85 border border-gray-600/40 shadow-lg">
+                      {waitReason === 'host_paused' ? (
+                        <svg className="w-3.5 h-3.5 text-yellow-400 fill-current shrink-0" viewBox="0 0 24 24">
+                          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+                        </svg>
+                      ) : (
+                        <svg
+                          className="w-3.5 h-3.5 text-yellow-400 animate-spin shrink-0"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          style={{ willChange: 'transform', transform: 'translateZ(0)' }}
+                        >
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      )}
                       <span className="text-[11px] text-gray-200 font-medium whitespace-nowrap">
                         {waitReason === 'host_paused' ? t('hostPausedWaiting') :
                          waitReason === 'host_buffering' ? t('hostBuffering') :
@@ -1215,7 +1255,7 @@ function StreamingRoomContent() {
             <div
               className={`flex flex-col shrink-0 overflow-hidden relative ${
                 isPlayerFullscreen
-                  ? 'w-[340px] h-full bg-gray-950/95 backdrop-blur-md border-l border-gray-700/50'
+                  ? 'w-[340px] h-full bg-gray-950/95 border-l border-gray-700/50'
                   : 'w-full h-[40vh] sm:h-full sm:flex-grow-0 sm:w-[280px] md:w-[300px] lg:w-[320px] xl:w-[340px] bg-white/[0.02] backdrop-blur-md border border-white/[0.08] rounded-xl shadow-2xl'
               }`}
             >
@@ -1312,63 +1352,17 @@ function StreamingRoomContent() {
                 )}
               </AnimatePresence>
 
-              {/* Emoji Bar — Absolute Popover nổi lên trên tin nhắn */}
-              <AnimatePresence>
-                {showEmojis && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    transition={{ duration: 0.15, ease: 'easeOut' }}
-                    className="absolute bottom-12 left-2 right-2 z-50 bg-gray-950/95 backdrop-blur-md border border-gray-800 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.7)] p-2 max-h-[150px] overflow-y-auto chat-scrollbar"
-                  >
-                    <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5 justify-items-center">
-                      {EMOJIS.map(emoji => (
-                        <button
-                          key={emoji}
-                          onClick={() => handleEmojiReaction(emoji)}
-                          className="text-xl hover:scale-125 active:scale-95 transition-transform p-1 rounded hover:bg-white/10"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Chat Input */}
-              <div className="px-2 sm:px-3 py-1.5 sm:py-2 border-t border-gray-800/80 shrink-0">
-                <div className="flex items-center gap-1 sm:gap-1.5">
-                  <button
-                    onClick={() => setShowEmojis(!showEmojis)}
-                    className={`p-1 sm:p-1.5 rounded-lg transition-colors shrink-0 ${showEmojis ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'}`}
-                  >
-                    <Smile className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  </button>
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                    placeholder={t('chatPlaceholder')}
-                    className="flex-grow bg-gray-800/50 border border-gray-700/40 rounded-full px-3 py-1 sm:py-1.5 text-base text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-yellow-500/30 focus:border-yellow-500/30 transition-all"
-                    maxLength={500}
-                  />
-                  <button
-                    onClick={handleSendChat}
-                    disabled={!chatInput.trim()}
-                    className="p-1 sm:p-1.5 bg-yellow-500 text-black rounded-full hover:bg-yellow-400 disabled:bg-gray-700 disabled:text-gray-500 transition-colors shrink-0"
-                  >
-                    <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  </button>
-                </div>
-              </div>
+              {/* Chat Input (Isolated Component) */}
+              <RoomChatInput
+                onSendMessage={handleSendMessage}
+                onSendEmoji={handleSendEmoji}
+                placeholder={t('chatPlaceholder')}
+              />
             </div>
           )}
 
           {/* ─── Playlist Panel (Ultra Glassmorphism Sidebar) ─── */}
-          {showPlaylist && (
+          {showPlaylist && isTVShow && (
             <div
               className={`flex flex-col shrink-0 overflow-hidden relative ${
                 isPlayerFullscreen
@@ -1434,7 +1428,7 @@ function StreamingRoomContent() {
           )}
         </div>
 
-        {!isPlayerFullscreen && (roomContentType === 'tvshow' || /\bS\d+\s*E\d+\b/i.test(roomTitle)) && (
+        {!isPlayerFullscreen && isTVShow && (
           episodePlaylist.length > 0 ? (
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2 sm:px-4 sm:py-3">
               <div className="mb-2 flex items-center justify-between gap-3">

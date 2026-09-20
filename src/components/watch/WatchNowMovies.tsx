@@ -281,6 +281,20 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
 
   // Server 2 states
   const [server2Link, setServer2Link] = useState('');
+  const [server2Loading, setServer2Loading] = useState(true);
+  const [server2Error, setServer2Error] = useState(false);
+
+  // Listen to potential stream error messages posted from iframe proxy
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'VIDSRC_STREAM_ERROR') {
+        setServer2Error(true);
+        setServer2Loading(false);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
 
 
@@ -474,6 +488,8 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
         <WatchNowMoviesServer2
           movie={movie}
           onLinkChange={setServer2Link}
+          onLoadingChange={setServer2Loading}
+          onErrorChange={setServer2Error}
         />
         <WatchNowMoviesServer3
           movie={movie}
@@ -539,7 +555,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
                         <p className="text-sm text-red-400 mb-2.5 font-medium leading-tight">{tStreaming('duplicateRoomError')}</p>
                         <div className="flex gap-2">
                           <button
-                            onClick={() => router.push(`/streaming-room?room=${streamPopup.roomId}`)}
+                            onClick={() => router.push(`/streaming-room?room=${streamPopup.roomId}&type=movie&movieId=${movie.id}&title=${encodeURIComponent(movie.title)}`)}
                             className="flex-1 px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-semibold rounded-lg hover:from-yellow-400 hover:to-amber-400 transition-colors flex items-center justify-center gap-1.5"
                           >
                             <Radio className="w-3 h-3" />
@@ -684,17 +700,68 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
               })()
             )}
             {selectedServer === 'server2' && (
-              <iframe
-                key={server2Link || movie.id}
-                src={server2Link}
-                className="w-full h-full"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-                allowFullScreen
-                title={movie.title + ' - Server 2'}
-                referrerPolicy="origin"
-                style={{ minWidth: '100%', minHeight: '100%', border: 'none' }}
-              />
+              (() => {
+                if (server2Loading) {
+                  return (
+                    <div className="flex items-center justify-center h-full text-white">
+                      <div className="flex flex-col items-center gap-4">
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
+                          className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full"
+                        />
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-white">{t('connectingToServer2')}</p>
+                          <p className="text-xs text-gray-400 mt-1">{t('pleaseWait')}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (server2Error) {
+                  return (
+                    <div className="flex items-center justify-center h-full text-white">
+                      <div className="flex flex-col items-center gap-4 text-center px-4">
+                        <svg className="w-12 h-12 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="text-lg font-semibold">{t('noVideoSource')}</p>
+                        <p className="text-sm text-gray-400">{t('tryAnotherServer')}</p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (!server2Link) {
+                  return (
+                    <div className="flex items-center justify-center h-full text-white">
+                      <div className="flex flex-col items-center gap-4">
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
+                          className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full"
+                        />
+                        <p className="text-sm text-gray-400">{t('pleaseWait')}</p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <iframe
+                    key={server2Link || movie.id}
+                    src={server2Link}
+                    className="w-full h-full"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                    allowFullScreen
+                    title={movie.title + ' - Server 2'}
+                    referrerPolicy="origin"
+                    style={{ minWidth: '100%', minHeight: '100%', border: 'none' }}
+                  />
+                );
+              })()
             )}
             {selectedServer === 'server3' && (
               (() => {

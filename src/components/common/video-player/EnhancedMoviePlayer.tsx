@@ -42,6 +42,8 @@ export interface EnhancedMoviePlayerProps {
   chatUnreadCount?: number;
   /** When true, shows loading spinner on play button (viewer waiting for host sync) */
   waitingForHost?: boolean;
+  /** Reason why viewer is waiting for host */
+  waitReason?: 'host_paused' | 'syncing' | 'host_buffering' | null;
   /** Callback fired when video playback ends (used for auto-next-episode) */
   onVideoEnded?: () => void;
   /** Custom overlay rendered inside the player container (visible in fullscreen) */
@@ -208,7 +210,7 @@ function parseQualities(levels: Level[]): Array<{ index: number; label: string }
 
 // ─── Component ────────────────────────────────────────────────────
 const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProps>(
-  ({ src, poster, autoPlay = false, onError, movieId, server, audio, title, season, episode, isTVShow = false, userId, viewerMode = false, onToggleChat, isStreamingRoom = false, fullscreenTarget, hostHasPlayed = false, chatUnreadCount = 0, waitingForHost = false, onVideoEnded, endOverlay, watchUrl, cleanHlsInBrowser = false, latestWatchUrl, savedTime, savedWatchUrl, onUpdateSource, onSkipUpdateSource, hasLoadedSavedProgress, audioSettings, onAudioSettingsChange, onTogglePlaylist, showPlaylist = false }, ref) => {
+  ({ src, poster, autoPlay = false, onError, movieId, server, audio, title, season, episode, isTVShow = false, userId, viewerMode = false, onToggleChat, isStreamingRoom = false, fullscreenTarget, hostHasPlayed = false, chatUnreadCount = 0, waitingForHost = false, waitReason, onVideoEnded, endOverlay, watchUrl, cleanHlsInBrowser = false, latestWatchUrl, savedTime, savedWatchUrl, onUpdateSource, onSkipUpdateSource, hasLoadedSavedProgress, audioSettings, onAudioSettingsChange, onTogglePlaylist, showPlaylist = false }, ref) => {
     const innerRef = useRef<HTMLVideoElement>(null);
     const hlsRef = useRef<Hls | null>(null);
     const innerContainerRef = useRef<HTMLDivElement>(null);
@@ -1675,7 +1677,15 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         {isLoading && controlsReady && !resumeSeekPending && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="pointer-events-auto flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-black/50 text-white">
-              <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 border-white" />
+              <svg
+                className="animate-spin h-8 w-8 sm:h-10 sm:w-10 text-white"
+                viewBox="0 0 24 24"
+                fill="none"
+                style={{ willChange: 'transform', transform: 'translateZ(0)' }}
+              >
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
             </div>
           </div>
         )}
@@ -1703,7 +1713,15 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         {resumeSeekPending && (
           <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/70" data-no-toggle>
             <div className="flex flex-col items-center gap-4">
-              <div className="animate-spin rounded-full h-12 w-12 sm:h-14 sm:w-14 border-4 border-white border-t-transparent" />
+              <svg
+                className="animate-spin h-12 w-12 sm:h-14 sm:w-14 text-white"
+                viewBox="0 0 24 24"
+                fill="none"
+                style={{ willChange: 'transform', transform: 'translateZ(0)' }}
+              >
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
               <p className="text-sm text-gray-300">{t('loadingToLastWatched')}</p>
               {showResumeSkip && (
                 <button
@@ -1826,8 +1844,20 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
                   >
                     {viewerMode && !hostHasPlayed ? (
                       <svg className="w-7 h-7 sm:w-9 sm:h-9 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    ) : waitingForHost && waitReason === 'host_paused' ? (
+                      /* Host paused: show Pause icon ⏸️ instead of spinning loader */
+                      <PauseIcon className="w-8 h-8 sm:w-10 sm:h-10 text-yellow-400" />
                     ) : waitingForHost ? (
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                      /* Host buffering or syncing: Hardware-accelerated SVG Spinner */
+                      <svg
+                        className="w-8 h-8 sm:w-10 sm:h-10 text-yellow-400 animate-spin"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        style={{ willChange: 'transform', transform: 'translateZ(0)' }}
+                      >
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
                     ) : (
                       <PlayIcon className="w-8 h-8 sm:w-10 sm:h-10" />
                     )}
@@ -2021,4 +2051,4 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
 );
 
 EnhancedMoviePlayer.displayName = "EnhancedMoviePlayer";
-export default EnhancedMoviePlayer;
+export default React.memo(EnhancedMoviePlayer);

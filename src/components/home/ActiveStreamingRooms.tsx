@@ -235,7 +235,7 @@ export default function ActiveStreamingRooms() {
                       className="shrink-0 w-[290px] sm:w-[315px] snap-start snap-always"
                     >
                       <Link
-                        href={`/streaming-room?room=${encodeURIComponent(room.room_id)}`}
+                        href={`/streaming-room?room=${encodeURIComponent(room.room_id)}&type=${encodeURIComponent(room.content_type || 'movie')}&title=${encodeURIComponent(room.title || '')}`}
                         onClick={(e) => {
                           if (isFull) {
                             e.preventDefault()
