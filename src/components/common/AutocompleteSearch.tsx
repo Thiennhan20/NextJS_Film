@@ -618,7 +618,7 @@ export default function AutocompleteSearch({
     `w-full rounded-full border transition-all duration-300 focus:outline-none font-bold text-white placeholder-white placeholder:font-bold ${
       menu
         ? 'h-12 sm:h-14 text-base sm:text-lg px-5 border-white/30 ring-1 ring-white/15 bg-gray-950/95 text-white placeholder-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/50 pr-28 sm:pr-32 shadow-2xl backdrop-blur-2xl'
-        : 'h-10 text-sm px-4 border-white/25 ring-1 ring-white/10 sm:w-48 sm:focus:w-64 bg-white/10 text-white placeholder-white focus:bg-gray-950/80 focus:border-red-500/50 shadow-sm pr-24'
+        : 'h-10 text-[16px] sm:text-sm px-4 border-white/25 ring-1 ring-white/10 sm:w-48 sm:focus:w-64 bg-white/10 text-white placeholder-white focus:bg-gray-950/80 focus:border-red-500/50 shadow-sm pr-24'
     } ${inputClassName || ''}`
   , [menu, inputClassName]);
 

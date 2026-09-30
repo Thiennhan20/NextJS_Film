@@ -1659,7 +1659,7 @@ function StreamingLobbyContent() {
                                         setError('');
                                       }}
                                       placeholder={t('passwordPlaceholder')}
-                                      className="w-full px-3.5 py-2.5 pr-10 bg-gray-950/90 border border-amber-500/40 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-amber-400 font-mono text-center tracking-widest shadow-inner transition-all"
+                                      className="w-full px-3.5 py-2.5 pr-10 bg-gray-950/90 border border-amber-500/40 rounded-xl text-[16px] sm:text-base text-white placeholder-gray-500 focus:outline-none focus:border-amber-400 font-mono text-center tracking-widest shadow-inner transition-all"
                                       autoFocus
                                     />
                                     <button
@@ -1782,7 +1782,7 @@ function StreamingLobbyContent() {
                       value={joinRoomId}
                       onChange={(e) => setJoinRoomId(e.target.value.toUpperCase())}
                       placeholder={t('enterRoomIdPlaceholder')}
-                      className="w-full px-4 py-2.5 bg-gray-950/60 border border-white/[0.1] rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500/60 transition-all duration-300 font-mono tracking-wider shadow-inner"
+                      className="w-full px-4 py-2.5 bg-gray-950/60 border border-white/[0.1] rounded-xl text-white text-[16px] sm:text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500/60 transition-all duration-300 font-mono tracking-wider shadow-inner"
                       onKeyDown={(e) => e.key === 'Enter' && handleJoinById()}
                     />
 
@@ -1977,7 +1977,7 @@ function StreamingLobbyContent() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t('searchRoomPlaceholder')}
-                    className="w-full pl-10 pr-9 py-2.5 bg-gray-800/80 border border-white/10 rounded-xl text-xs sm:text-sm text-white placeholder-gray-400 focus:outline-none focus:border-yellow-500/50 focus-visible:ring-2 focus-visible:ring-yellow-500/40 transition-all"
+                    className="w-full pl-10 pr-9 py-2.5 bg-gray-800/80 border border-white/10 rounded-xl text-[16px] sm:text-sm text-white placeholder-gray-400 focus:outline-none focus:border-yellow-500/50 focus-visible:ring-2 focus-visible:ring-yellow-500/40 transition-all"
                   />
                   {searchQuery && (
                     <button

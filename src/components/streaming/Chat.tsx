@@ -89,7 +89,7 @@ export default function Chat({ username, isVisible, isMobileLandscape = false, o
                   value={tempUsername}
                   onChange={(e) => setTempUsername(e.target.value)}
                   placeholder="New username"
-                  className="px-2 py-1 bg-gray-800/80 rounded-md text-xs sm:text-sm text-white border border-yellow-500/30 focus:border-yellow-500/50 focus:outline-none focus:ring-1 focus:ring-yellow-500/30"
+                  className="px-2 py-1 bg-gray-800/80 rounded-md text-[16px] sm:text-sm text-white border border-yellow-500/30 focus:border-yellow-500/50 focus:outline-none focus:ring-1 focus:ring-yellow-500/30"
                   onKeyDown={(e) => e.key === 'Enter' && handleUsernameChange()}
                 />
                 <button
@@ -251,7 +251,7 @@ export default function Chat({ username, isVisible, isMobileLandscape = false, o
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type your message..."
-            className="w-full px-3 py-2 bg-gray-800/80 rounded-xl border border-yellow-500/20 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40 text-white placeholder-gray-400 text-xs resize-none transition-all duration-300 backdrop-blur-sm shadow-md ring-1 ring-yellow-500/10 hover:border-yellow-500/40 hover:shadow-yellow-500/5 scrollbar-hide"
+            className="w-full px-3 py-2 bg-gray-800/80 rounded-xl border border-yellow-500/20 focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500/40 text-white placeholder-gray-400 text-[16px] sm:text-sm resize-none transition-all duration-300 backdrop-blur-sm shadow-md ring-1 ring-yellow-500/10 hover:border-yellow-500/40 hover:shadow-yellow-500/5 scrollbar-hide"
             style={{
               scrollbarWidth: 'none',
               msOverflowStyle: 'none',

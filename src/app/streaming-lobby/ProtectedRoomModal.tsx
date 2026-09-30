@@ -239,7 +239,7 @@ function ProtectedRoomModal({ room, onClose }: ProtectedRoomModalProps) {
                     setJoinPasswordError('');
                   }}
                   placeholder={t('passwordPlaceholder')}
-                  className="w-full px-3.5 py-2.5 pr-10 bg-zinc-950/80 border border-white/15 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/60 font-mono text-center tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full px-3.5 py-2.5 pr-10 bg-zinc-950/80 border border-white/15 rounded-xl text-[16px] sm:text-base text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/60 font-mono text-center tracking-widest disabled:opacity-40 disabled:cursor-not-allowed"
                   autoFocus
                   onKeyDown={async (e) => {
                     if (e.key === 'Enter') {
