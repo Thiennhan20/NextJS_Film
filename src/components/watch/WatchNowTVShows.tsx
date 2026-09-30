@@ -531,7 +531,7 @@ export default function WatchNowTVShows({
     if (countdownIntervalRef.current) { clearInterval(countdownIntervalRef.current); countdownIntervalRef.current = null; }
   }, []);
 
-  // Handler cho nút Stream
+  // Handler cho nút Stream: Chuyển hướng trực tiếp sang Sảnh để tạo phòng
   const handleStreamClick = async () => {
     if (!isAuthenticated) {
       setStreamPopup({ type: 'auth' });
@@ -557,7 +557,6 @@ export default function WatchNowTVShows({
     }
     setIsCheckingStream(false);
 
-    // Find playlistKey from sessionStorage if it exists
     let playlistKey = '';
     if (typeof window !== 'undefined') {
       const prefix = `watch-party-tvshow-${tvShow.id}-${selectedSeason}-`;
@@ -729,12 +728,18 @@ export default function WatchNowTVShows({
                             </button>
                           </div>
                         </>
-                      ) : (
+                      ) : streamPopup.type === 'duplicate' ? (
                         <>
                           <p className="text-sm text-red-400 mb-2.5 font-medium leading-tight">{tStreaming('duplicateRoomError')}</p>
                           <div className="flex gap-2">
                             <button
-                              onClick={() => router.push(`/streaming-room?room=${streamPopup.roomId}`)}
+                              onClick={() => {
+                                if (!isAuthenticated) {
+                                  setStreamPopup({ type: 'auth' });
+                                  return;
+                                }
+                                router.push(`/streaming-room?room=${streamPopup.roomId}`);
+                              }}
                               className="flex-1 px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-semibold rounded-lg hover:from-yellow-400 hover:to-amber-400 transition-colors flex items-center justify-center gap-1.5"
                             >
                               <Radio className="w-3 h-3" />
@@ -748,7 +753,7 @@ export default function WatchNowTVShows({
                             </button>
                           </div>
                         </>
-                      )}
+                      ) : null}
                     </div>
                   )}
                 </div>

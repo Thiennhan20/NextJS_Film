@@ -63,7 +63,8 @@
     "waiting": "Waiting",
     "full": "Full",
     "join": "Join",
-    "untitled": "Untitled"
+    "untitled": "Untitled",
+    "roomFullNotice": "This room is currently full. Please try again later!"
   },
   "Entertainment": {
     "movies": "Movies",

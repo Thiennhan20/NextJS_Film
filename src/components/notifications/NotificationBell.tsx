@@ -20,7 +20,7 @@ import useAuthStore from '@/store/useAuthStore'
 
 const CURRENT_HASH = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'dev'
 const HEADER_DROPDOWN_OPEN_EVENT = 'header-dropdown-open'
-const NOTIFICATION_COUNT_POLL_MS = 60000
+const NOTIFICATION_COUNT_POLL_MS = 300000 // 5 phút - giảm tải CPU Vercel (trước đây 60s)
 
 export type NotificationType = 'comment_liked' | 'comment_replied' | 'version_updated' | 'friend_request' | 'friend_accept'
 

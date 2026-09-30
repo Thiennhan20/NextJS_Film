@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react';
-import { PlusIcon as Plus, HashtagIcon as Hash, ArrowRightIcon as ArrowRight, SignalIcon as Radio, ClipboardDocumentIcon as Copy, CheckIcon as Check, ArrowRightOnRectangleIcon as LogIn, FilmIcon as Film, TvIcon as Tv, ClockIcon as Clock, UsersIcon as Users, TrashIcon as Trash2, ArrowPathIcon as RefreshCw, ExclamationTriangleIcon as AlertTriangle, XMarkIcon as X, InformationCircleIcon as Info, SparklesIcon as Sparkles, QuestionMarkCircleIcon as HelpCircle, MagnifyingGlassIcon as Search, ExclamationCircleIcon as ExclamationCircle, ChevronDownIcon as ChevronDown, ChevronUpIcon as ChevronUp, ChevronDoubleLeftIcon as ChevronDoubleLeft, ChevronDoubleRightIcon as ChevronDoubleRight } from '@heroicons/react/24/outline';
+import { PlusIcon as Plus, HashtagIcon as Hash, ArrowRightIcon as ArrowRight, SignalIcon as Radio, ClipboardDocumentIcon as Copy, CheckIcon as Check, ArrowRightOnRectangleIcon as LogIn, FilmIcon as Film, TvIcon as Tv, ClockIcon as Clock, UsersIcon as Users, TrashIcon as Trash2, ArrowPathIcon as RefreshCw, ExclamationTriangleIcon as AlertTriangle, XMarkIcon as X, InformationCircleIcon as Info, SparklesIcon as Sparkles, QuestionMarkCircleIcon as HelpCircle, MagnifyingGlassIcon as Search, ExclamationCircleIcon as ExclamationCircle, ChevronDownIcon as ChevronDown, ChevronUpIcon as ChevronUp, ChevronDoubleLeftIcon as ChevronDoubleLeft, ChevronDoubleRightIcon as ChevronDoubleRight, LockClosedIcon as Lock, LockOpenIcon as Unlock, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { StarIcon as Star } from '@heroicons/react/24/solid';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,6 +9,7 @@ import Image from 'next/image';
 import useAuthStore from '@/store/useAuthStore';
 import api from '@/lib/axios';
 import { useTranslations } from 'next-intl';
+import ProtectedRoomModal from './ProtectedRoomModal';
 
 interface Particle {
   x: number;
@@ -34,6 +35,7 @@ interface ActiveRoom {
   content_type?: string;
   season?: number | null;
   current_episode?: number | null;
+  has_password?: boolean;
 }
 
 // Helper to accurately identify TV Show vs Movie
@@ -86,6 +88,18 @@ function StreamingLobbyContent() {
   const [showRules, setShowRules] = useState(false);
   const [showMobileGuide, setShowMobileGuide] = useState(false);
   const [deleteConfirmRoomId, setDeleteConfirmRoomId] = useState<string | null>(null);
+  interface SelectedStream {
+    streamUrl: string;
+    title: string;
+    movieId?: string;
+    poster?: string;
+    type: 'movie' | 'tvshow';
+    season?: number | string | null;
+    episode?: number | string | null;
+    audio?: string;
+    playlistKey?: string;
+  }
+
   const [createdRoom, setCreatedRoom] = useState<{
     roomId: string;
     title: string;
@@ -93,10 +107,57 @@ function StreamingLobbyContent() {
     hostName: string;
     expiresAt: string;
     playlistKey?: string;
+    password?: string;
+    type?: string;
+    movieId?: string;
   } | null>(null);
 
-  // Has stream info from player
-  const hasStreamInfo = !!streamUrlFromParams;
+  // Selected stream for central room creation console
+  const [selectedStream, setSelectedStream] = useState<SelectedStream | null>(() => {
+    if (streamUrlFromParams) {
+      return {
+        streamUrl: streamUrlFromParams,
+        title: titleFromParams,
+        movieId: movieIdFromParams,
+        poster: posterFromParams,
+        type: typeFromParams === 'tvshow' ? 'tvshow' : 'movie',
+        season: seasonFromParams,
+        episode: episodeFromParams,
+        audio: audioFromParams,
+        playlistKey: playlistKeyFromParams,
+      };
+    }
+    return null;
+  });
+
+  // Sync selectedStream when URL params change
+  useEffect(() => {
+    if (streamUrlFromParams) {
+      setSelectedStream({
+        streamUrl: streamUrlFromParams,
+        title: titleFromParams,
+        movieId: movieIdFromParams,
+        poster: posterFromParams,
+        type: typeFromParams === 'tvshow' ? 'tvshow' : 'movie',
+        season: seasonFromParams,
+        episode: episodeFromParams,
+        audio: audioFromParams,
+        playlistKey: playlistKeyFromParams,
+      });
+    }
+  }, [streamUrlFromParams, titleFromParams, movieIdFromParams, posterFromParams, typeFromParams, seasonFromParams, episodeFromParams, audioFromParams, playlistKeyFromParams]);
+
+  // Privacy & Password states ("button để kéo riêng tư")
+  const pwdFromParams = searchParams.get('pwd') || '';
+  const [isPrivate, setIsPrivate] = useState(Boolean(pwdFromParams));
+  const [customPassword, setCustomPassword] = useState(pwdFromParams);
+  const [showCustomPassword, setShowCustomPassword] = useState(false);
+
+  // Protected room password prompt state
+  const [protectedRoomToJoin, setProtectedRoomToJoin] = useState<ActiveRoom | null>(null);
+
+  // Has stream info from player or selected recent stream
+  const hasStreamInfo = Boolean(selectedStream?.streamUrl);
 
   // Recent watched stream items
   interface RecentStreamItem {
@@ -111,6 +172,29 @@ function StreamingLobbyContent() {
     audio?: string;
     source: 'watched' | 'history';
   }
+
+  // Universal handler: select any stream into central Create Room console
+  const handleSelectRecentStream = (item: RecentStreamItem) => {
+    setSelectedStream({
+      streamUrl: item.streamUrl,
+      title: item.title,
+      movieId: item.movieId,
+      poster: item.poster || '',
+      type: item.type,
+      season: item.season,
+      episode: item.episode,
+      audio: item.audio || '',
+    });
+    setCreatedRoom(null);
+    setError('');
+    setDuplicateInfo(null);
+
+    // Smooth scroll to Create Room card
+    const targetEl = document.getElementById('section-create-join');
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
 
   interface MoviePopupDetail {
     title: string;
@@ -127,14 +211,8 @@ function StreamingLobbyContent() {
 
   const [recentItems, setRecentItems] = useState<RecentStreamItem[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
-  const [creatingRecentId, setCreatingRecentId] = useState<string | null>(null);
   const [isQuickPickExpanded, setIsQuickPickExpanded] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
-  const [recentError, setRecentError] = useState('');
-  const [recentDuplicateInfo, setRecentDuplicateInfo] = useState<{
-    existingRoomId: string;
-    audio: string;
-  } | null>(null);
 
   // Movie Details Popup states
   const [selectedMovieItem, setSelectedMovieItem] = useState<RecentStreamItem | null>(null);
@@ -471,7 +549,11 @@ function StreamingLobbyContent() {
                 <div
                   key={item.id}
                   onClick={() => openMovieDetail(item)}
-                  className="w-[145px] sm:w-[155px] shrink-0 snap-start rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-amber-400/40 p-2.5 flex flex-col justify-between transition-all duration-200 group cursor-pointer shadow-lg hover:shadow-amber-500/5 relative"
+                  className={`w-[145px] sm:w-[155px] shrink-0 snap-start rounded-2xl p-2.5 flex flex-col justify-between transition-all duration-200 group cursor-pointer shadow-lg relative ${
+                    selectedStream?.streamUrl === item.streamUrl
+                      ? 'bg-amber-500/10 border-2 border-amber-400 shadow-amber-500/10'
+                      : 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-amber-400/40 hover:shadow-amber-500/5'
+                  }`}
                   title={t('viewMovieDetails')}
                 >
                   {/* Poster with overlays */}
@@ -535,21 +617,18 @@ function StreamingLobbyContent() {
                     )}
                   </div>
 
-                  {/* 1-Click Create Button */}
+                  {/* 1-Click Select & Populate Console Button */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleCreateFromRecent(item);
+                      if (!requireAuth()) return;
+                      handleSelectRecentStream(item);
                     }}
-                    disabled={creatingRecentId === item.id || loading}
+                    disabled={loading}
                     className="w-full py-1.5 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-black text-[11px] font-black rounded-xl transition-all flex items-center justify-center gap-1 shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
                     title={t('createPartyNow')}
                   >
-                    {creatingRecentId === item.id ? (
-                      <div className="w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                    ) : (
-                      <Radio className="w-3 h-3" />
-                    )}
+                    <Radio className="w-3 h-3" />
                     <span>{t('createPartyNow')}</span>
                   </button>
                 </div>
@@ -581,7 +660,11 @@ function StreamingLobbyContent() {
                       openMovieDetail(item);
                     }
                   }}
-                  className="flex items-center justify-between gap-2.5 p-2 sm:p-2.5 rounded-xl bg-gradient-to-r from-white/[0.03] to-white/[0.01] hover:from-amber-500/[0.08] hover:to-purple-500/[0.04] border border-white/[0.06] hover:border-amber-400/35 hover:shadow-lg hover:shadow-black/40 transition-all duration-200 group cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:outline-none select-none"
+                  className={`flex items-center justify-between gap-2.5 p-2 sm:p-2.5 rounded-xl border transition-all duration-200 group cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:outline-none select-none ${
+                    selectedStream?.streamUrl === item.streamUrl
+                      ? 'bg-amber-500/10 border-amber-400/70 shadow-md shadow-amber-500/10'
+                      : 'bg-gradient-to-r from-white/[0.03] to-white/[0.01] hover:from-amber-500/[0.08] hover:to-purple-500/[0.04] border-white/[0.06] hover:border-amber-400/35 hover:shadow-lg hover:shadow-black/40'
+                  }`}
                   title={t('viewMovieDetails')}
                 >
                   {/* Exclamation mark icon button */}
@@ -639,22 +722,19 @@ function StreamingLobbyContent() {
                     </div>
                   </div>
 
-                  {/* 1-Click Create Button */}
+                  {/* 1-Click Select & Populate Console Button */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleCreateFromRecent(item);
+                      if (!requireAuth()) return;
+                      handleSelectRecentStream(item);
                     }}
-                    disabled={creatingRecentId === item.id || loading}
+                    disabled={loading}
                     className="px-3 py-1.5 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-black text-[11px] font-black rounded-xl transition-all shrink-0 flex items-center gap-1 shadow-sm hover:shadow-amber-500/20 cursor-pointer whitespace-nowrap active:scale-95 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:outline-none"
                     title={t('createPartyNow')}
                     aria-label={t('createPartyNow')}
                   >
-                    {creatingRecentId === item.id ? (
-                      <div className="w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                    ) : (
-                      <Radio className="w-3 h-3" />
-                    )}
+                    <Radio className="w-3 h-3" />
                     <span>{t('createPartyNow')}</span>
                   </button>
                 </div>
@@ -687,21 +767,7 @@ function StreamingLobbyContent() {
             </div>
           )}
 
-          {/* Error notice inside recently watched */}
-          {recentError && (
-            <div className="mt-2 text-xs text-red-400 bg-red-900/20 border border-red-500/20 rounded-lg px-2.5 py-2">
-              <p>{recentError}</p>
-              {recentDuplicateInfo?.existingRoomId && (
-                <button
-                  onClick={() => router.push(`/streaming-room?room=${recentDuplicateInfo.existingRoomId}`)}
-                  className="mt-1.5 w-full px-2.5 py-1 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-[11px] font-semibold rounded hover:from-yellow-400 hover:to-amber-400 transition-all flex items-center justify-center gap-1"
-                >
-                  <Radio className="h-3 w-3" />
-                  {t('goToExistingRoom')} ({recentDuplicateInfo.existingRoomId})
-                </button>
-              )}
-            </div>
-          )}
+
         </div>
       ) : (
         <div className="text-center py-5">
@@ -760,6 +826,12 @@ function StreamingLobbyContent() {
             {/* Room ID row */}
             <div className="flex items-center gap-1.5 mb-1">
               <span className="text-xs font-mono font-bold text-yellow-300">#{room.room_id}</span>
+              {room.has_password && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300 shadow-sm" title={t('passwordProtected')}>
+                  <Lock className="w-2.5 h-2.5 text-amber-400" />
+                  <span>PIN</span>
+                </span>
+              )}
             </div>
 
             {/* Movie type badge + Room status badge on their own separate row */}
@@ -831,13 +903,18 @@ function StreamingLobbyContent() {
               onClick={() => {
                 if (!requireAuth()) return;
                 if (isInsideModal) setShowAllRoomsModal(false);
+                const isHost = Boolean(userId && room.host_id && String(userId) === String(room.host_id));
+                if (room.has_password && !isHost) {
+                  setProtectedRoomToJoin(room);
+                  return;
+                }
                 const roomType = isTvShowRoom(room) ? 'tvshow' : 'movie';
                 router.push(`/streaming-room?room=${encodeURIComponent(room.room_id)}&type=${roomType}&title=${encodeURIComponent(room.title || '')}`);
               }}
-              disabled={room.member_count >= room.max_users && userId !== room.host_id}
+              disabled={room.member_count >= room.max_users && String(userId) !== String(room.host_id)}
               className="px-3.5 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-bold rounded-lg hover:from-yellow-400 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-400 disabled:cursor-not-allowed transition-all shadow-sm text-center cursor-pointer active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-yellow-400/70 focus-visible:outline-none"
             >
-              {room.member_count >= room.max_users && userId !== room.host_id ? t('full') : t('join')}
+              {room.member_count >= room.max_users && String(userId) !== String(room.host_id) ? t('full') : t('join')}
             </button>
           </div>
         </div>
@@ -847,7 +924,7 @@ function StreamingLobbyContent() {
 
   const handleCreateRoom = async () => {
     if (!requireAuth()) return;
-    if (!streamUrlFromParams) return;
+    if (!selectedStream?.streamUrl) return;
 
     setLoading(true);
     setError('');
@@ -855,9 +932,9 @@ function StreamingLobbyContent() {
     try {
       let episodePlaylist: unknown[] = [];
 
-      if (typeFromParams === 'tvshow' && playlistKeyFromParams && typeof window !== 'undefined') {
+      if (selectedStream.type === 'tvshow' && selectedStream.playlistKey && typeof window !== 'undefined') {
         try {
-          const storedPlaylist = sessionStorage.getItem(playlistKeyFromParams);
+          const storedPlaylist = sessionStorage.getItem(selectedStream.playlistKey);
           if (storedPlaylist) {
             const parsed = JSON.parse(storedPlaylist);
             if (Array.isArray(parsed?.episodes)) {
@@ -869,27 +946,45 @@ function StreamingLobbyContent() {
         }
       }
 
+      let cleanPin: string | undefined = undefined;
+      if (isPrivate) {
+        const pin = customPassword.trim();
+        if (!pin || pin.length !== 6) {
+          setError(t('pinMustBe6Digits'));
+          setLoading(false);
+          return;
+        }
+        cleanPin = pin;
+      }
+
       const response = await api.post('/rooms', {
-        title: titleFromParams,
-        stream_url: streamUrlFromParams,
-        movie_id: movieIdFromParams,
-        audio: audioFromParams,
-        content_type: typeFromParams,
-        season: seasonFromParams ? Number(seasonFromParams) : null,
-        episode: episodeFromParams ? Number(episodeFromParams) : null,
+        title: selectedStream.title,
+        stream_url: selectedStream.streamUrl,
+        movie_id: selectedStream.movieId,
+        audio: selectedStream.audio || '',
+        content_type: selectedStream.type,
+        season: selectedStream.season ? Number(selectedStream.season) : null,
+        episode: selectedStream.episode ? Number(selectedStream.episode) : null,
         episode_playlist: episodePlaylist,
-        poster: posterFromParams,
+        poster: selectedStream.poster || '',
+        password: cleanPin,
       });
 
       const { room_id, expires_at } = response.data;
+      if (cleanPin) {
+        try { sessionStorage.setItem(`room_pin_${room_id}`, cleanPin); } catch {}
+      }
 
       setCreatedRoom({
         roomId: room_id,
-        title: titleFromParams,
-        streamUrl: streamUrlFromParams,
+        title: selectedStream.title,
+        streamUrl: selectedStream.streamUrl,
         hostName: user?.name || 'Host',
         expiresAt: new Date(expires_at).toISOString(),
-        playlistKey: playlistKeyFromParams || undefined,
+        playlistKey: selectedStream.playlistKey || undefined,
+        password: cleanPin,
+        type: selectedStream.type,
+        movieId: selectedStream.movieId,
       });
       void fetchRooms();
     } catch (err: unknown) {
@@ -900,7 +995,7 @@ function StreamingLobbyContent() {
       if (errData?.code === 'DUPLICATE_ROOM') {
         setDuplicateInfo({
           existingRoomId: errData.existing_room_id || '',
-          audio: audioFromParams,
+          audio: selectedStream.audio || '',
         });
         setError(errData.error || t('duplicateRoomError'));
       } else {
@@ -908,54 +1003,6 @@ function StreamingLobbyContent() {
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  // 1-Click create room directly from a recently watched item
-  const handleCreateFromRecent = async (item: RecentStreamItem) => {
-    if (!requireAuth()) return;
-    if (!item.streamUrl) return;
-    if (activeRooms.length >= maxRooms) {
-      setRecentError(t('serverFullWait'));
-      return;
-    }
-
-    setCreatingRecentId(item.id);
-    setRecentError('');
-    setRecentDuplicateInfo(null);
-
-    try {
-      const response = await api.post('/rooms', {
-        title: item.title,
-        stream_url: item.streamUrl,
-        movie_id: item.movieId,
-        audio: item.audio || '',
-        content_type: item.type,
-        season: item.season,
-        episode: item.episode,
-        episode_playlist: [],
-        poster: item.poster || '',
-      });
-
-      const { room_id } = response.data;
-      const targetType = item.type || 'movie';
-      router.push(`/streaming-room?room=${encodeURIComponent(room_id)}&type=${encodeURIComponent(targetType)}&title=${encodeURIComponent(item.title || '')}`);
-    } catch (err: unknown) {
-      console.error('Error creating room from recent item:', err);
-      const axiosErr = err as { response?: { data?: { error?: string; code?: string; existing_room_id?: string } } };
-      const errData = axiosErr?.response?.data;
-
-      if (errData?.code === 'DUPLICATE_ROOM') {
-        setRecentDuplicateInfo({
-          existingRoomId: errData.existing_room_id || '',
-          audio: item.audio || '',
-        });
-        setRecentError(errData.error || t('duplicateRoomError'));
-      } else {
-        setRecentError(errData?.error || t('createRoomFailed'));
-      }
-    } finally {
-      setCreatingRecentId(null);
     }
   };
 
@@ -977,10 +1024,17 @@ function StreamingLobbyContent() {
       roomId = roomId.toUpperCase();
 
       // Validate room existence before joining. Use encodeURIComponent to handle special characters like '#' safely.
-      await api.get(`/rooms/${encodeURIComponent(roomId)}`);
+      const res = await api.get(`/rooms/${encodeURIComponent(roomId)}`);
       
-      // If no error, room exists, navigate to it
-      router.push(`/streaming-room?room=${encodeURIComponent(roomId)}`);
+      // If room has password and user is not host, prompt password
+      if (res.data?.has_password && !res.data?.is_host) {
+        setProtectedRoomToJoin(res.data);
+        return;
+      }
+
+      // If no error and no password needed, navigate to it
+      const roomType = isTvShowRoom(res.data) ? 'tvshow' : 'movie';
+      router.push(`/streaming-room?room=${encodeURIComponent(roomId)}&type=${roomType}&title=${encodeURIComponent(res.data?.title || '')}`);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { status?: number, data?: { error?: string } } };
       if (axiosErr?.response?.status === 404) {
@@ -995,15 +1049,19 @@ function StreamingLobbyContent() {
   };
 
   const handleGoToRoom = () => {
+    if (!requireAuth()) return;
     if (createdRoom) {
+      if (createdRoom.password) {
+        try { sessionStorage.setItem(`room_pin_${createdRoom.roomId}`, createdRoom.password); } catch {}
+      }
       const params = new URLSearchParams({
         room: createdRoom.roomId,
         streamUrl: createdRoom.streamUrl,
         title: createdRoom.title,
-        type: typeFromParams || (createdRoom.playlistKey ? 'tvshow' : 'movie'),
+        type: createdRoom.type || typeFromParams || (createdRoom.playlistKey ? 'tvshow' : 'movie'),
       });
-      if (movieIdFromParams) {
-        params.set('movieId', movieIdFromParams);
+      if (createdRoom.movieId || movieIdFromParams) {
+        params.set('movieId', createdRoom.movieId || movieIdFromParams);
       }
       if (createdRoom.playlistKey) {
         params.set('playlistKey', createdRoom.playlistKey);
@@ -1420,6 +1478,14 @@ function StreamingLobbyContent() {
                       <span className="text-gray-400 text-[11px] flex items-center gap-1"><Clock className="h-3 w-3" /> {t('expires')}</span>
                       <p className="text-gray-300 font-semibold">{t('sixHours')}</p>
                     </div>
+                    {createdRoom.password && (
+                      <div className="bg-gray-800/50 rounded-xl p-2.5 sm:p-3 col-span-2 flex items-center justify-between border border-amber-500/20">
+                        <span className="text-amber-400 text-[11px] flex items-center gap-1 font-semibold">
+                          <Lock className="h-3 w-3" /> {t('roomPassword')}
+                        </span>
+                        <p className="text-amber-300 font-mono font-bold text-xs">{createdRoom.password}</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-2">
@@ -1462,35 +1528,158 @@ function StreamingLobbyContent() {
                   {hasStreamInfo ? (
                     <div className="space-y-3">
                       {/* Stream info preview */}
-                      <div className="bg-gray-950/60 rounded-xl p-3.5 border border-white/[0.08] shadow-inner">
-                        <div className="flex items-center gap-2 mb-2">
-                          {typeFromParams === 'tvshow' ? (
-                            <Tv className="h-4 w-4 text-blue-400" />
-                          ) : (
-                            <Film className="h-4 w-4 text-purple-400" />
+                      <div className="bg-gray-950/60 rounded-xl p-3.5 border border-white/[0.08] shadow-inner relative">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            {selectedStream?.type === 'tvshow' ? (
+                              <Tv className="h-4 w-4 text-blue-400" />
+                            ) : (
+                              <Film className="h-4 w-4 text-purple-400" />
+                            )}
+                            <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">
+                              {selectedStream?.type === 'tvshow' ? t('tvShow') : t('movie')}
+                            </span>
+                          </div>
+                          {!createdRoom && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedStream(null);
+                                setError('');
+                              }}
+                              className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                              title="Bỏ chọn phim này"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           )}
-                          <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold">
-                            {typeFromParams === 'tvshow' ? t('tvShow') : t('movie')}
-                          </span>
                         </div>
-                        <p className="text-sm text-white font-bold truncate" title={titleFromParams}>
-                          {titleFromParams}
+                        <p className="text-sm text-white font-bold truncate" title={selectedStream?.title}>
+                          {selectedStream?.title}
                         </p>
-                        {typeFromParams === 'tvshow' && seasonFromParams && episodeFromParams && (
+                        {selectedStream?.type === 'tvshow' && selectedStream.season && selectedStream.episode && (
                           <p className="text-xs text-gray-400 mt-0.5">
-                            {t('seasonEpisode', { season: seasonFromParams, episode: episodeFromParams })}
+                            {t('seasonEpisode', { season: String(selectedStream.season), episode: String(selectedStream.episode) })}
                           </p>
                         )}
                         <div className="flex items-center gap-2 mt-2">
                           <div className="w-1.5 h-1.5 bg-green-400 rounded-full" />
                           <span className="text-xs text-green-400 font-medium">{t('streamReady')}</span>
-                          {audioFromParams && (
+                          {selectedStream?.audio && (
                             <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white uppercase">
-                              {audioFromParams}
+                              {selectedStream.audio}
                             </span>
                           )}
                         </div>
                       </div>
+
+                      {/* Privacy Mode Switch ("kéo riêng tư") */}
+                      {!createdRoom && (
+                        <div className="bg-gray-950/70 border border-white/[0.08] rounded-xl p-3 space-y-2.5">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
+                                isPrivate
+                                  ? 'bg-amber-500/20 border border-amber-500/30 text-amber-400'
+                                  : 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
+                              }`}>
+                                {isPrivate ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-bold text-white">
+                                    {isPrivate ? t('privateRoom') : t('publicRoom')}
+                                  </span>
+                                  <span className={`px-1.5 py-0.2 text-[9px] font-extrabold uppercase rounded ${
+                                    isPrivate
+                                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                  }`}>
+                                    {isPrivate ? 'PIN' : 'Free'}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-gray-400 truncate">
+                                  {isPrivate ? t('privateRoomDesc') : t('publicRoomDesc')}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Toggle / Slider Button ("button để kéo riêng tư") */}
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={isPrivate}
+                              onClick={() => {
+                                setIsPrivate(!isPrivate);
+                                setError('');
+                              }}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+                                isPrivate ? 'bg-amber-500' : 'bg-zinc-700'
+                              }`}
+                              title={isPrivate ? t('publicRoom') : t('privateRoom')}
+                            >
+                              <span className="sr-only">Toggle private room</span>
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                                  isPrivate ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
+
+                          {/* Bảng nhập mật khẩu (hiển thị khi kéo riêng tư) */}
+                          <AnimatePresence>
+                            {isPrivate && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.22, ease: 'easeOut' }}
+                                className="overflow-hidden pt-1"
+                              >
+                                <div className="pt-2 border-t border-white/[0.06]">
+                                  <label className="block text-xs font-semibold text-gray-300 mb-1.5 flex items-center justify-between">
+                                    <span className="flex items-center gap-1.5">
+                                      <Lock className="w-3.5 h-3.5 text-amber-400" />
+                                      <span>{t('roomPassword')}</span>
+                                    </span>
+                                    <span className={`text-[11px] font-mono ${customPassword.length === 6 ? 'text-emerald-400 font-bold' : 'text-gray-400'}`}>
+                                      {customPassword.length}/6 {customPassword.length === 6 ? '✓' : ''}
+                                    </span>
+                                  </label>
+                                  <div className="relative">
+                                    <input
+                                      type={showCustomPassword ? 'text' : 'password'}
+                                      inputMode="numeric"
+                                      pattern="[0-9]*"
+                                      maxLength={6}
+                                      value={customPassword}
+                                      onChange={(e) => {
+                                        setCustomPassword(e.target.value.replace(/\D/g, '').slice(0, 6));
+                                        setError('');
+                                      }}
+                                      placeholder={t('passwordPlaceholder')}
+                                      className="w-full px-3.5 py-2.5 pr-10 bg-gray-950/90 border border-amber-500/40 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-amber-400 font-mono text-center tracking-widest shadow-inner transition-all"
+                                      autoFocus
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowCustomPassword(!showCustomPassword)}
+                                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                                      title={showCustomPassword ? 'Ẩn mã PIN' : 'Hiện mã PIN'}
+                                    >
+                                      {showCustomPassword ? <EyeSlashIcon className="w-3.5 h-3.5" /> : <EyeIcon className="w-3.5 h-3.5" />}
+                                    </button>
+                                  </div>
+                                  <p className="text-[11px] text-amber-400/80 mt-1">
+                                    {t('enterPasswordDesc')}
+                                  </p>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
 
                       <button
                         onClick={createdRoom ? handleGoToRoom : handleCreateRoom}
@@ -1541,7 +1730,10 @@ function StreamingLobbyContent() {
                           <p>{error}</p>
                           {duplicateInfo?.existingRoomId && (
                             <button
-                              onClick={() => router.push(`/streaming-room?room=${duplicateInfo.existingRoomId}`)}
+                              onClick={() => {
+                                if (!requireAuth()) return;
+                                router.push(`/streaming-room?room=${duplicateInfo.existingRoomId}`);
+                              }}
                               className="mt-2 w-full px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-semibold rounded-lg hover:from-yellow-400 hover:to-amber-400 transition-all flex items-center justify-center gap-1.5"
                             >
                               <Radio className="h-3 w-3" />
@@ -2198,10 +2390,11 @@ function StreamingLobbyContent() {
 
                 <button
                   onClick={() => {
-                    handleCreateFromRecent(selectedMovieItem);
+                    if (!requireAuth()) return;
+                    handleSelectRecentStream(selectedMovieItem);
                     setSelectedMovieItem(null);
                   }}
-                  disabled={creatingRecentId === selectedMovieItem.id || loading}
+                  disabled={loading}
                   className="px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-yellow-400/70 focus-visible:outline-none"
                 >
                   <Radio className="w-3.5 h-3.5" />
@@ -2212,6 +2405,14 @@ function StreamingLobbyContent() {
           </motion.div>
         )}
       </AnimatePresence>
+
+
+
+      {/* Protected Room Password Prompt Modal (Isolated Component to prevent Lobby re-renders) */}
+      <ProtectedRoomModal
+        room={protectedRoomToJoin}
+        onClose={() => setProtectedRoomToJoin(null)}
+      />
     </div>
   );
 }

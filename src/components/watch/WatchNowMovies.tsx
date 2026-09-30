@@ -437,7 +437,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
     };
   }, [audioVideoElement, selectedServer]);
 
-  // Handler cho nút Stream
+  // Handler cho nút Stream: Chuyển hướng trực tiếp sang Sảnh để tạo phòng
   const handleStreamClick = async () => {
     if (!isAuthenticated) {
       setStreamPopup({ type: 'auth' });
@@ -463,6 +463,7 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
     }
     setIsCheckingStream(false);
 
+    // Kéo thẳng qua trang Sảnh với thông tin phim đã nạp sẵn
     const params = new URLSearchParams({
       streamUrl: effectiveStreamUrl,
       title: movie.title,
@@ -555,7 +556,13 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
                         <p className="text-sm text-red-400 mb-2.5 font-medium leading-tight">{tStreaming('duplicateRoomError')}</p>
                         <div className="flex gap-2">
                           <button
-                            onClick={() => router.push(`/streaming-room?room=${streamPopup.roomId}&type=movie&movieId=${movie.id}&title=${encodeURIComponent(movie.title)}`)}
+                            onClick={() => {
+                              if (!isAuthenticated) {
+                                setStreamPopup({ type: 'auth' });
+                                return;
+                              }
+                              router.push(`/streaming-room?room=${streamPopup.roomId}&type=movie&movieId=${movie.id}&title=${encodeURIComponent(movie.title)}`);
+                            }}
                             className="flex-1 px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-semibold rounded-lg hover:from-yellow-400 hover:to-amber-400 transition-colors flex items-center justify-center gap-1.5"
                           >
                             <Radio className="w-3 h-3" />

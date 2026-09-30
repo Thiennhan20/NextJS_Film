@@ -4,9 +4,53 @@ import { getRedisClient, buildCacheKey, CACHE_TTL } from '@/lib/redis';
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
+const BACKEND_BASE_URL = process.env.API_URL || (process.env.NODE_ENV === 'production'
+  ? 'https://server-nextjs-film.onrender.com/api/tmdb'
+  : 'http://localhost:3001/api/tmdb');
+
 interface BatchItem {
   type: 'movie' | 'tv';
   id: number;
+}
+
+/**
+ * Fetch item details with direct TMDB first, then fallback to backend proxy
+ */
+async function fetchItemDetails(item: BatchItem): Promise<{ item: BatchItem; data: object } | null> {
+  const endpoint = `/${item.type}/${item.id}`;
+
+  // 1. Direct TMDB fetch
+  if (TMDB_API_KEY) {
+    try {
+      const url = `${TMDB_BASE_URL}${endpoint}?api_key=${TMDB_API_KEY}`;
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(6000),
+      });
+      if (response.ok) {
+        const data = (await response.json()) as object;
+        return { item, data };
+      }
+    } catch {
+      // Fall through to backend fallback
+    }
+  }
+
+  // 2. Fallback to Backend proxy (e.g. Render / Singapore)
+  try {
+    const backendUrl = `${BACKEND_BASE_URL}?endpoint=${encodeURIComponent(endpoint)}`;
+    const response = await fetch(backendUrl, {
+      signal: AbortSignal.timeout(8000),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (response.ok) {
+      const data = (await response.json()) as object;
+      return { item, data };
+    }
+  } catch {
+    // Both failed
+  }
+
+  return null;
 }
 
 /**
@@ -47,26 +91,16 @@ export async function POST(request: NextRequest) {
           } else {
             uncachedItems.push(item);
           }
-        } else {
-          // If Redis check failed, try to fetch from TMDB instead
-          // We can't recover the item reference here, so it's skipped
         }
       }
     } else {
       uncachedItems.push(...limitedItems);
     }
 
-    // --- Fetch uncached items directly from TMDB ---
-    if (TMDB_API_KEY && uncachedItems.length > 0) {
+    // --- Fetch uncached items with TMDB + Backend fallback ---
+    if (uncachedItems.length > 0) {
       const fetchResults = await Promise.allSettled(
-        uncachedItems.map(async (item) => {
-          const url = `${TMDB_BASE_URL}/${item.type}/${item.id}?api_key=${TMDB_API_KEY}`;
-          const response = await fetch(url, {
-            signal: AbortSignal.timeout(8000),
-          });
-          if (!response.ok) return null;
-          return { item, data: await response.json() };
-        })
+        uncachedItems.map((item) => fetchItemDetails(item))
       );
 
       for (const result of fetchResults) {

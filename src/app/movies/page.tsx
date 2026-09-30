@@ -3,6 +3,9 @@ import { getMessages } from 'next-intl/server';
 import MoviesClient from './MoviesClient';
 import { getRedisClient, buildCacheKey, CACHE_TTL } from '@/lib/redis';
 
+// ISR: Cache trang danh sách phim lẻ 5 phút trên Vercel CDN
+export const revalidate = 300;
+
 // Movie type matching TMDB API response
 interface TMDBMovie {
   id: number;

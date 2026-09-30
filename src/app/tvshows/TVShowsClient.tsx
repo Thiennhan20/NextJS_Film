@@ -653,7 +653,7 @@ function TVShowsPageContent({ initialTVShows }: { initialTVShows: TVShow[] }) {
                     onWatchClick={() => router.push(`/tvshows/${tvShow.id}?page=${page}&year=${selectedYear}&category=${selectedCategory}&country=${selectedCountry}&season=1`)}
                     onDetailsClick={() => router.push(`/tvshows/${tvShow.id}?page=${page}&year=${selectedYear}&category=${selectedCategory}&country=${selectedCountry}&season=1`)}
                   >
-                    <Link href={`/tvshows/${tvShow.id}?page=${page}&year=${selectedYear}&category=${selectedCategory}&country=${selectedCountry}&season=1`} className="block">
+                    <Link href={`/tvshows/${tvShow.id}?page=${page}&year=${selectedYear}&category=${selectedCategory}&country=${selectedCountry}&season=1`} className="block" prefetch={false}>
                       <div className="border border-white/10 hover:border-white/20 rounded-xl overflow-hidden relative group bg-zinc-950 transition-all duration-300">
                         {/* Cinema Aspect Ratio 2:3 */}
                         <div className="relative w-full aspect-[2/3] overflow-hidden bg-zinc-950">

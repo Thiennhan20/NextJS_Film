@@ -16,6 +16,8 @@ export interface RoomStatus {
   host_name: string;
   is_host: boolean;
   stream_url: string;
+  has_password?: boolean;
+  pin?: string;
   audio?: 'vietsub' | 'dubbed' | '';
   content_type?: 'movie' | 'tvshow' | '';
   season?: number | null;
@@ -92,11 +94,15 @@ interface UseWatchPartySocketOptions {
   onHostBuffering?: () => void;
   onHostBufferEnd?: (data: { position_sec: number }) => void;
   onError?: (data: { message: string }) => void;
+  password?: string;
+  onPasswordRequired?: () => void;
+  onInvalidPassword?: (data: { message: string; locked?: boolean; remaining_seconds?: number; attempts_left?: number }) => void;
 }
 
 export function useWatchPartySocket({
   roomId,
   token,
+  password,
   onRoomStatus,
   onPlay,
   onPause,
@@ -115,6 +121,8 @@ export function useWatchPartySocket({
   onHostBuffering,
   onHostBufferEnd,
   onError,
+  onPasswordRequired,
+  onInvalidPassword,
 }: UseWatchPartySocketOptions) {
   const t = useTranslations('StreamingRoom');
   const socketRef = useRef<Socket | null>(null);
@@ -127,6 +135,7 @@ export function useWatchPartySocket({
     onChange, onEpisodePlaylist, onUserJoined, onUserLeft, onKick, onRoomClosed,
     onRoomExpired, onChat, onEmojiReaction, onSyncPosition,
     onHostBuffering, onHostBufferEnd, onError,
+    onPasswordRequired, onInvalidPassword,
   });
 
   useEffect(() => {
@@ -135,6 +144,7 @@ export function useWatchPartySocket({
       onChange, onEpisodePlaylist, onUserJoined, onUserLeft, onKick, onRoomClosed,
       onRoomExpired, onChat, onEmojiReaction, onSyncPosition,
       onHostBuffering, onHostBufferEnd, onError,
+      onPasswordRequired, onInvalidPassword,
     };
   });
 
@@ -163,7 +173,7 @@ export function useWatchPartySocket({
       setIsConnected(true);
 
       // Join room
-      socket.emit('JOIN_ROOM', { room_id: roomId });
+      socket.emit('JOIN_ROOM', { room_id: roomId, password });
 
       // Start heartbeat (every 15s)
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
@@ -264,6 +274,14 @@ export function useWatchPartySocket({
       callbacksRef.current.onHostBufferEnd?.(data);
     });
 
+    socket.on('PASSWORD_REQUIRED', () => {
+      callbacksRef.current.onPasswordRequired?.();
+    });
+
+    socket.on('INVALID_PASSWORD', (data: { message: string }) => {
+      callbacksRef.current.onInvalidPassword?.(data);
+    });
+
     return () => {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       // Intentional leave — tell server to skip grace period
@@ -273,9 +291,13 @@ export function useWatchPartySocket({
       socketRef.current = null;
       setIsConnected(false);
     };
-  }, [roomId, token, t]);
+  }, [roomId, token, password, t]);
 
   // ─── Emit functions ───────────────────────────────────────
+
+  const joinWithPassword = useCallback((pwd: string) => {
+    socketRef.current?.emit('JOIN_ROOM', { room_id: roomId, password: pwd });
+  }, [roomId]);
 
   const emitPlay = useCallback((positionSec: number) => {
     socketRef.current?.emit('PLAY', { position_sec: positionSec });
@@ -331,6 +353,7 @@ export function useWatchPartySocket({
 
   return {
     isConnected,
+    joinWithPassword,
     emitPlay,
     emitPause,
     emitSeek,

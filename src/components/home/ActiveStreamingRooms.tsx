@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import api from '@/lib/axios'
 import {
   SignalIcon as Radio,
@@ -13,10 +14,14 @@ import {
   ChevronLeftIcon as ChevronLeft,
   ChevronRightIcon as ChevronRight,
   FilmIcon as Film,
+  LockClosedIcon as Lock,
+  ArrowRightOnRectangleIcon as LogIn,
+  XMarkIcon as X,
 } from '@heroicons/react/24/outline'
 import { useTranslations } from 'next-intl'
 import { useHorizontalDragScroll } from '@/hooks/useHorizontalDragScroll'
 import useAuthStore from '@/store/useAuthStore'
+import ProtectedRoomModal from '@/app/streaming-lobby/ProtectedRoomModal'
 
 interface ActiveRoom {
   room_id: string
@@ -34,6 +39,7 @@ interface ActiveRoom {
   season?: number | null
   current_episode?: number | null
   movie_id?: string | number
+  has_password?: boolean
 }
 
 const getAvatarGradient = (id: string) => {
@@ -67,10 +73,16 @@ export default function ActiveStreamingRooms() {
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
   const t = useTranslations('StreamingRooms')
+  const tStreaming = useTranslations('StreamingLobby')
+  const router = useRouter()
 
   const user = useAuthStore((s) => s.user)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userId = (user as any)?.id || (user as any)?._id || ''
+  const [protectedRoomToJoin, setProtectedRoomToJoin] = useState<ActiveRoom | null>(null)
+  const [showAuthPopup, setShowAuthPopup] = useState(false)
+  const [fullRoomToast, setFullRoomToast] = useState(false)
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -239,6 +251,19 @@ export default function ActiveStreamingRooms() {
                         onClick={(e) => {
                           if (isFull) {
                             e.preventDefault()
+                            setFullRoomToast(true)
+                            setTimeout(() => setFullRoomToast(false), 3000)
+                            return
+                          }
+                          if (!isAuthenticated) {
+                            e.preventDefault()
+                            setShowAuthPopup(true)
+                            return
+                          }
+                          const isHost = Boolean(userId && room.host_id && String(userId) === String(room.host_id))
+                          if (room.has_password && !isHost) {
+                            e.preventDefault()
+                            setProtectedRoomToJoin(room)
                           }
                         }}
                         aria-disabled={isFull}
@@ -342,7 +367,7 @@ export default function ActiveStreamingRooms() {
                             </div>
 
                             {/* Status Indicator with Animated Soundwave */}
-                            <div className="mt-1.5 flex items-center">
+                            <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                               {isPlaying ? (
                                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 border border-emerald-500/25 text-emerald-400">
                                   {/* Dynamic Live Audio Bars */}
@@ -358,10 +383,10 @@ export default function ActiveStreamingRooms() {
                                           height: ['25%', '100%', '35%'],
                                         }}
                                         transition={{
-                                          duration: 0.65,
+                                          duration: 0.8,
                                           repeat: Infinity,
                                           repeatType: 'reverse',
-                                          delay: i * 0.18,
+                                          delay: i * 0.2,
                                           ease: 'easeInOut',
                                         }}
                                       />
@@ -378,6 +403,13 @@ export default function ActiveStreamingRooms() {
                                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 border border-blue-500/25 text-blue-400">
                                   <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
                                   <span>{t('waiting')}</span>
+                                </span>
+                              )}
+
+                              {room.has_password && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300 shadow-sm" title={tStreaming('passwordProtected')}>
+                                  <Lock className="w-2.5 h-2.5 text-amber-400" />
+                                  <span>{tStreaming('passwordProtected')}</span>
                                 </span>
                               )}
                             </div>
@@ -429,6 +461,80 @@ export default function ActiveStreamingRooms() {
           </div>
         </div>
       </div>
+
+      {/* Protected Room Password Prompt Modal */}
+      <ProtectedRoomModal
+        room={protectedRoomToJoin}
+        onClose={() => setProtectedRoomToJoin(null)}
+      />
+
+      {/* Auth Required Popup */}
+      <AnimatePresence>
+        {showAuthPopup && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            onClick={() => setShowAuthPopup(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              className="relative bg-gray-800/95 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/60 shadow-2xl max-w-sm w-full text-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setShowAuthPopup(false)}
+                className="absolute top-3 right-3 p-1 text-gray-500 hover:text-white transition-colors rounded-lg hover:bg-gray-700/50"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-gradient-to-br from-yellow-500/20 to-amber-500/20 border border-yellow-500/30 flex items-center justify-center">
+                <LogIn className="h-7 w-7 text-yellow-400" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-1">{tStreaming('signInRequired')}</h3>
+              <p className="text-sm text-gray-400 mb-5">
+                {tStreaming('pleaseSignIn')}
+              </p>
+              <div className="flex gap-2.5 justify-center">
+                <button
+                  type="button"
+                  onClick={() => router.push('/login')}
+                  className="px-5 py-2 bg-gradient-to-r from-yellow-500 to-amber-500 text-black font-semibold rounded-lg hover:from-yellow-400 hover:to-amber-400 transition-all text-sm shadow-lg shadow-yellow-500/20"
+                >
+                  {tStreaming('signIn')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAuthPopup(false)}
+                  className="px-5 py-2 bg-gray-700 text-gray-300 font-semibold rounded-lg hover:bg-gray-600 transition-all text-sm border border-gray-600"
+                >
+                  {tStreaming('cancel')}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Room Full Floating Toast */}
+      <AnimatePresence>
+        {fullRoomToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-900/95 border border-red-500/40 text-red-300 text-xs sm:text-sm font-medium shadow-2xl backdrop-blur-md"
+          >
+            <Users className="w-4 h-4 text-red-400 shrink-0" />
+            <span>{t('roomFullNotice')}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   )
 }

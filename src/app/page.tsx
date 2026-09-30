@@ -6,6 +6,10 @@ import type { HeroItem } from '@/components/home/HeroMovies';
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
+// ISR: Cache trang chủ 5 phút trên Vercel CDN
+// Dữ liệu trending cần cập nhật thường xuyên hơn trang chi tiết phim
+export const revalidate = 300;
+
 interface TMDBMovie {
   id: number;
   title: string;
@@ -95,6 +99,7 @@ export default async function Home() {
     Trending: messages.Trending,
     ComingSoonSection: messages.ComingSoonSection,
     StreamingRooms: messages.StreamingRooms,
+    StreamingLobby: messages.StreamingLobby,
     Entertainment: messages.Entertainment,
     Comments: messages.Comments,
     Watchlist: messages.Watchlist,

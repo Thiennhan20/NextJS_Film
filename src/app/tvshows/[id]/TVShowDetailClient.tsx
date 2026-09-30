@@ -1090,6 +1090,7 @@ export default function TVShowDetailClient({ id }: TVShowDetailClientProps) {
                         <Link
                           key={episodeNumber}
                           href={episodeHref}
+                          prefetch={false}
                           className="group flex min-h-12 items-center justify-center gap-1 overflow-hidden rounded-xl border border-white/[0.07] bg-[#1a1d23] px-1 text-[10px] font-bold text-white/68 transition hover:-translate-y-0.5 hover:border-yellow-400/45 hover:bg-yellow-400 hover:text-black sm:min-h-14 sm:gap-1.5 sm:px-2 sm:text-[11px] xl:text-xs"
                         >
                           <PlayIcon className="h-2.5 w-2.5 shrink-0 text-yellow-300 group-hover:text-black sm:h-3 sm:w-3 xl:h-3.5 xl:w-3.5" />
@@ -1102,6 +1103,7 @@ export default function TVShowDetailClient({ id }: TVShowDetailClientProps) {
                       <Link
                         key={episodeNumber}
                         href={episodeHref}
+                        prefetch={false}
                         className="group min-w-0 overflow-hidden rounded-xl border border-white/[0.08] bg-[#1a1d23] transition duration-300 hover:-translate-y-1 hover:border-yellow-400/40 hover:shadow-[0_16px_35px_rgba(0,0,0,0.35)] sm:rounded-2xl"
                       >
                         <div className="relative aspect-video overflow-hidden bg-[radial-gradient(circle_at_top,#2a2d35,#111318_72%)]">

@@ -6,6 +6,10 @@ import { Metadata } from 'next';
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
+// ISR: Cache trang tĩnh 1 tiếng trên Vercel CDN, sau đó tự revalidate ở nền
+// Chỉ ảnh hưởng metadata (tên phim, poster) - link xem phim luôn fetch real-time ở client
+export const revalidate = 3600;
+
 async function getMovieData(id: string) {
   if (!TMDB_API_KEY) return null;
   try {

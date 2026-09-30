@@ -41,6 +41,9 @@ interface TmdbResultItem {
   genre_ids?: number[];
   number_of_seasons?: number;
   number_of_episodes?: number;
+  profile_path?: string | null;
+  known_for_department?: string;
+  known_for?: unknown[];
   [key: string]: unknown;
 }
 
@@ -123,6 +126,29 @@ async function fetchFromBackend(searchParams: URLSearchParams): Promise<{ data: 
  */
 function trimPayload(endpoint: string, data: TmdbResponsePayload | null | undefined): TmdbResponsePayload | null | undefined {
   if (!data || !Array.isArray(data.results)) return data;
+
+  // Person trending: retain person-specific fields
+  if (/\/person\//.test(endpoint)) {
+    const trimmedResults = data.results.map((item: TmdbResultItem) => ({
+      id: item.id,
+      name: item.name,
+      profile_path: item.profile_path,
+      known_for_department: item.known_for_department,
+      known_for: Array.isArray(item.known_for)
+        ? (item.known_for as Record<string, unknown>[]).map((kf) => ({
+            id: kf?.id,
+            title: kf?.title,
+            name: kf?.name,
+            media_type: kf?.media_type,
+          }))
+        : item.known_for,
+    }));
+
+    return {
+      ...data,
+      results: trimmedResults,
+    };
+  }
 
   if (/\/discover\//.test(endpoint) || /\/trending\//.test(endpoint)) {
     const trimmedResults = data.results.map((item: TmdbResultItem) => ({

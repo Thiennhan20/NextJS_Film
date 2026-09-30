@@ -183,24 +183,13 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // HTML pages và tất cả routes khác - KHÔNG CACHE để luôn có phiên bản mới
+        // HTML pages - cho phép Vercel CDN cache với stale-while-revalidate
+        // Deploy mới sẽ tự động xóa cache cũ (Vercel Instant Purge)
         source: '/(.*)',
         headers: [
           {
             key: 'X-Font-Loading',
             value: 'swap',
-          },
-          {
-            key: 'Cache-Control',
-            value: 'no-cache, no-store, must-revalidate, max-age=0',
-          },
-          {
-            key: 'Pragma',
-            value: 'no-cache',
-          },
-          {
-            key: 'Expires',
-            value: '0',
           },
         ],
       },

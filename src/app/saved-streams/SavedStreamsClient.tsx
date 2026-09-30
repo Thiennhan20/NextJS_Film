@@ -11,8 +11,7 @@ import {
   TvIcon as Tv, 
   FilmIcon as Film, 
   ClockIcon as Clock,
-  SignalIcon as Radio,
-  ExclamationTriangleIcon as AlertTriangle
+  ExclamationTriangleIcon as AlertTriangle,
 } from '@heroicons/react/24/outline';
 import useAuthStore from '@/store/useAuthStore';
 import useAuthHydrated from '@/store/useAuthHydrated';
@@ -48,13 +47,8 @@ export default function SavedStreamsClient() {
 
   const [streamHistory, setStreamHistory] = useState<StreamHistoryItem[]>([]);
   const [loadingStreamHistory, setLoadingStreamHistory] = useState(false);
-  const [creatingHistoryId, setCreatingHistoryId] = useState<string | null>(null);
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState('');
-  const [duplicateInfo, setDuplicateInfo] = useState<{
-    existingRoomId: string;
-    audio: string;
-  } | null>(null);
 
   const fetchStreamHistory = useCallback(async () => {
     if (!isAuthenticated) {
@@ -82,46 +76,22 @@ export default function SavedStreamsClient() {
     }
   }, [hydrated, isAuthenticated, fetchStreamHistory]);
 
-  const handleCreateFromHistory = async (item: StreamHistoryItem) => {
+  const handleCreateFromHistory = (item: StreamHistoryItem) => {
     if (!isAuthenticated) return;
     if (!item.stream_url) return;
 
-    setCreatingHistoryId(item.id);
-    setHistoryError('');
-    setDuplicateInfo(null);
-
-    try {
-      const response = await api.post('/rooms', {
-        title: item.title,
-        stream_url: item.stream_url,
-        movie_id: item.movie_id,
-        audio: item.audio,
-        content_type: item.content_type,
-        season: item.season,
-        episode: item.episode,
-        episode_playlist: item.episode_playlist || [],
-        poster: item.poster || '',
-      });
-
-      const { room_id } = response.data;
-      router.push(`/streaming-room?room=${room_id}`);
-    } catch (err: unknown) {
-      console.error('Error creating room from saved stream:', err);
-      const axiosErr = err as { response?: { data?: { error?: string; code?: string; existing_room_id?: string } } };
-      const errData = axiosErr?.response?.data;
-
-      if (errData?.code === 'DUPLICATE_ROOM') {
-        setDuplicateInfo({
-          existingRoomId: errData.existing_room_id || '',
-          audio: item.audio,
-        });
-        setHistoryError(errData.error || tLobby('duplicateRoomError'));
-      } else {
-        setHistoryError(errData?.error || tLobby('savedStreamCreateFailed'));
-      }
-    } finally {
-      setCreatingHistoryId(null);
-    }
+    // Kéo thẳng qua trang Sảnh với thông tin phim đã lưu
+    const params = new URLSearchParams({
+      streamUrl: item.stream_url,
+      title: item.title,
+      movieId: item.movie_id,
+      poster: item.poster || '',
+      type: item.content_type || 'movie',
+      audio: item.audio || '',
+    });
+    if (item.season) params.set('season', String(item.season));
+    if (item.episode) params.set('episode', String(item.episode));
+    router.push(`/streaming-lobby?${params.toString()}`);
   };
 
   const handleDeleteHistoryItem = async (historyId: string) => {
@@ -232,15 +202,6 @@ export default function SavedStreamsClient() {
                   <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
                   <p className="text-sm font-medium">{historyError}</p>
                 </div>
-                {duplicateInfo?.existingRoomId && (
-                  <button
-                    onClick={() => router.push(`/streaming-room?room=${duplicateInfo.existingRoomId}`)}
-                    className="mt-3 px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-semibold rounded-lg hover:from-yellow-400 hover:to-amber-400 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-yellow-500/20"
-                  >
-                    <Radio className="h-4 w-4 animate-pulse" />
-                    {tLobby('goToExistingRoom')} ({duplicateInfo.existingRoomId})
-                  </button>
-                )}
               </motion.div>
             )}
 
@@ -271,7 +232,6 @@ export default function SavedStreamsClient() {
                 <AnimatePresence mode="popLayout">
                   {streamHistory.map((item, index) => {
                     const isTVShow = item.content_type === 'tvshow';
-                    const isCreatingThis = creatingHistoryId === item.id;
                     const isDeletingThis = deletingHistoryId === item.id;
 
                     return (
@@ -343,17 +303,9 @@ export default function SavedStreamsClient() {
                           </button>
                           <button
                             onClick={() => handleCreateFromHistory(item)}
-                            disabled={isCreatingThis}
                             className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-black text-sm font-bold rounded-xl hover:from-emerald-400 hover:to-teal-400 transition-all shadow-md shadow-emerald-500/10 text-center min-w-[110px]"
                           >
-                            {isCreatingThis ? (
-                              <div className="flex items-center justify-center gap-2">
-                                <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                                <span>{tLobby('creating')}</span>
-                              </div>
-                            ) : (
-                              tLobby('createAgain')
-                            )}
+                            {tLobby('createAgain')}
                           </button>
                         </div>
                       </motion.div>

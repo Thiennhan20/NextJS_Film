@@ -63,7 +63,8 @@
     "waiting": "Chờ",
     "full": "Đầy",
     "join": "Tham Gia",
-    "untitled": "Chưa đặt tên"
+    "untitled": "Chưa đặt tên",
+    "roomFullNotice": "Phòng này hiện đã đầy người xem. Vui lòng thử lại sau!"
   },
   "Entertainment": {
     "movies": "Phim Lẻ",

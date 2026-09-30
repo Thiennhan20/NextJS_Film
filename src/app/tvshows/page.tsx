@@ -3,6 +3,9 @@ import { getMessages } from 'next-intl/server';
 import TVShowsClient from './TVShowsClient';
 import { getRedisClient, buildCacheKey, CACHE_TTL } from '@/lib/redis';
 
+// ISR: Cache trang danh sách phim bộ 5 phút trên Vercel CDN
+export const revalidate = 300;
+
 // TV Show type matching TMDB API response
 interface TMDBTV {
   id: number;

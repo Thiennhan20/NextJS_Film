@@ -181,7 +181,8 @@ api.interceptors.response.use(
       originalRequest.url &&
       !originalRequest.url.includes('/auth/refresh') &&
       !originalRequest.url.includes('/auth/login') &&
-      !originalRequest.url.includes('/auth/google-login')
+      !originalRequest.url.includes('/auth/google-login') &&
+      !originalRequest.url.includes('/verify-password')
     ) {
       setInMemoryToken(null);
       if (typeof window !== 'undefined') {

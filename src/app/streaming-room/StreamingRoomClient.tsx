@@ -6,7 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import {
   ClipboardDocumentIcon as Copy, CheckIcon as Check, ArrowLeftIcon as ArrowLeft, UsersIcon as Users, HashtagIcon as Hash,
-  StarIcon as Crown, LockClosedIcon as Lock, LockOpenIcon as Unlock, ArrowRightOnRectangleIcon as LogOut, SignalIcon as Radio, ClockIcon as Clock, ExclamationTriangleIcon as AlertTriangle, ShareIcon as Share2, ChevronDownIcon as ChevronDown
+  StarIcon as Crown, LockClosedIcon as Lock, LockOpenIcon as Unlock, ArrowRightOnRectangleIcon as LogOut, SignalIcon as Radio, ClockIcon as Clock, ExclamationTriangleIcon as AlertTriangle, ShareIcon as Share2, ChevronDownIcon as ChevronDown,
+  EyeIcon, EyeSlashIcon, UserMinusIcon as UserMinus
 } from '@heroicons/react/24/outline';
 import useAuthStore from '@/store/useAuthStore';
 import EnhancedMoviePlayer from '@/components/common/video-player/EnhancedMoviePlayer';
@@ -114,6 +115,84 @@ function StreamingRoomContent() {
   const [currentEpisode, setCurrentEpisode] = useState<number | null>(null);
   const [episodePlaylist, setEpisodePlaylist] = useState<EpisodePlaylistItem[]>([]);
   const [changingEpisode, setChangingEpisode] = useState<number | null>(null);
+
+  // Password & Unlock States
+  const pwdFromParams = searchParams.get('pwd') || '';
+  const [roomPassword, setRoomPassword] = useState(() => {
+    if (pwdFromParams) return pwdFromParams;
+    if (typeof window !== 'undefined' && roomId) {
+      try {
+        return sessionStorage.getItem(`room_pin_${roomId}`) || '';
+      } catch {
+        return '';
+      }
+    }
+    return '';
+  });
+  const [passwordRequiredModal, setPasswordRequiredModal] = useState(false);
+  const [unlockPasswordInput, setUnlockPasswordInput] = useState('');
+  const [unlockPasswordError, setUnlockPasswordError] = useState('');
+  const [showUnlockPassword, setShowUnlockPassword] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [unlockLockTimer, setUnlockLockTimer] = useState<number>(0);
+
+  // Host-only PIN visibility & copy states
+  const [showHostPin, setShowHostPin] = useState(false);
+  const [copiedPin, setCopiedPin] = useState(false);
+
+  const effectivePin = useMemo(() => {
+    if (!isHost) return '';
+    if (roomStatus?.pin) return roomStatus.pin;
+    if (roomPassword) return roomPassword;
+    if (typeof window !== 'undefined' && roomId) {
+      try {
+        return sessionStorage.getItem(`room_pin_${roomId}`) || '';
+      } catch {
+        return '';
+      }
+    }
+    return '';
+  }, [isHost, roomStatus?.pin, roomPassword, roomId]);
+
+  const handleCopyPin = () => {
+    if (!effectivePin) return;
+    navigator.clipboard.writeText(effectivePin).then(() => {
+      setCopiedPin(true);
+      setTimeout(() => setCopiedPin(false), 2500);
+    });
+  };
+
+  // Sync saved PIN from sessionStorage if roomId becomes available
+  useEffect(() => {
+    if (!roomPassword && roomId && typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem(`room_pin_${roomId}`);
+        if (saved) setRoomPassword(saved);
+      } catch {}
+    }
+  }, [roomId, roomPassword]);
+
+  // Rate-limit countdown timer for unlock modal
+  useEffect(() => {
+    if (unlockLockTimer <= 0) return;
+    const interval = setInterval(() => {
+      setUnlockLockTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setUnlockPasswordError('');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [unlockLockTimer]);
+
+  const formatLockTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+  };
 
   // Helper to accurately identify TV Show vs Movie (movies NEVER show episode controls/banners)
   const isTVShow = useMemo(() => {
@@ -231,6 +310,7 @@ function StreamingRoomContent() {
 
   const {
     isConnected,
+    joinWithPassword,
     emitPlay,
     emitPause,
     emitSeek,
@@ -241,10 +321,29 @@ function StreamingRoomContent() {
     emitHostBuffering,
     emitHostBufferEnd,
     emitChange,
+    emitKick,
     emitLeaveRoom,
   } = useWatchPartySocket({
     roomId,
     token,
+    password: roomPassword,
+
+    onPasswordRequired: () => {
+      setPasswordRequiredModal(true);
+      setUnlockPasswordError('');
+    },
+
+    onInvalidPassword: (data) => {
+      setPasswordRequiredModal(true);
+      if (data?.locked && data?.remaining_seconds) {
+        setUnlockLockTimer(data.remaining_seconds);
+      }
+      if (data?.attempts_left !== undefined && data.attempts_left > 0 && !data.locked) {
+        setUnlockPasswordError(`${t('invalidPassword')} (${t('attemptsLeft', { count: data.attempts_left })})`);
+      } else {
+        setUnlockPasswordError(data?.message || t('invalidPassword'));
+      }
+    },
 
     onRoomStatus: (status) => {
       setRoomStatus(status);
@@ -429,7 +528,7 @@ function StreamingRoomContent() {
     // Drift correction: host sends position every 5s
     // Smooth Syncing: micro-adjust playbackRate instead of harsh pause + seek
     onSyncPosition: ({ position_sec }) => {
-      if (!videoRef.current || isHost) return;
+      if (!videoRef.current || isHost || !forceSync) return;
       const video = videoRef.current;
       const viewerTime = video.currentTime;
       const drift = viewerTime - position_sec; // positive = viewer ahead, negative = viewer behind
@@ -892,8 +991,51 @@ function StreamingRoomContent() {
     setShowChat(false);
   }, []);
 
+  const handleUnlockRoom = async () => {
+    if (!roomId) return;
+    if (unlockLockTimer > 0) return;
+    const cleanPin = unlockPasswordInput.trim();
+    if (!cleanPin) {
+      setUnlockPasswordError(t('enterPassword'));
+      return;
+    }
+    if (cleanPin.length !== 6) {
+      setUnlockPasswordError(t('pinMustBe6Digits'));
+      return;
+    }
+    setIsUnlocking(true);
+    setUnlockPasswordError('');
+    try {
+      const res = await api.post(`/rooms/${encodeURIComponent(roomId)}/verify-password`, {
+        password: cleanPin,
+      });
+      if (res.data?.success) {
+        setRoomPassword(cleanPin);
+        try { sessionStorage.setItem(`room_pin_${roomId}`, cleanPin); } catch {}
+        joinWithPassword(cleanPin);
+        setPasswordRequiredModal(false);
+      } else {
+        setUnlockPasswordError(t('invalidPassword'));
+      }
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number; data?: { error?: string; locked?: boolean; remaining_seconds?: number; attempts_left?: number } } };
+      const data = axiosErr?.response?.data;
+      if (data?.locked && data?.remaining_seconds) {
+        setUnlockLockTimer(data.remaining_seconds);
+      }
+      if (data?.attempts_left !== undefined && data.attempts_left > 0 && !data.locked) {
+        setUnlockPasswordError(`${t('invalidPassword')} (${t('attemptsLeft', { count: data.attempts_left })})`);
+      } else {
+        setUnlockPasswordError(data?.error || t('invalidPassword'));
+      }
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
   const handleCopyInvite = () => {
-    const inviteUrl = `${window.location.origin}/streaming-room?room=${roomId}`;
+    if (!roomId) return;
+    const inviteUrl = `${window.location.origin}/streaming-room?room=${encodeURIComponent(roomId)}`;
     navigator.clipboard.writeText(inviteUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
@@ -1006,124 +1148,241 @@ function StreamingRoomContent() {
       {/* ─── Top HUD Bar (Floating in non-fullscreen) ─── */}
       <div className={`z-40 w-full ${isPlayerFullscreen ? 'bg-black/60 border-b border-gray-800' : 'max-w-7xl mx-auto px-2 sm:px-6 pt-3 shrink-0'}`}>
         <div className={isPlayerFullscreen ? 'px-3 sm:px-6 py-2.5' : 'bg-black/40 backdrop-blur-xl border border-white/[0.05] rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 shadow-2xl'}>
-          {/* Row 1: Back + Room ID + Connection status */}
+          {/* Row 1: Back + Room ID + Actions */}
           <div className="flex items-center justify-between gap-2">
-            {/* Left: Back + Room ID */}
-            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-              <button onClick={() => router.push('/streaming-lobby')} className="flex items-center gap-1 text-gray-400 hover:text-yellow-400 transition-colors text-sm shrink-0">
+            {/* Left: Back + Room ID + Desktop Host PIN */}
+            <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+              <button
+                onClick={() => router.push('/streaming-lobby')}
+                className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1 text-gray-400 hover:text-yellow-400 hover:bg-white/[0.05] rounded-lg transition-all text-sm shrink-0 active:scale-95"
+                title={t('lobby')}
+              >
                 <ArrowLeft className="h-4 w-4" />
-                <span className="hidden sm:inline">{t('lobby')}</span>
+                <span className="hidden sm:inline font-medium text-xs sm:text-sm">{t('lobby')}</span>
               </button>
 
-              <div className="flex items-center gap-1 text-yellow-400 shrink-0 min-w-0">
-                <Hash className="h-3.5 w-3.5 shrink-0" />
-                <span className="text-xs sm:text-sm font-mono font-bold truncate max-w-[80px] sm:max-w-none">{roomId}</span>
-                <button
-                  onClick={handleCopyRoomId}
-                  className="p-0.5 sm:p-1 text-gray-500 hover:text-yellow-400 transition-colors rounded shrink-0"
-                  title={t('copyRoomId')}
-                >
-                  {copiedId ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
-                </button>
-              </div>
+              <button
+                onClick={handleCopyRoomId}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-yellow-500/10 hover:bg-yellow-500/15 border border-yellow-500/25 text-yellow-400 font-mono text-xs font-bold shrink-0 active:scale-95 transition-all shadow-xs"
+                title={t('copyRoomId')}
+              >
+                <Hash className="h-3 w-3 text-yellow-400/80 shrink-0" />
+                <span>{roomId}</span>
+                {copiedId ? (
+                  <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                ) : (
+                  <Copy className="h-3 w-3 text-yellow-400/60 hover:text-yellow-400 shrink-0" />
+                )}
+              </button>
+
+              {/* Host-only Room PIN viewer (Desktop only - inline) */}
+              {isHost && effectivePin && (
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 border border-amber-500/25 rounded-lg text-xs text-amber-300 shadow-sm shrink-0">
+                  <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="text-[11px] text-gray-400 font-medium">PIN:</span>
+                  <span className="font-mono font-bold tracking-wider text-amber-200 min-w-[46px] text-center">
+                    {showHostPin ? effectivePin : '••••••'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowHostPin(!showHostPin)}
+                    className="p-1 text-gray-400 hover:text-white transition-colors rounded hover:bg-white/10"
+                    title={showHostPin ? t('hidePin') : t('showPin')}
+                  >
+                    {showHostPin ? <EyeSlashIcon className="w-3.5 h-3.5" /> : <EyeIcon className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyPin}
+                    className="p-1 text-gray-400 hover:text-amber-300 transition-colors rounded hover:bg-white/10"
+                    title={copiedPin ? t('pinCopied') : t('copyPin')}
+                  >
+                    {copiedPin ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Right: Actions row */}
-            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
               {isHost && (
-                <span className="hidden sm:flex items-center gap-1 text-yellow-400 text-xs font-semibold bg-yellow-500/10 px-2 py-1 rounded-md">
+                <span className="hidden sm:flex items-center gap-1 text-yellow-400 text-xs font-semibold bg-yellow-500/10 border border-yellow-500/20 px-2 py-1 rounded-lg">
                   <Crown className="h-3 w-3 animate-pulse" /> {t('hostBadge')}
                 </span>
               )}
-
 
               {/* Dynamic Member Popover Button */}
               <div className="relative">
                 <button
                   onClick={() => setShowMembers(prev => !prev)}
-                  className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors text-xs px-1.5 sm:px-2 py-1 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-white/[0.08]"
+                  className="flex items-center gap-1 text-gray-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] transition-all text-xs px-2.5 py-1.5 rounded-lg shrink-0 active:scale-95 font-medium min-h-[32px] sm:min-h-0"
                   title={t('viewActiveMembers')}
+                  aria-label={t('viewActiveMembers')}
                 >
-                  <Users className="h-3.5 w-3.5" />
-                  <span>{memberCount}/{roomStatus?.max_users || 2}</span>
-                  <ChevronDown className={`h-3 w-3 transition-transform ${showMembers ? 'rotate-180' : ''}`} />
+                  <Users className="h-3.5 w-3.5 text-gray-400" />
+                  <span className="tabular-nums">{memberCount}/{roomStatus?.max_users || 2}</span>
+                  <ChevronDown className={`h-3 w-3 text-gray-400 transition-transform duration-200 ${showMembers ? 'rotate-180' : ''}`} />
                 </button>
 
                 <AnimatePresence>
                   {showMembers && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute right-0 mt-2 w-48 bg-gray-950/95 backdrop-blur-xl border border-white/[0.08] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.7)] p-2 z-[60]"
-                    >
-                      <div className="text-[10px] text-gray-500 px-2 py-1 uppercase tracking-wider font-semibold border-b border-white/[0.05] mb-1">
-                        {t('activeMembersCount', { count: roomMembers.length })}
-                      </div>
-                      <div className="space-y-0.5 max-h-[160px] overflow-y-auto chat-scrollbar">
-                        {roomMembers.length === 0 ? (
-                          <div className="text-center py-2 text-xs text-gray-600">{t('noMembers')}</div>
-                        ) : (
-                          roomMembers.map(member => (
-                            <div key={member.user_id} className="flex items-center justify-between px-2 py-1 rounded hover:bg-white/[0.03] transition-colors">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                {member.avatar ? (
-                                  <Image
-                                    src={member.avatar}
-                                    alt={member.username}
-                                    width={22}
-                                    height={22}
-                                    unoptimized
-                                    className="w-5.5 h-5.5 rounded-full object-cover shrink-0 shadow-sm border border-gray-600/50"
-                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
-                                  />
-                                ) : null}
-                                <div className={`w-5.5 h-5.5 rounded-full bg-gradient-to-br ${getAvatarGradient(member.user_id)} flex items-center justify-center text-white text-[9px] font-bold shrink-0 shadow-sm ${member.avatar ? 'hidden' : ''}`}>
-                                  {member.username?.charAt(0)?.toUpperCase() || '?'}
+                    <>
+                      {/* Invisible backdrop to dismiss popover on outside click */}
+                      <div className="fixed inset-0 z-[55]" onClick={() => setShowMembers(false)} />
+                      <motion.div
+                        initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute right-0 mt-2 w-48 bg-gray-950/95 backdrop-blur-xl border border-white/[0.08] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.7)] p-2 z-[60]"
+                      >
+                        <div className="text-[10px] text-gray-500 px-2 py-1 uppercase tracking-wider font-semibold border-b border-white/[0.05] mb-1">
+                          {t('activeMembersCount', { count: roomMembers.length })}
+                        </div>
+                        <div className="space-y-0.5 max-h-[160px] overflow-y-auto chat-scrollbar">
+                          {roomMembers.length === 0 ? (
+                            <div className="text-center py-2 text-xs text-gray-600">{t('noMembers')}</div>
+                          ) : (
+                            roomMembers.map(member => (
+                              <div key={member.user_id} className="flex items-center justify-between px-2 py-1 rounded hover:bg-white/[0.03] transition-colors">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  {member.avatar ? (
+                                    <Image
+                                      src={member.avatar}
+                                      alt={member.username}
+                                      width={22}
+                                      height={22}
+                                      unoptimized
+                                      className="w-5.5 h-5.5 rounded-full object-cover shrink-0 shadow-sm border border-gray-600/50"
+                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                                    />
+                                  ) : null}
+                                  <div className={`w-5.5 h-5.5 rounded-full bg-gradient-to-br ${getAvatarGradient(member.user_id)} flex items-center justify-center text-white text-[9px] font-bold shrink-0 shadow-sm ${member.avatar ? 'hidden' : ''}`}>
+                                    {member.username?.charAt(0)?.toUpperCase() || '?'}
+                                  </div>
+                                  <span className="text-xs text-gray-300 truncate max-w-[100px]" title={member.username}>
+                                    {member.username}
+                                  </span>
                                 </div>
-                                <span className="text-xs text-gray-300 truncate max-w-[100px]" title={member.username}>
-                                  {member.username}
-                                </span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {member.is_host && (
+                                    <span title={t('roomHost')} className="shrink-0">
+                                      <Crown className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500/20" />
+                                    </span>
+                                  )}
+                                  {isHost && !member.is_host && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (window.confirm(t('confirmKickUser', { user: member.username }))) {
+                                          emitKick(member.user_id);
+                                          showNotification(t('userKickedNotification', { user: member.username }));
+                                        }
+                                      }}
+                                      className="p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors shrink-0"
+                                      title={t('kickUser', { user: member.username })}
+                                      aria-label={t('kickUser', { user: member.username })}
+                                    >
+                                      <UserMinus className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                              {member.is_host && (
-                                <span title={t('roomHost')} className="shrink-0">
-                                  <Crown className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500/20" />
-                                </span>
-                              )}
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </motion.div>
+                            ))
+                          )}
+                        </div>
+                      </motion.div>
+                    </>
                   )}
                 </AnimatePresence>
               </div>
 
-              <button onClick={handleCopyInvite} className="flex items-center gap-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-all text-xs border border-gray-700">
-                {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Share2 className="h-3.5 w-3.5" />}
+              {/* Share Invite */}
+              <button
+                onClick={handleCopyInvite}
+                className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white transition-all text-xs shrink-0 active:scale-95 font-medium"
+                title={t('shareRoom')}
+              >
+                {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Share2 className="h-3.5 w-3.5 text-gray-300" />}
                 <span className="hidden sm:inline">{copied ? t('copied') : t('share')}</span>
               </button>
 
+              {/* Host Playback Sync Toggle */}
               {isHost && (
-                <button onClick={handleToggleSync} title={forceSync ? t('forceSyncOn') : t('freeSeekOn')}
-                  className={`flex items-center gap-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-xs border transition-all ${forceSync ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' : 'bg-gray-800 text-gray-400 border-gray-700'}`}
+                <button
+                  onClick={handleToggleSync}
+                  title={forceSync ? t('forceSyncOn') : t('freeSeekOn')}
+                  className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1 rounded-lg text-xs border transition-all shrink-0 active:scale-95 font-medium ${
+                    forceSync
+                      ? 'bg-yellow-500/15 text-yellow-400 border-yellow-500/35 shadow-xs shadow-yellow-500/10'
+                      : 'bg-white/[0.04] text-gray-400 hover:text-gray-300 border-white/[0.08]'
+                  }`}
                 >
                   {forceSync ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
                   <span className="hidden sm:inline">{forceSync ? t('syncLabel') : t('freeLabel')}</span>
                 </button>
               )}
 
-              {/* Connection status indicator - mobile: dot only, desktop: dot + text */}
-              <div className="flex items-center gap-1">
+              {/* Connection status indicator */}
+              <div className="flex items-center gap-1.5 shrink-0 px-1" title={isConnected ? t('connected') : t('disconnected')}>
                 {isConnected ? (
-                  <><div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" /><span className="hidden sm:inline text-xs text-green-400">{t('connected')}</span></>
+                  <>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                    </span>
+                    <span className="hidden sm:inline text-xs text-emerald-400 font-medium">{t('connected')}</span>
+                  </>
                 ) : (
-                  <><div className="w-2 h-2 bg-red-400 rounded-full" /><span className="hidden sm:inline text-xs text-red-400">{t('disconnected')}</span></>
+                  <>
+                    <div className="w-2 h-2 bg-red-500 rounded-full" />
+                    <span className="hidden sm:inline text-xs text-red-400 font-medium">{t('disconnected')}</span>
+                  </>
                 )}
               </div>
             </div>
           </div>
+
+          {/* Row 2 (Mobile only): Dedicated Host PIN strip */}
+          {isHost && effectivePin && (
+            <div className="sm:hidden flex items-center pt-2 mt-2 border-t border-white/[0.08] gap-2">
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 shrink-0">
+                <Crown className="w-3 h-3 text-yellow-400" />
+                Host
+              </span>
+
+              {/* Khung mã PIN tích hợp nút mở mã PIN và copy vào bên trong */}
+              <div className="inline-flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-lg text-xs shadow-xs">
+                <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-[11px] text-gray-400 font-medium">PIN:</span>
+                <span className="font-mono font-bold tracking-widest text-amber-200 text-xs min-w-[48px] text-center select-all">
+                  {showHostPin ? effectivePin : '••••••'}
+                </span>
+                <div className="w-[1px] h-3.5 bg-amber-500/20 mx-0.5" />
+                {/* Nút Ẩn/Hiện PIN bên trong khung PIN */}
+                <button
+                  type="button"
+                  onClick={() => setShowHostPin(!showHostPin)}
+                  className="p-1.5 text-gray-400 hover:text-white active:scale-95 transition-all rounded hover:bg-white/10 min-w-[28px] min-h-[28px] flex items-center justify-center"
+                  title={showHostPin ? t('hidePin') : t('showPin')}
+                  aria-label={showHostPin ? t('hidePin') : t('showPin')}
+                >
+                  {showHostPin ? <EyeSlashIcon className="w-3.5 h-3.5 text-amber-400" /> : <EyeIcon className="w-3.5 h-3.5 text-gray-400" />}
+                </button>
+                {/* Nút Sao chép PIN bên trong khung PIN */}
+                <button
+                  type="button"
+                  onClick={handleCopyPin}
+                  className="p-1.5 text-gray-400 hover:text-amber-300 active:scale-95 transition-all rounded hover:bg-white/10 min-w-[28px] min-h-[28px] flex items-center justify-center"
+                  title={copiedPin ? t('pinCopied') : t('copyPin')}
+                  aria-label={copiedPin ? t('pinCopied') : t('copyPin')}
+                >
+                  {copiedPin ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-amber-300/90" />}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1266,10 +1525,11 @@ function StreamingRoomContent() {
                   <span className="text-[10px] sm:text-[11px] text-gray-500">{chatMessages.length}</span>
                   <button
                     onClick={() => setShowChat(false)}
-                    className="text-gray-400 hover:text-white transition-colors p-1 rounded-md hover:bg-gray-700/50"
+                    className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-md hover:bg-gray-700/50 min-w-[32px] min-h-[32px] flex items-center justify-center active:scale-95"
                     title={t('closeChat')}
+                    aria-label={t('closeChat')}
                   >
-                    <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
               </div>
@@ -1282,7 +1542,7 @@ function StreamingRoomContent() {
               >
                 {chatMessages.length === 0 && (
                   <div className="text-center text-gray-600 text-xs py-4 sm:py-8">
-                    No messages yet. Say hi! 👋
+                    {t('noMessagesYet')}
                   </div>
                 )}
 
@@ -1344,10 +1604,10 @@ function StreamingRoomContent() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.9 }}
                     onClick={scrollToBottom}
-                    className="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 bg-yellow-500 text-black px-4 py-1.5 rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.5)] font-semibold text-xs sm:text-sm flex items-center gap-1.5 hover:bg-yellow-400 z-50 transition-colors border border-yellow-600/50"
+                    className="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 bg-yellow-500 text-black px-4 py-1.5 rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.5)] font-semibold text-xs sm:text-sm flex items-center gap-1.5 hover:bg-yellow-400 z-50 transition-colors border border-yellow-600/50 active:scale-95"
                   >
                     <ChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3]" />
-                    New message
+                    {t('newMessage')}
                   </motion.button>
                 )}
               </AnimatePresence>
@@ -1497,6 +1757,85 @@ function StreamingRoomContent() {
           </div>
         )}
       </div>
+      {/* Password Required Unlock Modal */}
+      <AnimatePresence>
+        {passwordRequiredModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="w-full max-w-sm bg-gradient-to-br from-zinc-900 via-zinc-900 to-black border border-amber-500/30 rounded-2xl p-6 shadow-2xl relative text-center"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto mb-3 shadow-lg shadow-amber-500/10">
+                <Lock className="w-7 h-7" />
+              </div>
+
+              <h3 className="text-lg font-bold text-white mb-1">{t('passwordProtectedTitle')}</h3>
+              <p className="text-xs text-gray-400 mb-4">{t('passwordProtectedDesc')}</p>
+
+              <div className="space-y-3">
+                {unlockLockTimer > 0 && (
+                  <div className="flex items-center gap-2.5 p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs text-left">
+                    <Clock className="w-4 h-4 shrink-0 animate-pulse text-amber-400" />
+                    <span className="font-medium">{t('rateLimitedMessage', { time: formatLockTime(unlockLockTimer) })}</span>
+                  </div>
+                )}
+
+                <div className="relative">
+                  <input
+                    type={showUnlockPassword ? 'text' : 'password'}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    disabled={unlockLockTimer > 0 || isUnlocking}
+                    value={unlockPasswordInput}
+                    onChange={(e) => {
+                      setUnlockPasswordInput(e.target.value.replace(/\D/g, '').slice(0, 6));
+                      setUnlockPasswordError('');
+                    }}
+                    placeholder={t('enterPassword')}
+                    className="w-full px-4 py-2.5 pr-10 bg-zinc-950/80 border border-white/15 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/60 font-mono text-center tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
+                    autoFocus
+                    onKeyDown={(e) => e.key === 'Enter' && handleUnlockRoom()}
+                  />
+                  <button
+                    type="button"
+                    disabled={unlockLockTimer > 0}
+                    onClick={() => setShowUnlockPassword(!showUnlockPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white disabled:opacity-40"
+                  >
+                    {showUnlockPassword ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {unlockPasswordError && (
+                  <p className="text-xs text-red-400 bg-red-950/40 p-2 rounded-lg border border-red-500/20">{unlockPasswordError}</p>
+                )}
+
+                <div className="flex gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => router.push('/streaming-lobby')}
+                    className="flex-1 py-2.5 px-3 bg-zinc-800 hover:bg-zinc-700 text-gray-300 font-semibold text-xs rounded-xl transition-all"
+                  >
+                    {t('backToLobby')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleUnlockRoom}
+                    disabled={isUnlocking || unlockLockTimer > 0}
+                    className="flex-1 py-2.5 px-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold text-xs rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-1.5 active:scale-98"
+                  >
+                    {isUnlocking ? <div className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <Unlock className="w-3.5 h-3.5" />}
+                    <span>{t('unlockRoom')}</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
