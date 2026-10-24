@@ -54,7 +54,7 @@ export default function GameRealtimePage() {
   }
 
   const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-  const gameBaseUrl = isDevelopment ? 'http://localhost:3002' : 'https://ntngame.fly.dev';
+  const gameBaseUrl = isDevelopment ? 'http://localhost:3002' : 'https://p01--game-app--znbny2j8c2gp.code.run';
   const iframeSrc = `${gameBaseUrl}?token=${encodeURIComponent(activeToken || '')}&locale=${locale}`;
 
   return (

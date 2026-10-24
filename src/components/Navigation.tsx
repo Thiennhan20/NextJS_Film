@@ -115,7 +115,7 @@ export default function Navigation() {
   const prefetchGameRooms = async () => {
     try {
       const isDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-      const gameApiUrl = isDev ? 'http://localhost:8080/api/rooms' : 'https://ntngame.fly.dev/api/rooms';
+      const gameApiUrl = isDev ? 'http://localhost:8080/api/rooms' : 'https://p01--game-app--znbny2j8c2gp.code.run/api/rooms';
       const res = await fetch(gameApiUrl, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
