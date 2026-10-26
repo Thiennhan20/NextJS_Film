@@ -26,6 +26,8 @@ export type NotificationType = 'comment_liked' | 'comment_replied' | 'version_up
 
 interface NotificationActor {
   _id: string
+  username?: string
+  hashId?: string
   name?: string
   email?: string
   avatar?: string
@@ -361,7 +363,7 @@ export default function NotificationBell({ compact = false }: NotificationBellPr
     }
 
     if (notification.type === 'friend_accept') {
-      return `/profile/${notification.actor?._id}`
+      return `/profile/${notification.actor?.username || notification.actor?.hashId || notification.actor?._id}`
     }
 
     if (notification.type !== 'comment_liked' && notification.type !== 'comment_replied') {

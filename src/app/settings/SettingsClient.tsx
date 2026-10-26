@@ -178,9 +178,15 @@ export default function SettingsClient() {
                   <>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 bg-gray-800/50 rounded-lg sm:rounded-xl border border-gray-700/50">
                       <div className="mb-2 sm:mb-0 min-w-0 flex-1">
-                        <p className="text-gray-400 text-xs sm:text-sm mb-1">{t('userId')}</p>
-                        <p className="text-white font-mono text-xs sm:text-sm break-all">{user!.id}</p>
+                        <p className="text-gray-400 text-xs sm:text-sm mb-1">Username</p>
+                        <p className="text-white font-mono text-xs sm:text-sm break-all">@{user!.username || 'N/A'}</p>
                       </div>
+                      <Link
+                        href="/profile"
+                        className="text-xs text-red-400 hover:text-red-300 transition-colors font-medium mt-1 sm:mt-0"
+                      >
+                        Đổi username
+                      </Link>
                     </div>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 bg-gray-800/50 rounded-lg sm:rounded-xl border border-gray-700/50">
                       <div className="mb-2 sm:mb-0 min-w-0 flex-1">

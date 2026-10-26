@@ -26,8 +26,10 @@ interface Comment {
   userId: {
     _id: string
     name: string
-    email: string
+    email?: string
     avatar?: string
+    username?: string
+    hashId?: string
   }
   content: string
   createdAt: string
@@ -41,6 +43,8 @@ interface Comment {
     _id: string
     name: string
     avatar?: string
+    username?: string
+    hashId?: string
   } | string
   replyToComment?: string | { _id: string }
 }
@@ -890,7 +894,7 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
             >
               <div className="flex items-start gap-3 sm:gap-4">
                 <Link
-                  href={`/profile/${comment.userId?._id || comment.userId}`}
+                  href={`/profile/${comment.userId?.username || comment.userId?.hashId || comment.userId?._id || comment.userId}`}
                   className="flex-shrink-0 self-start block w-8 h-8 sm:w-10 sm:h-10 rounded-full overflow-hidden hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-red-500/50 cursor-pointer"
                   aria-label={comment.userId?.name || t('unknownUser')}
                 >
@@ -915,7 +919,7 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start sm:items-center justify-between gap-2 mb-2">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
-                      <Link href={`/profile/${comment.userId?._id || comment.userId}`} className="block max-w-full"><h4 className="font-semibold text-white hover:text-red-400 transition-colors truncate text-sm sm:text-base">{comment.userId?.name || t('unknownUser')}</h4></Link>
+                      <Link href={`/profile/${comment.userId?.username || comment.userId?.hashId || comment.userId?._id || comment.userId}`} className="block max-w-full"><h4 className="font-semibold text-white hover:text-red-400 transition-colors truncate text-sm sm:text-base">{comment.userId?.name || t('unknownUser')}</h4></Link>
                       <span className="text-gray-400 text-xs sm:text-sm flex items-center gap-1">
                         <ClockIcon className="h-3 w-3" />
                         {formatTimeAgo(comment.createdAt)}
@@ -1062,7 +1066,7 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                             }`}
                           >
                             <Link
-                              href={`/profile/${reply.userId?._id || reply.userId}`}
+                              href={`/profile/${reply.userId?.username || reply.userId?.hashId || reply.userId?._id || reply.userId}`}
                               className="flex-shrink-0 self-start block w-6 h-6 sm:w-8 sm:h-8 rounded-full overflow-hidden hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-red-500/50 cursor-pointer"
                               aria-label={reply.userId?.name || t('unknownUser')}
                             >
@@ -1087,7 +1091,7 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                             <div className="flex-1 min-w-0">
                               <div className="mb-1 flex items-start justify-between gap-2">
                                 <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-                                  <Link href={`/profile/${reply.userId?._id || reply.userId}`} className="block max-w-full"><h5 className="font-medium text-white hover:text-red-400 transition-colors text-xs sm:text-sm truncate">{reply.userId?.name || t('unknownUser')}</h5></Link>
+                                  <Link href={`/profile/${reply.userId?.username || reply.userId?.hashId || reply.userId?._id || reply.userId}`} className="block max-w-full"><h5 className="font-medium text-white hover:text-red-400 transition-colors text-xs sm:text-sm truncate">{reply.userId?.name || t('unknownUser')}</h5></Link>
                                   <span className="text-gray-400 text-xs flex items-center gap-1">
                                     <ClockIcon className="h-3 w-3" />
                                     {formatTimeAgo(reply.createdAt)}

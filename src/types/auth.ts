@@ -1,10 +1,14 @@
 export interface User {
   id: string;
+  _id?: string;
+  username?: string;
+  hashId?: string;
   name: string;
   email: string;
   avatar?: string;
   originalAvatar?: string;
   authType?: string;
+  usernameChangedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -23,6 +23,8 @@ import { PlayCircleIcon } from '@heroicons/react/24/solid'
 
 interface PublicUser {
   _id: string;
+  hashId?: string;
+  username?: string;
   name: string;
   avatar: string;
   createdAt: string;
@@ -57,71 +59,38 @@ export default function PublicProfileClient({ userId }: { userId: string }) {
 
   // Nếu userId trùng với người đang đăng nhập, chuyển hướng về trang profile cá nhân
   useEffect(() => {
-    if (hydrated && isAuthenticated && authUser && authUser.id === userId) {
+    if (!hydrated || !isAuthenticated || !authUser) return
+    const isSelf =
+      (authUser.username && authUser.username.toLowerCase() === userId.toLowerCase()) ||
+      authUser.id === userId ||
+      authUser._id === userId ||
+      (profileUser && (profileUser._id === authUser.id || profileUser._id === authUser._id))
+
+    if (isSelf) {
       router.replace('/profile')
     }
-  }, [hydrated, isAuthenticated, authUser, userId, router])
+  }, [hydrated, isAuthenticated, authUser, userId, profileUser, router])
 
-  // Fetch friend status
-  const fetchFriendStatus = useCallback(async () => {
-    if (!isAuthenticated) return
+  // Fetch public profile (includes user, recentlyWatched, and friendStatus in a single fast call)
+  const fetchProfile = useCallback(async () => {
     try {
-      const friendsRes = await api.get('/friends')
-      const { friends, friendRequests, sentFriendRequests } = friendsRes.data;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (friends.some((f: any) => f._id === userId)) {
-        setFriendStatus('friends');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } else if (sentFriendRequests.some((f: any) => f._id === userId)) {
-        setFriendStatus('request_sent');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } else if (friendRequests.some((f: any) => f._id === userId)) {
-        setFriendStatus('request_received');
-      } else {
-        setFriendStatus('none');
+      setLoading(true)
+      const response = await api.get(`/auth/profile/${userId}`)
+      setProfileUser(response.data.user)
+      setRecentlyWatched(response.data.recentlyWatched || [])
+      if (response.data.friendStatus) {
+        setFriendStatus(response.data.friendStatus)
       }
-    } catch (e) {
-      console.error('Error fetching friend status:', e);
+    } catch (error) {
+      console.error('Error fetching public profile:', error)
+    } finally {
+      setLoading(false)
     }
-  }, [isAuthenticated, userId])
+  }, [userId])
 
-  // Fetch public profile
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const response = await api.get(`/auth/profile/${userId}`)
-        setProfileUser(response.data.user)
-        setRecentlyWatched(response.data.recentlyWatched || [])
-        await fetchFriendStatus()
-      } catch (error) {
-        console.error('Error fetching public profile:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchProfile()
-  }, [userId, isAuthenticated, fetchFriendStatus])
-
-  // Re-fetch friend status when user returns to this tab
-  useEffect(() => {
-    if (!isAuthenticated) return
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        fetchFriendStatus()
-      }
-    }
-    const handleFocus = () => {
-      fetchFriendStatus()
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('focus', handleFocus)
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('focus', handleFocus)
-    }
-  }, [isAuthenticated, userId, fetchFriendStatus])
+  }, [fetchProfile])
 
   // Calculate account age
   const accountAge = useMemo(() => {
@@ -176,23 +145,30 @@ export default function PublicProfileClient({ userId }: { userId: string }) {
       return;
     }
     
+    const targetId = profileUser?.username || profileUser?.hashId || profileUser?._id || userId;
+    const prevStatus = friendStatus;
+
+    if (friendStatus === 'friends') {
+      setShowConfirm(true);
+      return;
+    }
+
     try {
       if (friendStatus === 'none') {
-        await api.post(`/friends/request/${userId}`);
-        toast.success(t('requestSentSuccess'));
         setFriendStatus('request_sent');
+        toast.success(t('requestSentSuccess'));
+        await api.post(`/friends/request/${targetId}`);
       } else if (friendStatus === 'request_sent') {
-        await api.post(`/friends/cancel/${userId}`);
-        toast.success(t('cancelRequestSuccess'));
         setFriendStatus('none');
+        toast.success(t('cancelRequestSuccess'));
+        await api.post(`/friends/cancel/${targetId}`);
       } else if (friendStatus === 'request_received') {
-        await api.post(`/friends/accept/${userId}`);
-        toast.success(t('acceptRequestSuccess'));
         setFriendStatus('friends');
-      } else if (friendStatus === 'friends') {
-        setShowConfirm(true);
+        toast.success(t('acceptRequestSuccess'));
+        await api.post(`/friends/accept/${targetId}`);
       }
     } catch (error) {
+      setFriendStatus(prevStatus);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       toast.error((error as any).response?.data?.message || t('actionError'));
     }
@@ -200,11 +176,16 @@ export default function PublicProfileClient({ userId }: { userId: string }) {
 
   const handleConfirmRemoveFriend = async () => {
     setShowConfirm(false);
+    const targetId = profileUser?.username || profileUser?.hashId || profileUser?._id || userId;
+    const prevStatus = friendStatus;
+
+    setFriendStatus('none');
+    toast.success(t('unfriendSuccess'));
+
     try {
-      await api.delete(`/friends/${userId}`);
-      toast.success(t('unfriendSuccess'));
-      setFriendStatus('none');
+      await api.delete(`/friends/${targetId}`);
     } catch (error) {
+      setFriendStatus(prevStatus);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       toast.error((error as any).response?.data?.message || t('actionError'));
     }
@@ -282,9 +263,16 @@ export default function PublicProfileClient({ userId }: { userId: string }) {
                   </div>
 
                   <div className="flex-1 text-center sm:text-left flex flex-col justify-center py-2">
-                    <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-2 sm:mb-3 break-words tracking-tight">
-                      {profileUser.name}
-                    </h2>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-2 sm:mb-3">
+                      <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white break-words tracking-tight">
+                        {profileUser.name}
+                      </h2>
+                      {profileUser.username && (
+                        <span className="text-xs sm:text-sm text-red-400 font-medium bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full w-fit mx-auto sm:mx-0">
+                          @{profileUser.username}
+                        </span>
+                      )}
+                    </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-center sm:justify-start gap-2 text-gray-300">
                         <CalendarIcon className="w-4 h-4 lg:w-5 lg:h-5 text-gray-400 flex-shrink-0" />
