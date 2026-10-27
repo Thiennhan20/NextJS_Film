@@ -533,38 +533,8 @@ export default function FloatingChatbox() {
     if (!isOpen) return
     if (isAtBottomRef.current) {
       scrollToBottom('auto')
-      const raf = requestAnimationFrame(() => {
-        if (isAtBottomRef.current) scrollToBottom('auto')
-      })
-      const t1 = setTimeout(() => {
-        if (isAtBottomRef.current) scrollToBottom('auto')
-      }, 60)
-      return () => {
-        cancelAnimationFrame(raf)
-        clearTimeout(t1)
-      }
     }
   }, [messages, isLoadingChat, streamingContent, isOpen, scrollToBottom])
-
-  // MutationObserver bắt các thay đổi nở chiều cao của nội dung khi AI đang streaming
-  useEffect(() => {
-    if (!isOpen || !isLoadingChat) return
-    const container = chatMessagesContainerRef.current
-    if (!container) return
-
-    const doScroll = () => {
-      if (isAtBottomRef.current) {
-        requestAnimationFrame(() => scrollToBottom('auto'))
-      }
-    }
-
-    const mutObs = new MutationObserver(doScroll)
-    mutObs.observe(container, { childList: true, subtree: true, characterData: true })
-
-    return () => {
-      mutObs.disconnect()
-    }
-  }, [isOpen, isLoadingChat, scrollToBottom])
 
   // Cuộn lại khi ảnh poster load xong
   const handleImageLoad = useCallback(() => {
@@ -761,6 +731,7 @@ export default function FloatingChatbox() {
     const decoder = new TextDecoder();
     let buffer = '';
     let fullText = '';
+    let lastRenderTime = 0;
 
     while (true) {
       if (signal?.aborted) {
@@ -786,12 +757,19 @@ export default function FloatingChatbox() {
           }
           if (parsed.text) {
             fullText += parsed.text;
-            setStreamingContent(fullText);
+            const now = performance.now();
+            if (now - lastRenderTime > 35) {
+              lastRenderTime = now;
+              setStreamingContent(fullText);
+            }
           }
         } catch {
           // Bỏ qua chunk JSON lỗi
         }
       }
+    }
+    if (fullText) {
+      setStreamingContent(fullText);
     }
     return fullText || null;
   }, []);
@@ -895,6 +873,17 @@ export default function FloatingChatbox() {
       markdownCache.set(content, cleanHtml)
     }
     return cleanHtml
+  }, [markedModule])
+
+  // Render nhanh cho nội dung đang streaming: không chạy DOMParser nặng trên từng ký tự
+  const renderStreamingMarkdown = useCallback((content: string) => {
+    if (!markedModule) return content
+    try {
+      const rawHtml = markedModule.parse(content)
+      return rawHtml.replace(/<(script|iframe|object|embed|form|link|style|meta)[^>]*>.*?<\/\1>|<(script|iframe|object|embed|form|link|style|meta)[^>]*\/?>/gi, '')
+    } catch {
+      return content
+    }
   }, [markedModule])
 
   return (
@@ -1173,7 +1162,7 @@ export default function FloatingChatbox() {
                       <div className="max-w-[85%] sm:max-w-[80%] p-3.5 rounded-2xl bg-gray-800/90 border border-gray-700/60 text-gray-100 rounded-bl-sm shadow-md break-words">
                         <div 
                           className="ai-response-content prose prose-invert max-w-none text-sm leading-relaxed prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:my-2 prose-strong:text-white prose-strong:font-semibold" 
-                          dangerouslySetInnerHTML={{ __html: renderMarkdown(streamingContent) }} 
+                          dangerouslySetInnerHTML={{ __html: renderStreamingMarkdown(streamingContent) }} 
                         />
                         <span className="inline-block w-2 h-4 bg-rose-400 ml-1 align-middle animate-pulse rounded-sm" />
                       </div>
