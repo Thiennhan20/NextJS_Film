@@ -12,10 +12,26 @@ import {
   CheckIcon,
   MicrophoneIcon,
   StopIcon,
-  SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { ChevronUpIcon } from '@heroicons/react/24/solid'
 import { useUIStore } from '@/store/store'
+
+// Hạn lưu lịch sử trò chuyện: Đúng 1 ngày (24 giờ = 86,400,000 ms) theo yêu cầu
+const CHAT_STORAGE_KEY = 'ntn_chatMessages'
+const ONE_DAY_MS = 24 * 60 * 60 * 1000
+
+interface SpeechRecognitionLike {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: ((event: { results: { [index: number]: { [index: number]: { transcript: string } } } }) => void) | null
+  onerror: (() => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
 
 // Hàm lọc và làm sạch mã HTML từ Markdown để ngăn chặn lỗ hổng XSS
 function sanitizeHtml(html: string): string {
@@ -166,21 +182,25 @@ const ChatInputForm = memo(forwardRef<ChatInputHandle, ChatInputFormProps>(funct
   const [isListening, setIsListening] = useState(false)
   const [isSpeechSupported, setIsSpeechSupported] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const recognitionRef = useRef<any>(null)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
 
   // Kiểm tra hỗ trợ Web Speech API trên trình duyệt
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-      if (SpeechRecognition) {
+      const win = window as unknown as {
+        SpeechRecognition?: SpeechRecognitionConstructor
+        webkitSpeechRecognition?: SpeechRecognitionConstructor
+      }
+      const SpeechRecognitionClass = win.SpeechRecognition || win.webkitSpeechRecognition
+      if (SpeechRecognitionClass) {
         setIsSpeechSupported(true)
         try {
-          const recognition = new SpeechRecognition()
+          const recognition = new SpeechRecognitionClass()
           recognition.continuous = false
           recognition.interimResults = false
           recognition.lang = 'vi-VN'
 
-          recognition.onresult = (event: any) => {
+          recognition.onresult = (event) => {
             const transcript = event.results?.[0]?.[0]?.transcript || ''
             if (transcript) {
               setInputMessage(prev => prev ? `${prev} ${transcript}` : transcript)
@@ -335,10 +355,6 @@ export default function FloatingChatbox() {
 
   // Kiểm tra biến toàn cục khi xem phim full
   const isWatchingFullMovie = typeof window !== 'undefined' && (window as { isWatchingFullMovie?: boolean }).isWatchingFullMovie
-
-  // Hạn lưu lịch sử trò chuyện: Đúng 1 ngày (24 giờ = 86,400,000 ms) theo yêu cầu
-  const CHAT_STORAGE_KEY = 'ntn_chatMessages'
-  const ONE_DAY_MS = 24 * 60 * 60 * 1000
 
   // Hydration sync: Nạp tin nhắn từ localStorage và tự động dọn dẹp nếu đã quá 1 ngày
   useEffect(() => {
@@ -693,8 +709,8 @@ export default function FloatingChatbox() {
         signal: signal || AbortSignal.timeout(30000)
       });
       if (!response.ok) throw new Error(`Direct failed: ${response.status}`);
-    } catch (err: any) {
-      if (err.name === 'AbortError') throw err;
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') throw err;
       response = await fetch(fallback, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -728,8 +744,8 @@ export default function FloatingChatbox() {
         signal: signal || AbortSignal.timeout(30000)
       });
       if (!response.ok) throw new Error(`Direct failed: ${response.status}`);
-    } catch (err: any) {
-      if (err.name === 'AbortError') throw err;
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') throw err;
       response = await fetch(fallback, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -831,8 +847,8 @@ export default function FloatingChatbox() {
       let assistantMessageContent: string | null = null;
       try {
         assistantMessageContent = await fetchStreamReply(payload, movieContext, controller.signal);
-      } catch (streamErr: any) {
-        if (streamErr.name === 'AbortError') return;
+      } catch (streamErr: unknown) {
+        if (streamErr instanceof Error && streamErr.name === 'AbortError') return;
         console.warn('[Chat] Stream lỗi, chuyển sang non-stream:', streamErr);
       }
 
@@ -851,8 +867,8 @@ export default function FloatingChatbox() {
         setTimeout(() => scrollToBottom('auto'), 50);
       }
 
-    } catch (err: any) {
-      if (err.name === 'AbortError') return;
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       setMessages(prev => [...prev, { 
         role: 'assistant', 
         content: 'Không thể kết nối đến máy chủ AI vào lúc này. Vui lòng thử lại sau ít phút! 🎬' 
