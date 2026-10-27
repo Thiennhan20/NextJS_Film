@@ -3,11 +3,27 @@ import { NextRequest } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
-const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL 
-  || process.env.API_URL 
-  || (process.env.NODE_ENV === 'production' 
-      ? 'https://server-nextjs-film.onrender.com/api' 
-      : 'http://localhost:3001/api');
+// Helper chuẩn hóa URL Backend: Trên production (Vercel) tuyệt đối không dùng localhost
+function getBackendApiUrl(): string {
+  const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+  let envUrl = process.env.BACKEND_API_URL || process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '';
+
+  if (isProd) {
+    if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
+      return 'https://server-nextjs-film.onrender.com/api';
+    }
+  } else {
+    if (!envUrl) {
+      return 'http://localhost:3001/api';
+    }
+  }
+
+  envUrl = envUrl.trim().replace(/\/+$/, '');
+  if (!envUrl.endsWith('/api')) {
+    envUrl = `${envUrl}/api`;
+  }
+  return envUrl;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,9 +65,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Thử kết nối tới backend SSE stream
-    const backendStreamEndpoint = BACKEND_API_URL.endsWith('/api') 
-      ? `${BACKEND_API_URL}/chatai/stream` 
-      : `${BACKEND_API_URL}/api/chatai/stream`;
+    const backendBaseUrl = getBackendApiUrl();
+    const backendStreamEndpoint = `${backendBaseUrl}/chatai/stream`;
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 12000) // 12s timeout
@@ -84,9 +99,7 @@ export async function POST(request: NextRequest) {
 
     // 3. Graceful Fallback: Gọi non-stream và stream từng từ qua SSE về client
     // Giúp loại bỏ 100% lỗi đỏ 500 trên Vercel và vẫn giữ hiệu ứng gõ chữ thời gian thực
-    const backendChatEndpoint = BACKEND_API_URL.endsWith('/api') 
-      ? `${BACKEND_API_URL}/chat` 
-      : `${BACKEND_API_URL}/api/chat`;
+    const backendChatEndpoint = `${backendBaseUrl}/chat`;
 
     let replyText = '';
     try {

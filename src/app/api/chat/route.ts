@@ -1,12 +1,27 @@
 // Backend API Route - src/app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 
-// URL Express backend (ưu tiên biến môi trường, fallback production Render / local)
-const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL 
-  || process.env.API_URL 
-  || (process.env.NODE_ENV === 'production' 
-      ? 'https://server-nextjs-film.onrender.com/api' 
-      : 'http://localhost:3001/api');
+// Helper chuẩn hóa URL Backend: Trên production (Vercel) tuyệt đối không dùng localhost
+function getBackendApiUrl(): string {
+  const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+  let envUrl = process.env.BACKEND_API_URL || process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '';
+
+  if (isProd) {
+    if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
+      return 'https://server-nextjs-film.onrender.com/api';
+    }
+  } else {
+    if (!envUrl) {
+      return 'http://localhost:3001/api';
+    }
+  }
+
+  envUrl = envUrl.trim().replace(/\/+$/, '');
+  if (!envUrl.endsWith('/api')) {
+    envUrl = `${envUrl}/api`;
+  }
+  return envUrl;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,13 +63,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 2. Chuyển tiếp (Proxy) tới Backend Render (chứa Vertex AI Gemini 2.5)
-    // Giúp giảm tải 100% thời gian xử lý AI trên Vercel CPU
+    // 2. Chuyển tiếp (Proxy) tới Backend Render
     try {
-      // Chuẩn hóa endpoint: nếu BACKEND_API_URL đã có /api thì gọi /chat hoặc /chatai/chat
-      const backendChatEndpoint = BACKEND_API_URL.endsWith('/api') 
-        ? `${BACKEND_API_URL}/chat` 
-        : `${BACKEND_API_URL}/api/chat`;
+      const backendBaseUrl = getBackendApiUrl();
+      const backendChatEndpoint = `${backendBaseUrl}/chat`;
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s cho Render cold start
