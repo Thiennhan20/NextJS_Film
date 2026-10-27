@@ -10,6 +10,9 @@ import {
   ArrowDownIcon,
   ClipboardDocumentIcon,
   CheckIcon,
+  MicrophoneIcon,
+  StopIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { ChevronUpIcon } from '@heroicons/react/24/solid'
 import { useUIStore } from '@/store/store'
@@ -39,9 +42,33 @@ function sanitizeHtml(html: string): string {
         }
       })
       if (el.tagName === 'A') {
-        el.setAttribute('target', '_blank')
-        el.setAttribute('rel', 'noopener noreferrer')
-        el.classList.add('text-rose-400', 'underline', 'hover:text-rose-300', 'font-medium')
+        const href = el.getAttribute('href') || ''
+        if (href.startsWith('/search') || href.startsWith('/movies') || href.startsWith('/watch')) {
+          el.classList.add(
+            'inline-flex',
+            'items-center',
+            'gap-1.5',
+            'px-2.5',
+            'py-1',
+            'my-1',
+            'rounded-lg',
+            'bg-red-500/20',
+            'hover:bg-red-500/30',
+            'border',
+            'border-red-500/40',
+            'text-red-300',
+            'hover:text-white',
+            'text-xs',
+            'font-semibold',
+            'transition-all',
+            'no-underline',
+            'shadow-sm'
+          )
+        } else {
+          el.setAttribute('target', '_blank')
+          el.setAttribute('rel', 'noopener noreferrer')
+          el.classList.add('text-rose-400', 'underline', 'hover:text-rose-300', 'font-medium')
+        }
       }
       if (el.tagName === 'IMG') {
         el.setAttribute('loading', 'lazy')
@@ -126,16 +153,69 @@ export interface ChatInputHandle {
 
 interface ChatInputFormProps {
   onSendMessage: (text: string) => void
+  onStopGeneration?: () => void
   isLoadingChat: boolean
   placeholder?: string
 }
 
 const ChatInputForm = memo(forwardRef<ChatInputHandle, ChatInputFormProps>(function ChatInputForm(
-  { onSendMessage, isLoadingChat, placeholder = 'Hỏi về phim, diễn viên hoặc nhờ gợi ý phim...' },
+  { onSendMessage, onStopGeneration, isLoadingChat, placeholder = 'Hỏi về phim, diễn viên hoặc nhờ gợi ý phim...' },
   ref
 ) {
   const [inputMessage, setInputMessage] = useState('')
+  const [isListening, setIsListening] = useState(false)
+  const [isSpeechSupported, setIsSpeechSupported] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const recognitionRef = useRef<any>(null)
+
+  // Kiểm tra hỗ trợ Web Speech API trên trình duyệt
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      if (SpeechRecognition) {
+        setIsSpeechSupported(true)
+        try {
+          const recognition = new SpeechRecognition()
+          recognition.continuous = false
+          recognition.interimResults = false
+          recognition.lang = 'vi-VN'
+
+          recognition.onresult = (event: any) => {
+            const transcript = event.results?.[0]?.[0]?.transcript || ''
+            if (transcript) {
+              setInputMessage(prev => prev ? `${prev} ${transcript}` : transcript)
+            }
+            setIsListening(false)
+          }
+
+          recognition.onerror = () => {
+            setIsListening(false)
+          }
+
+          recognition.onend = () => {
+            setIsListening(false)
+          }
+
+          recognitionRef.current = recognition
+        } catch {}
+      }
+    }
+  }, [])
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) return
+    if (isListening) {
+      recognitionRef.current.stop()
+      setIsListening(false)
+    } else {
+      try {
+        recognitionRef.current.start()
+        setIsListening(true)
+      } catch {
+        setIsListening(false)
+      }
+    }
+  }
 
   useImperativeHandle(ref, () => ({
     setValue: (val: string) => {
@@ -157,25 +237,59 @@ const ChatInputForm = memo(forwardRef<ChatInputHandle, ChatInputFormProps>(funct
 
   return (
     <form onSubmit={handleSubmit} className="p-3.5 sm:p-4 border-t border-gray-800 bg-gray-900/60 backdrop-blur-md flex-shrink-0">
-      <div className="flex gap-2">
-        <input
-          ref={inputRef}
-          type="text"
-          value={inputMessage}
-          onChange={(e) => setInputMessage(e.target.value)}
-          placeholder={placeholder}
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-          className="flex-1 min-h-[44px] bg-gray-800/80 border border-gray-700/60 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/70 focus:border-red-500 placeholder-gray-400 transition-colors"
-        />
-        <button
-          type="submit"
-          disabled={isLoadingChat || !inputMessage.trim()}
-          className="min-h-[44px] min-w-[70px] bg-gradient-to-r from-red-600 to-rose-600 text-white px-5 py-2.5 rounded-xl font-medium text-sm hover:from-red-500 hover:to-rose-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-md hover:shadow-red-600/20 active:scale-95"
-        >
-          Gửi
-        </button>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 flex items-center">
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            placeholder={isListening ? '🎙️ Đang lắng nghe giọng nói của bạn...' : placeholder}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            className={`w-full min-h-[44px] bg-gray-800/80 border ${
+              isListening ? 'border-red-500/80 ring-2 ring-red-500/40 text-rose-200' : 'border-gray-700/60 text-white'
+            } rounded-xl pl-4 pr-11 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/70 focus:border-red-500 placeholder-gray-400 transition-colors`}
+          />
+          {isSpeechSupported && (
+            <button
+              type="button"
+              onClick={toggleListening}
+              disabled={isLoadingChat}
+              className={`absolute right-2 p-1.5 rounded-lg transition-colors ${
+                isListening
+                  ? 'text-red-400 bg-red-500/20 animate-pulse'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700/60'
+              } disabled:opacity-30`}
+              title={isListening ? 'Dừng ghi âm' : 'Nhập bằng giọng nói (Tiếng Việt)'}
+              aria-label="Nhập giọng nói"
+            >
+              <MicrophoneIcon className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
+        {isLoadingChat ? (
+          <button
+            type="button"
+            onClick={onStopGeneration}
+            className="min-h-[44px] min-w-[76px] bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-red-500/60 text-red-400 hover:text-red-300 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-md active:scale-95 flex-shrink-0"
+            title="Dừng tạo câu trả lời"
+            aria-label="Dừng tạo câu trả lời"
+          >
+            <StopIcon className="w-4 h-4 fill-current text-red-400" />
+            <span>Dừng</span>
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!inputMessage.trim()}
+            className="min-h-[44px] min-w-[70px] bg-gradient-to-r from-red-600 to-rose-600 text-white px-5 py-2.5 rounded-xl font-medium text-sm hover:from-red-500 hover:to-rose-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-md hover:shadow-red-600/20 active:scale-95 flex-shrink-0"
+          >
+            Gửi
+          </button>
+        )}
       </div>
     </form>
   )
@@ -222,23 +336,47 @@ export default function FloatingChatbox() {
   // Kiểm tra biến toàn cục khi xem phim full
   const isWatchingFullMovie = typeof window !== 'undefined' && (window as { isWatchingFullMovie?: boolean }).isWatchingFullMovie
 
-  // Hydration sync: Nạp tin nhắn từ localStorage sau khi component mount trên client
+  // Hạn lưu lịch sử trò chuyện: Đúng 1 ngày (24 giờ = 86,400,000 ms) theo yêu cầu
+  const CHAT_STORAGE_KEY = 'ntn_chatMessages'
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000
+
+  // Hydration sync: Nạp tin nhắn từ localStorage và tự động dọn dẹp nếu đã quá 1 ngày
   useEffect(() => {
     setIsHydrated(true)
     if (typeof window !== 'undefined') {
       try {
-        const storedMessages = localStorage.getItem('ntn_chatMessages')
-        if (storedMessages) {
-          setMessages(JSON.parse(storedMessages))
+        const raw = localStorage.getItem(CHAT_STORAGE_KEY)
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed)) {
+            // Định dạng cũ chưa có timestamp -> nạp bình thường
+            setMessages(parsed)
+          } else if (parsed && typeof parsed.timestamp === 'number' && Array.isArray(parsed.messages)) {
+            const age = Date.now() - parsed.timestamp
+            if (age > ONE_DAY_MS) {
+              // Đã quá 1 ngày: Tự động xóa sạch lịch sử
+              localStorage.removeItem(CHAT_STORAGE_KEY)
+              setMessages([])
+            } else {
+              setMessages(parsed.messages)
+            }
+          }
         }
       } catch {}
     }
   }, [])
 
-  // Lưu tin nhắn vào localStorage mỗi khi thay đổi (chỉ sau khi đã hydrate)
+  // Lưu tin nhắn vào localStorage kèm timestamp (chỉ sau khi đã hydrate)
   useEffect(() => {
     if (isHydrated && typeof window !== 'undefined') {
-      localStorage.setItem('ntn_chatMessages', JSON.stringify(messages))
+      if (messages.length > 0) {
+        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({
+          timestamp: Date.now(),
+          messages
+        }))
+      } else {
+        localStorage.removeItem(CHAT_STORAGE_KEY)
+      }
     }
   }, [messages, isHydrated])
 
@@ -465,21 +603,67 @@ export default function FloatingChatbox() {
     setShowClearConfirm(false)
   }
 
-  // Gợi ý câu hỏi theo khung giờ trong ngày (chỉ sử dụng icon điện ảnh 🎬, 🍿, 🎞️)
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  // Nhận biết thông tin phim từ tiêu đề trang hiện tại
+  const getCurrentMovieContext = useCallback((): string => {
+    if (typeof window === 'undefined') return ''
+    try {
+      const title = document.title || ''
+      if (
+        title &&
+        !title.includes('Trang chủ') &&
+        !title.includes('Danh mục') &&
+        !title.includes('Tìm kiếm') &&
+        !title.includes('Yêu thích')
+      ) {
+        const cleaned = title
+          .replace(/\s*[-|–]\s*(Xem Phim|NTN Stream|MovieWorld|Full HD|Tập \d+).*$/gi, '')
+          .trim()
+        if (cleaned.length >= 2 && cleaned.length <= 80) return cleaned
+      }
+    } catch {}
+    return ''
+  }, [])
+
+  // Dừng tạo câu trả lời AI ngay lập tức
+  const handleStopGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    setStreamingContent(prev => {
+      if (prev && prev.trim()) {
+        setMessages(msgs => [...msgs, { role: 'assistant', content: prev.trim() }])
+      }
+      return ''
+    })
+    setIsLoadingChat(false)
+  }, [])
+
+  // Gợi ý câu hỏi thông minh theo ngữ cảnh phim và khung giờ trong ngày
   const timeSuggestions = useMemo((): string[] => {
-    if (!isHydrated) return ['🎬 Phim hành động đáng xem', '🍿 Phim hài giải trí', '🎞️ Phim hot tuần này']
+    const movieContext = typeof window !== 'undefined' ? getCurrentMovieContext() : ''
+    if (movieContext) {
+      return [
+        `🎬 Tóm tắt nội dung phim ${movieContext}`,
+        `🍿 Dàn diễn viên trong ${movieContext} gồm những ai?`,
+        `🎞️ Gợi ý phim tương tự như ${movieContext}`,
+        `⭐ Giải thích ý nghĩa và cái kết của ${movieContext}`
+      ]
+    }
     const hour = new Date().getHours()
     if (hour >= 5 && hour < 11) {
-      return ['🎬 Phim nhẹ nhàng buổi sáng', '🍿 Phim hoạt hình vui vẻ', '🎞️ Phim tài liệu hay']
+      return ['🎬 Phim nhẹ nhàng truyền cảm hứng', '🍿 Hoạt hình vui nhộn giải trí', '🎞️ Top phim tài liệu hay nhất', '⭐ Phim gia đình ấm áp']
     }
     if (hour >= 11 && hour < 17) {
-      return ['🎬 Phim hành động đáng xem', '🍿 Phim hài giải trí', '🎞️ Phim hot tuần này']
+      return ['🎬 Phim hành động mãn nhãn', '🍿 Phim hài xả stress cực hay', '🎞️ Phim chiếu rạp hot tuần này', '⭐ Phim trinh thám gay cấn']
     }
     if (hour >= 17 && hour < 22) {
-      return ['🎬 Phim tình cảm lãng mạn', '🍿 Phim trinh thám gay cấn', '🎞️ Phim bộ đặc sắc']
+      return ['🎬 Gợi ý phim có plot twist đỉnh cao', '🍿 Phim tâm lý tội phạm giật gân', '🎞️ Phim bộ đặc sắc đáng cày', '⭐ Phim khoa học viễn tưởng hay']
     }
-    return ['🎬 Phim kinh dị đêm khuya', '🍿 Phim viễn tưởng hay', '🎞️ Phim tâm lý sâu sắc']
-  }, [isHydrated])
+    return ['🎬 Phim kinh dị đêm khuya rùng rợn', '🍿 Phim sinh tồn nghẹt thở', '🎞️ Phim tâm lý sâu sắc', '⭐ Phim giật gân khó đoán kết']
+  }, [getCurrentMovieContext])
 
   // Helper xác định endpoint chat: ưu tiên kết nối trực tiếp Render backend để Vercel tốn 0ms CPU
   const getChatEndpoint = (isStream: boolean): { direct: string; fallback: string } => {
@@ -493,22 +677,29 @@ export default function FloatingChatbox() {
   };
 
   // Fallback non-streaming: ưu tiên gọi trực tiếp Render backend
-  const fetchNonStreamReply = useCallback(async (payload: { role: 'user' | 'assistant', content: string }[]): Promise<string> => {
+  const fetchNonStreamReply = useCallback(async (
+    payload: { role: 'user' | 'assistant', content: string }[],
+    movieContext?: string,
+    signal?: AbortSignal
+  ): Promise<string> => {
     const { direct, fallback } = getChatEndpoint(false);
+    const reqBody = JSON.stringify({ messages: payload, currentMovie: movieContext || undefined });
     let response: Response;
     try {
       response = await fetch(direct, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: payload }),
-        signal: AbortSignal.timeout(30000)
+        body: reqBody,
+        signal: signal || AbortSignal.timeout(30000)
       });
       if (!response.ok) throw new Error(`Direct failed: ${response.status}`);
-    } catch {
+    } catch (err: any) {
+      if (err.name === 'AbortError') throw err;
       response = await fetch(fallback, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: payload })
+        body: reqBody,
+        signal: signal
       });
     }
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -521,22 +712,29 @@ export default function FloatingChatbox() {
   }, []);
 
   // Streaming SSE: ưu tiên gọi trực tiếp Render backend để đưa CPU Vercel về 0ms
-  const fetchStreamReply = useCallback(async (payload: { role: 'user' | 'assistant', content: string }[]): Promise<string | null> => {
+  const fetchStreamReply = useCallback(async (
+    payload: { role: 'user' | 'assistant', content: string }[],
+    movieContext?: string,
+    signal?: AbortSignal
+  ): Promise<string | null> => {
     const { direct, fallback } = getChatEndpoint(true);
+    const reqBody = JSON.stringify({ messages: payload, currentMovie: movieContext || undefined });
     let response: Response;
     try {
       response = await fetch(direct, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: payload }),
-        signal: AbortSignal.timeout(30000)
+        body: reqBody,
+        signal: signal || AbortSignal.timeout(30000)
       });
       if (!response.ok) throw new Error(`Direct failed: ${response.status}`);
-    } catch {
+    } catch (err: any) {
+      if (err.name === 'AbortError') throw err;
       response = await fetch(fallback, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: payload })
+        body: reqBody,
+        signal: signal
       });
     }
 
@@ -549,6 +747,10 @@ export default function FloatingChatbox() {
     let fullText = '';
 
     while (true) {
+      if (signal?.aborted) {
+        try { reader.cancel(); } catch {}
+        break;
+      }
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
@@ -620,36 +822,47 @@ export default function FloatingChatbox() {
     const payload = [...messages, newMessage];
     setStreamingContent('');
 
+    // Khởi tạo AbortController cho request lần này
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const movieContext = getCurrentMovieContext();
+
     try {
-      let assistantMessageContent: string | null = null
+      let assistantMessageContent: string | null = null;
       try {
-        assistantMessageContent = await fetchStreamReply(payload)
-      } catch (streamErr) {
-        console.warn('[Chat] Stream lỗi, chuyển sang non-stream:', streamErr)
+        assistantMessageContent = await fetchStreamReply(payload, movieContext, controller.signal);
+      } catch (streamErr: any) {
+        if (streamErr.name === 'AbortError') return;
+        console.warn('[Chat] Stream lỗi, chuyển sang non-stream:', streamErr);
       }
-      if (!assistantMessageContent) {
-        assistantMessageContent = await fetchNonStreamReply(payload)
+
+      if (!assistantMessageContent && !controller.signal.aborted) {
+        assistantMessageContent = await fetchNonStreamReply(payload, movieContext, controller.signal);
       }
+
+      if (controller.signal.aborted) return;
 
       const assistantMessage: { role: 'assistant', content: string } = { 
         role: 'assistant', 
-        content: assistantMessageContent 
-      }
-      setMessages(prev => [...prev, assistantMessage])
+        content: assistantMessageContent || 'Trợ lý AI đang cập nhật dữ liệu phim ảnh. Bạn vui lòng thử lại sau giây lát nhé! 🎬🍿'
+      };
+      setMessages(prev => [...prev, assistantMessage]);
       if (isAtBottomRef.current) {
-        setTimeout(() => scrollToBottom('auto'), 50)
+        setTimeout(() => scrollToBottom('auto'), 50);
       }
 
-    } catch {
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: 'Không thể kết nối đến máy chủ AI vào lúc này. Vui lòng thử lại sau ít phút!' 
-      }])
+        content: 'Không thể kết nối đến máy chủ AI vào lúc này. Vui lòng thử lại sau ít phút! 🎬' 
+      }]);
     } finally {
-      setStreamingContent('')
-      setIsLoadingChat(false)
+      abortControllerRef.current = null;
+      setStreamingContent('');
+      setIsLoadingChat(false);
     }
-  }, [isLoadingChat, messages, scrollToBottom, fetchNonStreamReply, fetchStreamReply])
+  }, [isLoadingChat, messages, scrollToBottom, fetchNonStreamReply, fetchStreamReply, getCurrentMovieContext])
 
   // Render nội dung Markdown có qua sanitize an toàn XSS và được cache
   const renderMarkdown = useCallback((content: string) => {
@@ -916,10 +1129,10 @@ export default function FloatingChatbox() {
                           <button
                             key={i}
                             type="button"
-                            onClick={() => chatInputRef.current?.setValue(suggest.replace(/^[^\\s]+\\s/, ''))}
-                            className="text-xs bg-gray-800/80 hover:bg-red-950/60 hover:border-red-500/60 border border-gray-700/70 text-gray-300 hover:text-white rounded-xl px-3.5 py-2 transition-all shadow-sm active:scale-95"
+                            onClick={() => handleSendMessage(suggest)}
+                            className="text-xs bg-gray-800/80 hover:bg-red-950/60 hover:border-red-500/60 border border-gray-700/70 text-gray-300 hover:text-white rounded-xl px-3.5 py-2 transition-all shadow-sm active:scale-95 flex items-center gap-1.5 hover:shadow-red-500/20"
                           >
-                            {suggest}
+                            <span>{suggest}</span>
                           </button>
                         ))}
                       </div>
@@ -992,6 +1205,7 @@ export default function FloatingChatbox() {
               <ChatInputForm
                 ref={chatInputRef}
                 onSendMessage={handleSendMessage}
+                onStopGeneration={handleStopGeneration}
                 isLoadingChat={isLoadingChat}
               />
             </motion.div>
