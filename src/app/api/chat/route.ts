@@ -71,42 +71,49 @@ export async function POST(request: NextRequest) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s cho Render cold start
 
-      const backendResponse = await fetch(backendChatEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages }),
-        signal: controller.signal
-      });
+      let debugErr = '';
+      try {
+        const backendResponse = await fetch(backendChatEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages }),
+          signal: controller.signal
+        });
 
-      clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-      if (backendResponse.ok) {
-        const data = await backendResponse.json();
-        const replyText = data.reply || data.choices?.[0]?.message?.content;
-        if (replyText) {
-          return NextResponse.json({
-            choices: [{
-              message: {
-                role: 'assistant',
-                content: replyText
-              }
-            }]
-          });
+        if (backendResponse.ok) {
+          const data = await backendResponse.json();
+          const replyText = data.reply || data.choices?.[0]?.message?.content;
+          if (replyText) {
+            return NextResponse.json({
+              choices: [{
+                message: {
+                  role: 'assistant',
+                  content: replyText
+                }
+              }]
+            });
+          }
+        } else {
+          const errText = await backendResponse.text();
+          debugErr = `HTTP ${backendResponse.status}: ${errText.slice(0, 200)}`;
         }
+      } catch (backendErr: unknown) {
+        clearTimeout(timeoutId);
+        debugErr = backendErr instanceof Error ? backendErr.message : String(backendErr);
+        console.warn("⚠️ [ChatRoute] Backend AI Render tạm thời chưa phản hồi:", debugErr);
       }
-    } catch (backendErr) {
-      console.warn("⚠️ [ChatRoute] Backend AI Render tạm thời chưa phản hồi, thử fallback...", backendErr);
-    }
 
-    // 3. Phản hồi thân thiện nếu máy chủ backend đang khởi động (không fallback sang model khác)
-    return NextResponse.json({
-      choices: [{
-        message: {
-          role: 'assistant',
-          content: 'Trợ lý AI (Gemini 3.7 Flash) đang khởi động kết nối trên máy chủ. Bạn vui lòng đợi khoảng 10-15 giây rồi gửi lại tin nhắn nhé! 🎬🍿'
-        }
-      }]
-    });
+      // 3. Phản hồi nếu máy chủ backend chưa trả lời thành công
+      return NextResponse.json({
+        choices: [{
+          message: {
+            role: 'assistant',
+            content: `Trợ lý AI đang kết nối máy chủ (${backendChatEndpoint} - ${debugErr || 'No reply'}). Vui lòng thử lại sau giây lát! 🎬🍿`
+          }
+        }]
+      });
 
   } catch {
     return NextResponse.json(
