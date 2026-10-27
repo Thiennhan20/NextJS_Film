@@ -86,42 +86,12 @@ export async function POST(request: NextRequest) {
       console.warn("⚠️ [ChatRoute] Backend AI Render tạm thời chưa phản hồi, thử fallback...", backendErr);
     }
 
-    // 3. Fallback: Nếu backend Render chưa sẵn sàng hoặc đang khởi động và có GROQ_API_KEY
-    if (process.env.GROQ_API_KEY) {
-      try {
-        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-            "messages": [
-              {
-                role: "system",
-                content: "Bạn là trợ lý AI chuyên về phim ảnh của NTN Stream. Chỉ trả lời các câu hỏi về điện ảnh, phim ảnh, diễn viên, đạo diễn. Từ chối lịch sự các chủ đề ngoài phim ảnh."
-              },
-              ...messages
-            ]
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          return NextResponse.json(data);
-        }
-      } catch (groqErr) {
-        console.error("⚠️ [ChatRoute] Groq fallback failed:", groqErr);
-      }
-    }
-
-    // Phản hồi thân thiện nếu máy chủ đang khởi động
+    // 3. Phản hồi thân thiện nếu máy chủ backend đang khởi động (không fallback sang model khác)
     return NextResponse.json({
       choices: [{
         message: {
           role: 'assistant',
-          content: 'Trợ lý AI đang khởi động trên server. Bạn vui lòng đợi khoảng 15-20 giây rồi gửi lại tin nhắn nhé! 🎬🍿'
+          content: 'Trợ lý AI (Gemini 3.7 Flash) đang khởi động kết nối trên máy chủ. Bạn vui lòng đợi khoảng 10-15 giây rồi gửi lại tin nhắn nhé! 🎬🍿'
         }
       }]
     });
