@@ -2,26 +2,16 @@
 import { NextRequest } from 'next/server'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
-// Helper chuẩn hóa URL Backend: Trên production (Vercel) tuyệt đối không dùng localhost
+// Helper chuẩn hóa URL Backend: Trên production (Vercel) luôn kết nối trực tiếp đến Render backend
 function getBackendApiUrl(): string {
-  const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
-  let envUrl = process.env.BACKEND_API_URL || process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '';
-
-  if (isProd) {
-    if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
-      return 'https://server-nextjs-film.onrender.com/api';
-    }
-  } else {
-    if (!envUrl) {
-      return 'http://localhost:3001/api';
-    }
+  if (process.env.NODE_ENV === 'production' || !!process.env.VERCEL) {
+    return 'https://server-nextjs-film.onrender.com/api';
   }
-
+  let envUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
   envUrl = envUrl.trim().replace(/\/+$/, '');
-  if (!envUrl.endsWith('/api')) {
-    envUrl = `${envUrl}/api`;
-  }
+  if (!envUrl.endsWith('/api')) envUrl += '/api';
   return envUrl;
 }
 

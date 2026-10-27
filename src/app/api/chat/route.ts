@@ -1,25 +1,17 @@
 // Backend API Route - src/app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 
-// Helper chuẩn hóa URL Backend: Trên production (Vercel) tuyệt đối không dùng localhost
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
+// Helper chuẩn hóa URL Backend: Trên production (Vercel) luôn kết nối trực tiếp đến Render backend
 function getBackendApiUrl(): string {
-  const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
-  let envUrl = process.env.BACKEND_API_URL || process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '';
-
-  if (isProd) {
-    if (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
-      return 'https://server-nextjs-film.onrender.com/api';
-    }
-  } else {
-    if (!envUrl) {
-      return 'http://localhost:3001/api';
-    }
+  if (process.env.NODE_ENV === 'production' || !!process.env.VERCEL) {
+    return 'https://server-nextjs-film.onrender.com/api';
   }
-
+  let envUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
   envUrl = envUrl.trim().replace(/\/+$/, '');
-  if (!envUrl.endsWith('/api')) {
-    envUrl = `${envUrl}/api`;
-  }
+  if (!envUrl.endsWith('/api')) envUrl += '/api';
   return envUrl;
 }
 
@@ -64,56 +56,55 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Chuyển tiếp (Proxy) tới Backend Render
+    const backendBaseUrl = getBackendApiUrl();
+    const backendChatEndpoint = `${backendBaseUrl}/chat`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s cho Render cold start
+
+    let debugErr = '';
     try {
-      const backendBaseUrl = getBackendApiUrl();
-      const backendChatEndpoint = `${backendBaseUrl}/chat`;
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s cho Render cold start
-
-      let debugErr = '';
-      try {
-        const backendResponse = await fetch(backendChatEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages }),
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        if (backendResponse.ok) {
-          const data = await backendResponse.json();
-          const replyText = data.reply || data.choices?.[0]?.message?.content;
-          if (replyText) {
-            return NextResponse.json({
-              choices: [{
-                message: {
-                  role: 'assistant',
-                  content: replyText
-                }
-              }]
-            });
-          }
-        } else {
-          const errText = await backendResponse.text();
-          debugErr = `HTTP ${backendResponse.status}: ${errText.slice(0, 200)}`;
-        }
-      } catch (backendErr: unknown) {
-        clearTimeout(timeoutId);
-        debugErr = backendErr instanceof Error ? backendErr.message : String(backendErr);
-        console.warn("⚠️ [ChatRoute] Backend AI Render tạm thời chưa phản hồi:", debugErr);
-      }
-
-      // 3. Phản hồi nếu máy chủ backend chưa trả lời thành công
-      return NextResponse.json({
-        choices: [{
-          message: {
-            role: 'assistant',
-            content: `Trợ lý AI đang kết nối máy chủ (${backendChatEndpoint} - ${debugErr || 'No reply'}). Vui lòng thử lại sau giây lát! 🎬🍿`
-          }
-        }]
+      const backendResponse = await fetch(backendChatEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages }),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
+
+      if (backendResponse.ok) {
+        const data = await backendResponse.json();
+        const replyText = data.reply || data.choices?.[0]?.message?.content;
+        if (replyText) {
+          return NextResponse.json({
+            choices: [{
+              message: {
+                role: 'assistant',
+                content: replyText
+              }
+            }]
+          });
+        }
+      } else {
+        const errText = await backendResponse.text();
+        debugErr = `HTTP ${backendResponse.status}: ${errText.slice(0, 200)}`;
+      }
+    } catch (backendErr: unknown) {
+      clearTimeout(timeoutId);
+      debugErr = backendErr instanceof Error ? backendErr.message : String(backendErr);
+      console.warn("⚠️ [ChatRoute] Backend AI Render tạm thời chưa phản hồi:", debugErr);
+    }
+
+    // 3. Phản hồi nếu máy chủ backend chưa trả lời thành công
+    return NextResponse.json({
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: `Trợ lý AI đang kết nối máy chủ (${backendChatEndpoint} - ${debugErr || 'No reply'}). Vui lòng thử lại sau giây lát! 🎬🍿`
+        }
+      }]
+    });
 
   } catch {
     return NextResponse.json(
