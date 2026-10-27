@@ -15,6 +15,11 @@
 }
 
 /* Custom scrollbar for webkit browsers */
+.custom-scrollbar {
+  overflow-anchor: none;
+  scrollbar-gutter: stable;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 8px;
   height: 8px;
