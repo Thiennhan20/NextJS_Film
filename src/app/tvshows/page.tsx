@@ -1,7 +1,19 @@
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
+import dns from 'node:dns';
 import TVShowsClient from './TVShowsClient';
 import { getRedisClient, buildCacheKey, CACHE_TTL } from '@/lib/redis';
+
+let isSinkholed: boolean | null = null;
+async function isTmdbBlocked(): Promise<boolean> {
+  if (isSinkholed !== null) return isSinkholed;
+  return new Promise((resolve) => {
+    dns.lookup('api.themoviedb.org', (err, address) => {
+      isSinkholed = !!err || address === '127.0.0.1' || address === '::1';
+      resolve(isSinkholed);
+    });
+  });
+}
 
 // ISR: Cache trang danh sách phim bộ 5 phút trên Vercel CDN
 export const revalidate = 300;
@@ -84,7 +96,8 @@ async function getInitialTVShows(): Promise<TVShow[]> {
 
   // 2. Cache-Aside Fallback: Direct TMDB fetch server-side
   const tmdbKey = process.env.TMDB_API_KEY;
-  if (tmdbKey) {
+  const blocked = await isTmdbBlocked();
+  if (tmdbKey && !blocked) {
     try {
       const res = await fetch(
         `https://api.themoviedb.org/3/discover/tv?api_key=${tmdbKey}&sort_by=popularity.desc&page=1`,
@@ -104,9 +117,32 @@ async function getInitialTVShows(): Promise<TVShow[]> {
           return json.results.map(mapTMDBToTVShow);
         }
       }
-    } catch (fetchErr) {
-      console.error('❌ SSR direct TMDB fetch failed:', fetchErr);
+    } catch {
+      // Direct TMDB unreachable (e.g. ISP DNS sinkhole) -> proceed to backend fallback
     }
+  }
+
+  // 3. Fallback to Render backend TMDB proxy
+  try {
+    const res = await fetch(
+      'https://server-nextjs-film.onrender.com/api/tmdb?endpoint=/discover/tv&page=1&sort_by=popularity.desc',
+      {
+        next: { revalidate: 3600 },
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+
+    if (res.ok) {
+      const json = await res.json();
+      if (json?.results && json.results.length > 0) {
+        if (redis) {
+          redis.set(cacheKey, json, { ex: CACHE_TTL.DISCOVER }).catch(() => {});
+        }
+        return json.results.map(mapTMDBToTVShow);
+      }
+    }
+  } catch {
+    // Both direct and proxy failed
   }
 
   return [];

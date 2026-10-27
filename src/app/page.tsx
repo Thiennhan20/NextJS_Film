@@ -36,19 +36,51 @@ interface TMDBListResponse<T> {
   results?: T[];
 }
 
-async function fetchTMDB<T>(endpoint: string): Promise<T | null> {
-  if (!TMDB_API_KEY) return null;
+import dns from 'node:dns';
 
+let isSinkholed: boolean | null = null;
+async function isTmdbBlocked(): Promise<boolean> {
+  if (isSinkholed !== null) return isSinkholed;
+  return new Promise((resolve) => {
+    dns.lookup('api.themoviedb.org', (err, address) => {
+      isSinkholed = !!err || address === '127.0.0.1' || address === '::1';
+      resolve(isSinkholed);
+    });
+  });
+}
+
+const BACKEND_TMDB_URL = 'https://server-nextjs-film.onrender.com/api/tmdb';
+
+async function fetchTMDB<T>(endpoint: string): Promise<T | null> {
+  const blocked = await isTmdbBlocked();
+
+  // 1. Try direct TMDB first (only if not sinkholed by local ISP)
+  if (TMDB_API_KEY && !blocked) {
+    try {
+      const response = await fetch(`${TMDB_BASE_URL}${endpoint}?api_key=${TMDB_API_KEY}`, {
+        next: { revalidate: 300 },
+        signal: AbortSignal.timeout(3000),
+      });
+
+      if (response.ok) return (await response.json()) as T;
+    } catch {
+      // Direct TMDB unreachable -> proceed to backend proxy
+    }
+  }
+
+  // 2. Fallback to Render backend TMDB proxy
   try {
-    const response = await fetch(`${TMDB_BASE_URL}${endpoint}?api_key=${TMDB_API_KEY}`, {
+    const response = await fetch(`${BACKEND_TMDB_URL}?endpoint=${encodeURIComponent(endpoint)}`, {
       next: { revalidate: 300 },
+      signal: AbortSignal.timeout(8000),
     });
 
-    if (!response.ok) return null;
-    return response.json() as Promise<T>;
+    if (response.ok) return (await response.json()) as T;
   } catch {
     return null;
   }
+
+  return null;
 }
 
 async function getInitialHeroItems(): Promise<HeroItem[]> {

@@ -173,16 +173,6 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // API routes - không cache để luôn có dữ liệu mới
-        source: '/api/(.*)',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          },
-        ],
-      },
-      {
         // HTML pages - cho phép Vercel CDN cache với stale-while-revalidate
         // Deploy mới sẽ tự động xóa cache cũ (Vercel Instant Purge)
         source: '/(.*)',

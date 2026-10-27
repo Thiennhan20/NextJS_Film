@@ -30,9 +30,9 @@ export async function POST(request: NextRequest) {
         lastMessage.includes("làm ra web") || 
         lastMessage.includes("người tạo"))
       ) {
-        quickReply = "Trang web NTN Stream được sáng lập và phát triển bởi Nguyễn Thiện Nhân (22 tuổi) 🚀.";
+        quickReply = "Trang web NTN Stream được sáng lập và phát triển bởi Nguyễn Thiện Nhân 🎬.";
       } else if (lastMessage.includes("nguyễn thiện nhân") || lastMessage.includes("thiện nhân")) {
-        quickReply = "Nguyễn Thiện Nhân (22 tuổi) là nhà phát triển sáng lập nên nền tảng xem phim NTN Stream.";
+        quickReply = "Nguyễn Thiện Nhân là nhà phát triển sáng lập nên nền tảng xem phim NTN Stream.";
       }
     }
 

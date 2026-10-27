@@ -465,99 +465,160 @@ export default function FloatingChatbox() {
     setShowClearConfirm(false)
   }
 
-  // Gợi ý câu hỏi theo khung giờ trong ngày (được memoize)
+  // Gợi ý câu hỏi theo khung giờ trong ngày (chỉ sử dụng icon điện ảnh 🎬, 🍿, 🎞️)
   const timeSuggestions = useMemo((): string[] => {
-    if (!isHydrated) return ['🍿 Phim hành động đáng xem', '😂 Phim hài giải trí', '🔥 Phim hot tuần này']
+    if (!isHydrated) return ['🎬 Phim hành động đáng xem', '🍿 Phim hài giải trí', '🎞️ Phim hot tuần này']
     const hour = new Date().getHours()
     if (hour >= 5 && hour < 11) {
-      return ['☀️ Phim nhẹ nhàng cho buổi sáng', '🎞️ Phim hoạt hình vui vẻ', '📚 Phim tài liệu hay']
+      return ['🎬 Phim nhẹ nhàng buổi sáng', '🍿 Phim hoạt hình vui vẻ', '🎞️ Phim tài liệu hay']
     }
     if (hour >= 11 && hour < 17) {
-      return ['🍿 Phim hành động đáng xem', '😂 Phim hài giải trí', '🔥 Phim hot tuần này']
+      return ['🎬 Phim hành động đáng xem', '🍿 Phim hài giải trí', '🎞️ Phim hot tuần này']
     }
     if (hour >= 17 && hour < 22) {
-      return ['💑 Phim tình cảm lãng mạn', '🕵️ Phim trinh thám gay cấn', '🇰🇷 Phim bộ Hàn Quốc hay']
+      return ['🎬 Phim tình cảm lãng mạn', '🍿 Phim trinh thám gay cấn', '🎞️ Phim bộ đặc sắc']
     }
-    return ['👻 Phim kinh dị đêm khuya', '🌌 Phim khoa học viễn tưởng', '🧠 Phim tâm lý sâu sắc']
+    return ['🎬 Phim kinh dị đêm khuya', '🍿 Phim viễn tưởng hay', '🎞️ Phim tâm lý sâu sắc']
   }, [isHydrated])
 
-  // Fallback non-streaming: gọi /api/chat trả JSON
-  const fetchNonStreamReply = async (payload: { role: 'user' | 'assistant', content: string }[]): Promise<string> => {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: payload })
-    })
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    const data = await response.json()
-    if (data.choices?.[0]?.message?.content) return data.choices[0].message.content
-    if (data.reply) return data.reply
-    if (data.error) return `Thông báo từ AI: ${data.error}`
-    if (data.message) return `${data.message}`
-    return 'Hệ thống AI đang khởi động, vui lòng thử lại sau vài giây!'
-  }
+  // Helper xác định endpoint chat: ưu tiên kết nối trực tiếp Render backend để Vercel tốn 0ms CPU
+  const getChatEndpoint = (isStream: boolean): { direct: string; fallback: string } => {
+    const isLocal = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const backendBase = isLocal ? 'http://localhost:3001/api' : 'https://server-nextjs-film.onrender.com/api';
+    return {
+      direct: isStream ? `${backendBase}/chatai/stream` : `${backendBase}/chat`,
+      fallback: isStream ? '/api/chat/stream' : '/api/chat'
+    };
+  };
 
-  // Streaming SSE: đọc từng chunk từ /api/chat/stream
-  const fetchStreamReply = async (payload: { role: 'user' | 'assistant', content: string }[]): Promise<string | null> => {
-    const response = await fetch('/api/chat/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: payload })
-    })
-    const contentType = response.headers.get('content-type') || ''
-    if (!response.ok || !response.body || !contentType.includes('text/event-stream')) return null
+  // Fallback non-streaming: ưu tiên gọi trực tiếp Render backend
+  const fetchNonStreamReply = useCallback(async (payload: { role: 'user' | 'assistant', content: string }[]): Promise<string> => {
+    const { direct, fallback } = getChatEndpoint(false);
+    let response: Response;
+    try {
+      response = await fetch(direct, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: payload }),
+        signal: AbortSignal.timeout(30000)
+      });
+      if (!response.ok) throw new Error(`Direct failed: ${response.status}`);
+    } catch {
+      response = await fetch(fallback, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: payload })
+      });
+    }
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await response.json();
+    if (data.choices?.[0]?.message?.content) return data.choices[0].message.content;
+    if (data.reply) return data.reply;
+    if (data.error) return `Thông báo từ AI: ${data.error}`;
+    if (data.message) return `${data.message}`;
+    return 'Hệ thống AI đang khởi động, vui lòng thử lại sau vài giây!';
+  }, []);
 
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let fullText = ''
+  // Streaming SSE: ưu tiên gọi trực tiếp Render backend để đưa CPU Vercel về 0ms
+  const fetchStreamReply = useCallback(async (payload: { role: 'user' | 'assistant', content: string }[]): Promise<string | null> => {
+    const { direct, fallback } = getChatEndpoint(true);
+    let response: Response;
+    try {
+      response = await fetch(direct, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: payload }),
+        signal: AbortSignal.timeout(30000)
+      });
+      if (!response.ok) throw new Error(`Direct failed: ${response.status}`);
+    } catch {
+      response = await fetch(fallback, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: payload })
+      });
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!response.ok || !response.body || !contentType.includes('text/event-stream')) return null;
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullText = '';
 
     while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
-      const events = buffer.split('\n\n')
-      buffer = events.pop() || ''
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || '';
 
       for (const event of events) {
-        const dataLine = event.split('\n').find(line => line.startsWith('data: '))
-        if (!dataLine) continue
-        const jsonStr = dataLine.slice(6).trim()
-        if (!jsonStr || jsonStr === '[DONE]') continue
+        const dataLine = event.split('\n').find(line => line.startsWith('data: '));
+        if (!dataLine) continue;
+        const jsonStr = dataLine.slice(6).trim();
+        if (!jsonStr || jsonStr === '[DONE]') continue;
         try {
-          const parsed = JSON.parse(jsonStr)
+          const parsed = JSON.parse(jsonStr);
           if (parsed.error) {
-            if (!fullText) return null
-            continue
+            if (!fullText) return null;
+            continue;
           }
           if (parsed.text) {
-            fullText += parsed.text
-            setStreamingContent(fullText)
+            fullText += parsed.text;
+            setStreamingContent(fullText);
           }
         } catch {
           // Bỏ qua chunk JSON lỗi
         }
       }
     }
-    return fullText || null
-  }
+    return fullText || null;
+  }, []);
 
   const handleSendMessage = useCallback(async (contentToSend: string) => {
-    const trimmed = contentToSend.trim()
-    if (!trimmed || isLoadingChat) return
+    const trimmed = contentToSend.trim();
+    if (!trimmed || isLoadingChat) return;
 
-    const newMessage: { role: 'user', content: string } = { role: 'user', content: trimmed }
-    setMessages(prev => [...prev, newMessage])
-    setIsLoadingChat(true)
+    // 1. Phản hồi tức thì ngay tại Client cho các câu hỏi tác giả (0ms latency, 0 request mạng)
+    const lower = trimmed.toLowerCase();
+    if (
+      lower.includes("ai") && (lower.includes("tạo ra web") || lower.includes("làm ra web") || lower.includes("người tạo"))
+    ) {
+      setMessages(prev => [
+        ...prev,
+        { role: 'user', content: trimmed },
+        { role: 'assistant', content: 'Trang web NTN Stream được sáng lập và phát triển bởi Nguyễn Thiện Nhân 🎬.' }
+      ]);
+      chatInputRef.current?.focus();
+      scrollToBottom('smooth');
+      return;
+    }
+    if (lower.includes("nguyễn thiện nhân") || lower.includes("thiện nhân")) {
+      setMessages(prev => [
+        ...prev,
+        { role: 'user', content: trimmed },
+        { role: 'assistant', content: 'Nguyễn Thiện Nhân là nhà phát triển sáng lập nên nền tảng xem phim NTN Stream 🎬.' }
+      ]);
+      chatInputRef.current?.focus();
+      scrollToBottom('smooth');
+      return;
+    }
+
+    const newMessage: { role: 'user', content: string } = { role: 'user', content: trimmed };
+    setMessages(prev => [...prev, newMessage]);
+    setIsLoadingChat(true);
 
     // Đưa tiêu điểm vào input và luôn cuộn xuống đáy khi user gửi tin
-    chatInputRef.current?.focus()
-    isAtBottomRef.current = true
-    setShowScrollToBottomBtn(false)
-    scrollToBottom('smooth')
+    chatInputRef.current?.focus();
+    isAtBottomRef.current = true;
+    setShowScrollToBottomBtn(false);
+    scrollToBottom('smooth');
 
-    const payload = [...messages, newMessage]
-    setStreamingContent('')
+    const payload = [...messages, newMessage];
+    setStreamingContent('');
 
     try {
       let assistantMessageContent: string | null = null
@@ -588,7 +649,7 @@ export default function FloatingChatbox() {
       setStreamingContent('')
       setIsLoadingChat(false)
     }
-  }, [isLoadingChat, messages, scrollToBottom])
+  }, [isLoadingChat, messages, scrollToBottom, fetchNonStreamReply, fetchStreamReply])
 
   // Render nội dung Markdown có qua sanitize an toàn XSS và được cache
   const renderMarkdown = useCallback((content: string) => {

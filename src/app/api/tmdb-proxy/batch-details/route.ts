@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
       {
         headers: {
           'Cache-Control':
-            'public, s-maxage=300, stale-while-revalidate=3600',
+            'public, s-maxage=3600, stale-while-revalidate=86400',
         },
       }
     );
