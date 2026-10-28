@@ -15,6 +15,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { ChevronUpIcon } from '@heroicons/react/24/solid'
 import { useUIStore } from '@/store/store'
+import { useTranslations, useLocale } from 'next-intl'
 
 // Hạn lưu lịch sử trò chuyện: Đúng 1 ngày (24 giờ = 86,400,000 ms) theo yêu cầu
 const CHAT_STORAGE_KEY = 'ntn_chatMessages'
@@ -117,6 +118,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
   onCopy,
   renderMarkdown,
 }: ChatMessageItemProps) {
+  const t = useTranslations('ChatAI')
   return (
     <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
       <div
@@ -137,17 +139,17 @@ const ChatMessageItem = memo(function ChatMessageItem({
                 type="button"
                 onClick={() => onCopy(msg.content, index)}
                 className="inline-flex items-center gap-1.5 text-xs text-gray-300 hover:text-white px-2.5 py-1 rounded-lg bg-gray-700/50 hover:bg-gray-700 border border-gray-600/40 transition-colors"
-                aria-label="Sao chép câu trả lời"
+                aria-label={t('copyAria')}
               >
                 {isCopied ? (
                   <>
                     <CheckIcon className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
-                    <span className="text-emerald-400 font-medium">Đã chép</span>
+                    <span className="text-emerald-400 font-medium">{t('copied')}</span>
                   </>
                 ) : (
                   <>
                     <ClipboardDocumentIcon className="w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
-                    <span>Sao chép</span>
+                    <span>{t('copy')}</span>
                   </>
                 )}
               </button>
@@ -175,9 +177,11 @@ interface ChatInputFormProps {
 }
 
 const ChatInputForm = memo(forwardRef<ChatInputHandle, ChatInputFormProps>(function ChatInputForm(
-  { onSendMessage, onStopGeneration, isLoadingChat, placeholder = 'Hỏi về phim, diễn viên hoặc nhờ gợi ý phim...' },
+  { onSendMessage, onStopGeneration, isLoadingChat, placeholder },
   ref
 ) {
+  const t = useTranslations('ChatAI')
+  const locale = useLocale()
   const [inputMessage, setInputMessage] = useState('')
   const [isListening, setIsListening] = useState(false)
   const [isSpeechSupported, setIsSpeechSupported] = useState(false)
@@ -198,7 +202,7 @@ const ChatInputForm = memo(forwardRef<ChatInputHandle, ChatInputFormProps>(funct
           const recognition = new SpeechRecognitionClass()
           recognition.continuous = false
           recognition.interimResults = false
-          recognition.lang = 'vi-VN'
+          recognition.lang = locale === 'vi' ? 'vi-VN' : 'en-US'
 
           recognition.onresult = (event) => {
             const transcript = event.results?.[0]?.[0]?.transcript || ''
@@ -220,7 +224,7 @@ const ChatInputForm = memo(forwardRef<ChatInputHandle, ChatInputFormProps>(funct
         } catch {}
       }
     }
-  }, [])
+  }, [locale])
 
   const toggleListening = () => {
     if (!recognitionRef.current) return
@@ -264,7 +268,7 @@ const ChatInputForm = memo(forwardRef<ChatInputHandle, ChatInputFormProps>(funct
             type="text"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            placeholder={isListening ? '🎙️ Đang lắng nghe giọng nói của bạn...' : placeholder}
+            placeholder={isListening ? t('listeningPlaceholder') : (placeholder || t('inputPlaceholder'))}
             autoComplete="off"
             autoCorrect="off"
             spellCheck={false}
@@ -282,8 +286,8 @@ const ChatInputForm = memo(forwardRef<ChatInputHandle, ChatInputFormProps>(funct
                   ? 'text-red-400 bg-red-500/20 animate-pulse'
                   : 'text-gray-400 hover:text-white hover:bg-gray-700/60'
               } disabled:opacity-30`}
-              title={isListening ? 'Dừng ghi âm' : 'Nhập bằng giọng nói (Tiếng Việt)'}
-              aria-label="Nhập giọng nói"
+              title={isListening ? t('stopListening') : t('voiceInput')}
+              aria-label={t('voiceInput')}
             >
               <MicrophoneIcon className="w-5 h-5" />
             </button>
@@ -295,11 +299,11 @@ const ChatInputForm = memo(forwardRef<ChatInputHandle, ChatInputFormProps>(funct
             type="button"
             onClick={onStopGeneration}
             className="min-h-[44px] min-w-[76px] bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-red-500/60 text-red-400 hover:text-red-300 px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-md active:scale-95 flex-shrink-0"
-            title="Dừng tạo câu trả lời"
-            aria-label="Dừng tạo câu trả lời"
+            title={t('stopAria')}
+            aria-label={t('stopAria')}
           >
             <StopIcon className="w-4 h-4 fill-current text-red-400" />
-            <span>Dừng</span>
+            <span>{t('stop')}</span>
           </button>
         ) : (
           <button
@@ -307,7 +311,7 @@ const ChatInputForm = memo(forwardRef<ChatInputHandle, ChatInputFormProps>(funct
             disabled={!inputMessage.trim()}
             className="min-h-[44px] min-w-[70px] bg-gradient-to-r from-red-600 to-rose-600 text-white px-5 py-2.5 rounded-xl font-medium text-sm hover:from-red-500 hover:to-rose-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-md hover:shadow-red-600/20 active:scale-95 flex-shrink-0"
           >
-            Gửi
+            {t('send')}
           </button>
         )}
       </div>
@@ -316,6 +320,7 @@ const ChatInputForm = memo(forwardRef<ChatInputHandle, ChatInputFormProps>(funct
 }))
 
 export default function FloatingChatbox() {
+  const t = useTranslations('ChatAI')
   const [isOpen, setIsOpen] = useState(false)
   const [snapPositions, setSnapPositions] = useState({
     bottomRight: { x: 0, y: 0 },
@@ -632,24 +637,24 @@ export default function FloatingChatbox() {
     const movieContext = typeof window !== 'undefined' ? getCurrentMovieContext() : ''
     if (movieContext) {
       return [
-        `🎬 Tóm tắt nội dung phim ${movieContext}`,
-        `🍿 Dàn diễn viên trong ${movieContext} gồm những ai?`,
-        `🎞️ Gợi ý phim tương tự như ${movieContext}`,
-        `⭐ Giải thích ý nghĩa và cái kết của ${movieContext}`
+        t('suggestMovieSummary', { movie: movieContext }),
+        t('suggestMovieCast', { movie: movieContext }),
+        t('suggestSimilarMovies', { movie: movieContext }),
+        t('suggestMovieEnding', { movie: movieContext })
       ]
     }
     const hour = new Date().getHours()
     if (hour >= 5 && hour < 11) {
-      return ['🎬 Phim nhẹ nhàng truyền cảm hứng', '🍿 Hoạt hình vui nhộn giải trí', '🎞️ Top phim tài liệu hay nhất', '⭐ Phim gia đình ấm áp']
+      return [t('suggestMorning1'), t('suggestMorning2'), t('suggestMorning3'), t('suggestMorning4')]
     }
     if (hour >= 11 && hour < 17) {
-      return ['🎬 Phim hành động mãn nhãn', '🍿 Phim hài xả stress cực hay', '🎞️ Phim chiếu rạp hot tuần này', '⭐ Phim trinh thám gay cấn']
+      return [t('suggestAfternoon1'), t('suggestAfternoon2'), t('suggestAfternoon3'), t('suggestAfternoon4')]
     }
     if (hour >= 17 && hour < 22) {
-      return ['🎬 Gợi ý phim có plot twist đỉnh cao', '🍿 Phim tâm lý tội phạm giật gân', '🎞️ Phim bộ đặc sắc đáng cày', '⭐ Phim khoa học viễn tưởng hay']
+      return [t('suggestEvening1'), t('suggestEvening2'), t('suggestEvening3'), t('suggestEvening4')]
     }
-    return ['🎬 Phim kinh dị đêm khuya rùng rợn', '🍿 Phim sinh tồn nghẹt thở', '🎞️ Phim tâm lý sâu sắc', '⭐ Phim giật gân khó đoán kết']
-  }, [getCurrentMovieContext])
+    return [t('suggestNight1'), t('suggestNight2'), t('suggestNight3'), t('suggestNight4')]
+  }, [getCurrentMovieContext, t])
 
   // Helper xác định endpoint chat: ưu tiên kết nối trực tiếp Render backend để Vercel tốn 0ms CPU
   const getChatEndpoint = (isStream: boolean): { direct: string; fallback: string } => {
@@ -692,10 +697,10 @@ export default function FloatingChatbox() {
     const data = await response.json();
     if (data.choices?.[0]?.message?.content) return data.choices[0].message.content;
     if (data.reply) return data.reply;
-    if (data.error) return `Thông báo từ AI: ${data.error}`;
+    if (data.error) return `${data.error}`;
     if (data.message) return `${data.message}`;
-    return 'Hệ thống AI đang khởi động, vui lòng thử lại sau vài giây!';
-  }, []);
+    return t('serverStarting');
+  }, [t]);
 
   // Streaming SSE: ưu tiên gọi trực tiếp Render backend để đưa CPU Vercel về 0ms
   const fetchStreamReply = useCallback(async (
@@ -781,22 +786,22 @@ export default function FloatingChatbox() {
     // 1. Phản hồi tức thì ngay tại Client cho các câu hỏi tác giả (0ms latency, 0 request mạng)
     const lower = trimmed.toLowerCase();
     if (
-      lower.includes("ai") && (lower.includes("tạo ra web") || lower.includes("làm ra web") || lower.includes("người tạo"))
+      lower.includes("ai") && (lower.includes("tạo ra web") || lower.includes("làm ra web") || lower.includes("người tạo") || lower.includes("who created") || lower.includes("who made"))
     ) {
       setMessages(prev => [
         ...prev,
         { role: 'user', content: trimmed },
-        { role: 'assistant', content: 'Trang web NTN Stream được sáng lập và phát triển bởi Nguyễn Thiện Nhân 🎬.' }
+        { role: 'assistant', content: t('authorFounderReply') }
       ]);
       chatInputRef.current?.focus();
       scrollToBottom('smooth');
       return;
     }
-    if (lower.includes("nguyễn thiện nhân") || lower.includes("thiện nhân")) {
+    if (lower.includes("nguyễn thiện nhân") || lower.includes("thiện nhân") || lower.includes("thien nhan")) {
       setMessages(prev => [
         ...prev,
         { role: 'user', content: trimmed },
-        { role: 'assistant', content: 'Nguyễn Thiện Nhân là nhà phát triển sáng lập nên nền tảng xem phim NTN Stream 🎬.' }
+        { role: 'assistant', content: t('authorDevReply') }
       ]);
       chatInputRef.current?.focus();
       scrollToBottom('smooth');
@@ -838,7 +843,7 @@ export default function FloatingChatbox() {
 
       const assistantMessage: { role: 'assistant', content: string } = { 
         role: 'assistant', 
-        content: assistantMessageContent || 'Trợ lý AI đang cập nhật dữ liệu phim ảnh. Bạn vui lòng thử lại sau giây lát nhé! 🎬🍿'
+        content: assistantMessageContent || t('updatingData')
       };
       setMessages(prev => [...prev, assistantMessage]);
       if (isAtBottomRef.current) {
@@ -849,14 +854,14 @@ export default function FloatingChatbox() {
       if (err instanceof Error && err.name === 'AbortError') return;
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: 'Không thể kết nối đến máy chủ AI vào lúc này. Vui lòng thử lại sau ít phút! 🎬' 
+        content: t('connectionError') 
       }]);
     } finally {
       abortControllerRef.current = null;
       setStreamingContent('');
       setIsLoadingChat(false);
     }
-  }, [isLoadingChat, messages, scrollToBottom, fetchNonStreamReply, fetchStreamReply, getCurrentMovieContext])
+  }, [isLoadingChat, messages, scrollToBottom, fetchNonStreamReply, fetchStreamReply, getCurrentMovieContext, t])
 
   // Render nội dung Markdown có qua sanitize an toàn XSS và được cache
   const renderMarkdown = useCallback((content: string) => {
@@ -978,7 +983,7 @@ export default function FloatingChatbox() {
             } : undefined}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             className="fixed bottom-6 right-6 z-[1000] bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white p-4 rounded-full shadow-[0_4px_25px_rgba(225,29,72,0.4)] hover:shadow-[0_6px_30px_rgba(225,29,72,0.55)] transition-all duration-300 cursor-move border border-red-400/20"
-            aria-label="Mở Trợ lý AI Phim Ảnh"
+            aria-label={t('chatWithAi')}
           >
             <ChatBubbleLeftIcon className="h-6 w-6 text-white" />
           </motion.button>
@@ -1040,10 +1045,10 @@ export default function FloatingChatbox() {
                       </div>
 
                       <h3 id="confirm-clear-heading" className="text-base font-bold text-white mb-2">
-                        Xóa toàn bộ lịch sử trò chuyện?
+                        {t('confirmClearTitle')}
                       </h3>
                       <p id="confirm-clear-desc" className="text-xs text-gray-300 leading-relaxed mb-6">
-                        Tất cả tin nhắn trò chuyện và gợi ý phim đã lưu sẽ bị xóa vĩnh viễn khỏi thiết bị này.
+                        {t('confirmClearDesc')}
                       </p>
 
                       <div className="flex gap-2.5">
@@ -1052,14 +1057,14 @@ export default function FloatingChatbox() {
                           onClick={() => setShowClearConfirm(false)}
                           className="flex-1 min-h-[40px] px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-300 hover:text-white bg-gray-700/60 hover:bg-gray-700 border border-gray-600/50 transition-all duration-200"
                         >
-                          Hủy bỏ
+                          {t('cancel')}
                         </button>
                         <button
                           type="button"
                           onClick={handleConfirmClear}
                           className="flex-1 min-h-[40px] px-4 py-2.5 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-lg shadow-red-600/30 transition-all duration-200 active:scale-95"
                         >
-                          Xác nhận xóa
+                          {t('confirmClear')}
                         </button>
                       </div>
                     </motion.div>
@@ -1075,9 +1080,9 @@ export default function FloatingChatbox() {
                   </div>
                   <div>
                     <h2 id="chatbox-heading" className="text-base sm:text-lg font-bold bg-gradient-to-r from-red-400 via-rose-300 to-orange-300 text-transparent bg-clip-text">
-                      Trợ lý AI Điện ảnh NTN
+                      {t('title')}
                     </h2>
-                    <p className="text-xs text-gray-300/90 leading-tight">Chuyên tư vấn & gợi ý phim thông minh</p>
+                    <p className="text-xs text-gray-300/90 leading-tight">{t('subtitle')}</p>
                   </div>
                 </div>
 
@@ -1088,8 +1093,8 @@ export default function FloatingChatbox() {
                       onClick={() => setShowClearConfirm(true)}
                       disabled={isLoadingChat}
                       className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
-                      aria-label="Xóa toàn bộ lịch sử trò chuyện"
-                      title="Xóa toàn bộ lịch sử trò chuyện"
+                      aria-label={t('clearHistory')}
+                      title={t('clearHistory')}
                     >
                       <TrashIcon className="h-5 w-5" aria-hidden="true" />
                     </button>
@@ -1098,8 +1103,8 @@ export default function FloatingChatbox() {
                     type="button"
                     onClick={() => setIsOpen(false)}
                     className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-                    aria-label="Đóng chat (phím Escape)"
-                    title="Đóng chat (Esc)"
+                    aria-label={t('closeChat')}
+                    title={t('closeChat')}
                   >
                     <XMarkIcon className="h-5 w-5" aria-hidden="true" />
                   </button>
@@ -1125,9 +1130,9 @@ export default function FloatingChatbox() {
                       <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-red-600/20 to-rose-500/10 border border-red-500/30 flex items-center justify-center mb-3.5 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
                         <FilmIcon className="w-8 h-8 text-rose-400 animate-pulse" aria-hidden="true" />
                       </div>
-                      <p className="text-base sm:text-lg font-bold text-gray-100 mb-1.5">Trợ lý Phim Ảnh NTN Stream</p>
+                      <p className="text-base sm:text-lg font-bold text-gray-100 mb-1.5">{t('welcomeTitle')}</p>
                       <p className="text-xs sm:text-sm text-gray-400 max-w-sm mb-5 leading-relaxed">
-                        Hãy hỏi tôi bất kỳ điều gì về phim lẻ, phim bộ, diễn viên, hoặc nhờ AI gợi ý theo tâm trạng của bạn!
+                        {t('welcomeDesc')}
                       </p>
                       <div className="flex flex-wrap gap-2 justify-center max-w-lg">
                         {timeSuggestions.map((suggest, i) => (
@@ -1178,7 +1183,7 @@ export default function FloatingChatbox() {
                           <div className="w-2 h-2 bg-rose-400 rounded-full animate-bounce delay-150" />
                           <div className="w-2 h-2 bg-orange-400 rounded-full animate-bounce delay-300" />
                         </div>
-                        <span className="text-xs text-gray-300 font-medium">AI đang tìm kiếm phim...</span>
+                        <span className="text-xs text-gray-300 font-medium">{t('searchingMovie')}</span>
                       </div>
                     </div>
                   )}
@@ -1198,10 +1203,10 @@ export default function FloatingChatbox() {
                     type="button"
                     onClick={() => scrollToBottom('smooth')}
                     className="absolute bottom-20 right-6 z-20 bg-gray-800/95 hover:bg-gray-700 text-white border border-gray-600/70 rounded-full px-3.5 py-1.5 shadow-2xl flex items-center gap-1.5 text-xs backdrop-blur-md transition-all active:scale-95"
-                    aria-label="Cuộn xuống tin nhắn mới nhất"
+                    aria-label={t('scrollDownAria')}
                   >
                     <ArrowDownIcon className="w-3.5 h-3.5 text-rose-400 animate-bounce" aria-hidden="true" />
-                    <span className="font-medium text-gray-200">Xuống dưới</span>
+                    <span className="font-medium text-gray-200">{t('scrollDown')}</span>
                   </motion.button>
                 )}
               </AnimatePresence>
