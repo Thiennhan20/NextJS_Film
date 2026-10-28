@@ -381,37 +381,44 @@ function SearchPageContent() {
     return fetchPromise
   }, [])
   
-  // Hàm load thêm 10 trang tiếp theo (khi bấm vào 1 trong 2 trang kế tiếp)
+  // Hàm load thêm trang tiếp theo an toàn theo totalPages (chống tràn số trang ảo)
   const loadNext10Pages = useCallback(async (startPage: number) => {
     if (!query.trim()) return
+    const { totalPages } = getCurrentFilterMetadata()
+    if (totalPages > 0 && startPage > totalPages) return
     
-    const promises = []
-    for (let p = startPage; p < startPage + 10; p++) {
+    const maxTarget = totalPages > 0 ? Math.min(startPage + 2, totalPages) : startPage + 2
+    const pagesToFetch: number[] = []
+    for (let p = startPage; p <= maxTarget; p++) {
       if (!getCurrentFilterCache()[p]) {
-        promises.push(
-          fetchSearchPage(query, p, contentType, selectedYear, selectedGenre, selectedCountry)
-            .then(({ results }) => ({ p, results }))
-            .catch(() => ({ p, results: [] as SearchResult[] }))
-        )
+        pagesToFetch.push(p)
       }
     }
     
-    if (promises.length > 0) {
-      const results = await Promise.all(promises)
-      results.forEach(({ p, results }) => {
-        if (results.length > 0) {
-          setCurrentFilterCache(p, results)
-        }
-      })
-      
-      const currentPages = getCurrentFilterLoadedPages()
-      const newPages = [...currentPages]
-      for (let p = startPage; p < startPage + 10; p++) {
-        if (!newPages.includes(p)) newPages.push(p)
+    if (pagesToFetch.length === 0) return
+    
+    const results = await Promise.allSettled(
+      pagesToFetch.map(p =>
+        fetchSearchPage(query, p, contentType, selectedYear, selectedGenre, selectedCountry)
+          .then(({ results: res }) => ({ p, results: res }))
+      )
+    )
+    
+    results.forEach(res => {
+      if (res.status === 'fulfilled' && res.value.results.length > 0) {
+        setCurrentFilterCache(res.value.p, res.value.results)
       }
-      setCurrentFilterLoadedPages(newPages.sort((a, b) => a - b))
-    }
-  }, [query, contentType, selectedYear, selectedGenre, selectedCountry, getCurrentFilterCache, getCurrentFilterLoadedPages, setCurrentFilterCache, setCurrentFilterLoadedPages, fetchSearchPage])
+    })
+    
+    const currentPages = getCurrentFilterLoadedPages()
+    const newPages = [...currentPages]
+    pagesToFetch.forEach(p => {
+      if ((totalPages === 0 || p <= totalPages) && !newPages.includes(p)) {
+        newPages.push(p)
+      }
+    })
+    setCurrentFilterLoadedPages(newPages.sort((a, b) => a - b))
+  }, [query, contentType, selectedYear, selectedGenre, selectedCountry, getCurrentFilterMetadata, getCurrentFilterCache, getCurrentFilterLoadedPages, setCurrentFilterCache, setCurrentFilterLoadedPages, fetchSearchPage])
   
   // Debounced search effect
   useEffect(() => {
@@ -688,44 +695,43 @@ function SearchPageContent() {
   const totalPages = metadata.totalPages
   const totalResults = metadata.totalResults
   
-  // Xác định maxLoadedPage
-  const maxLoadedPage = getCurrentFilterLoadedPages().length > 0 
-    ? Math.max(...getCurrentFilterLoadedPages()) 
+  // Xác định các trang hợp lệ không vượt quá totalPages
+  const rawLoadedPages = getCurrentFilterLoadedPages()
+  const validLoadedPages = totalPages > 0 
+    ? rawLoadedPages.filter(p => p <= totalPages) 
+    : rawLoadedPages
+  const maxLoadedPage = validLoadedPages.length > 0 
+    ? Math.max(...validLoadedPages) 
     : 1
+  const isLastPage = totalPages > 0 ? page >= totalPages : false
   
   // Xử lý khi đổi trang
   const handlePageChange = useCallback((p: number) => {
-    if (p < 1) return
+    if (p < 1 || (totalPages > 0 && p > totalPages)) return
     setPageInput(String(p))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
     
-    // Nếu bấm vào trang cuối cùng đã load, tự động load tiếp 10 trang mới
-    if (p === maxLoadedPage) {
-      loadNext10Pages(maxLoadedPage + 1).then(() => {
+    // Nếu bấm vào trang cuối cùng đã load và chưa đạt tới totalPages, load thêm trang kế tiếp
+    if (p >= maxLoadedPage && (totalPages === 0 || p < totalPages)) {
+      loadNext10Pages(p + 1).then(() => {
         setPage(p)
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-      })
-    } else if (p === maxLoadedPage + 1 || p === maxLoadedPage + 2) {
-      loadNext10Pages(maxLoadedPage + 1).then(() => {
-        setPage(p)
-        window.scrollTo({ top: 0, behavior: 'smooth' })
       })
     } else {
       setPage(p)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
-  }, [maxLoadedPage, loadNext10Pages])
+  }, [maxLoadedPage, totalPages, loadNext10Pages])
   
-  // Sync page input when page changes due to URL/back/forward
+  // Sync page input khi page thay đổi từ URL/back/forward
   useEffect(() => {
     setPageInput(String(page))
   }, [page])
   
   const submitPageInput = useCallback(() => {
-    const target = parseInt(pageInput || '1', 10)
-    if (!isNaN(target) && target > 0) {
-      handlePageChange(target)
-    }
-  }, [pageInput, handlePageChange])
+    let target = parseInt(pageInput || '1', 10)
+    if (isNaN(target) || target < 1) target = 1
+    if (totalPages > 0 && target > totalPages) target = totalPages
+    handlePageChange(target)
+  }, [pageInput, totalPages, handlePageChange])
   
   return (
     <div className="min-h-screen bg-black">
@@ -979,21 +985,23 @@ function SearchPageContent() {
             </AnimatePresence>
             
             {/* Pagination */}
-            {!loading && getCurrentFilterLoadedPages().length > 0 && totalPages > 1 && (
+            {!loading && validLoadedPages.length > 0 && totalPages > 1 && (
               <div className="max-w-7xl mx-auto px-2 md:px-4 pb-8 md:pb-12 mt-6 md:mt-8">
                 <Pagination
                   currentPage={page}
-                  loadedPages={getCurrentFilterLoadedPages()}
+                  loadedPages={validLoadedPages}
                   onPageChange={handlePageChange}
+                  isLastPage={isLastPage}
                 />
                 {/* Go to page input */}
                 <div className="mt-4 flex flex-col items-center gap-2">
-                  <span className="text-sm text-gray-400">Go to Page</span>
+                  <span className="text-sm text-gray-400">{t('goToPage')}</span>
                   <div className="flex items-center gap-2 px-2">
                     <input
                       type="number"
                       inputMode="numeric"
                       min={1}
+                      max={totalPages > 0 ? totalPages : undefined}
                       value={pageInput}
                       onChange={(e) => setPageInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') submitPageInput(); }}
@@ -1005,7 +1013,7 @@ function SearchPageContent() {
                       onClick={submitPageInput}
                       className="rounded-lg bg-red-600 text-white px-4 py-2 text-sm font-medium hover:bg-red-700 transition-colors"
                     >
-                      Go
+                      {t('go')}
                     </button>
                   </div>
                 </div>
