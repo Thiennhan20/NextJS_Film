@@ -270,7 +270,7 @@ const ChatInputForm = memo(forwardRef<ChatInputHandle, ChatInputFormProps>(funct
             spellCheck={false}
             className={`w-full min-h-[44px] bg-gray-800/80 border ${
               isListening ? 'border-red-500/80 ring-2 ring-red-500/40 text-rose-200' : 'border-gray-700/60 text-white'
-            } rounded-xl pl-4 pr-11 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/70 focus:border-red-500 placeholder-gray-400 transition-colors`}
+            } rounded-xl pl-4 pr-11 py-2.5 text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-red-500/70 focus:border-red-500 placeholder-gray-400 transition-colors`}
           />
           {isSpeechSupported && (
             <button
