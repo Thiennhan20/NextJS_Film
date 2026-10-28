@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
-  ArrowLeftIcon, 
   TrashIcon as Trash2, 
   ArrowPathIcon as RefreshCw, 
   TvIcon as Tv, 
@@ -13,6 +12,7 @@ import {
   ClockIcon as Clock,
   ExclamationTriangleIcon as AlertTriangle,
 } from '@heroicons/react/24/outline';
+import BackButton from '@/components/common/BackButton';
 import useAuthStore from '@/store/useAuthStore';
 import useAuthHydrated from '@/store/useAuthHydrated';
 import api from '@/lib/axios';
@@ -167,14 +167,9 @@ export default function SavedStreamsClient() {
               transition={{ duration: 0.4 }}
               className="flex items-center gap-3 mb-6 sm:mb-8"
             >
-              <Link
-                href="/profile"
-                className="p-2 rounded-lg bg-gray-800/60 hover:bg-gray-700/60 border border-gray-700/50 transition-colors"
-              >
-                <ArrowLeftIcon className="w-5 h-5 text-gray-300" />
-              </Link>
+              <BackButton />
               <div>
-                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500 text-transparent bg-clip-text">
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500 text-transparent bg-clip-text">
                   {tLobby('savedStreams')}
                 </h1>
                 <p className="text-xs sm:text-sm text-gray-400 mt-0.5">

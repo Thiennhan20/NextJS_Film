@@ -17,6 +17,7 @@ import Link from 'next/link'
 import { toast } from 'react-hot-toast'
 import Image from 'next/image'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
+import BackButton from '@/components/common/BackButton'
 import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 
@@ -139,6 +140,7 @@ const FriendItemCard = React.memo(function FriendItemCard({
 
 export default function FriendsClient() {
   const t = useTranslations('Friends')
+  const tProfile = useTranslations('Profile')
   const { isAuthenticated, isAuthChecked } = useAuthStore()
   const hydrated = useAuthHydrated()
   const searchParams = useSearchParams()
@@ -364,11 +366,18 @@ export default function FriendsClient() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white pt-20 sm:pt-24 pb-8 sm:pb-12 px-3 sm:px-4">
+    <div className="min-h-screen bg-black text-white pt-6 sm:pt-10 pb-10 sm:pb-16 px-3 sm:px-4 md:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-2 sm:gap-3 mb-5 sm:mb-8">
-          <UserGroupIcon className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />
-          <h1 className="text-2xl sm:text-3xl font-bold">{t('title')}</h1>
+        <div className="flex items-center gap-3 mb-6 sm:mb-8">
+          <BackButton />
+          <div>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400 text-transparent bg-clip-text">
+              {t('title')}
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
+              {tProfile('manageFriends')}
+            </p>
+          </div>
         </div>
 
         {/* Tabs */}

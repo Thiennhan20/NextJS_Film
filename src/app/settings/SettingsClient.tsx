@@ -6,11 +6,10 @@ import {
   UserIcon,
   CalendarIcon,
   ClockIcon,
-  Cog6ToothIcon,
-  ArrowLeftIcon,
   CheckIcon,
   GlobeAltIcon
 } from '@heroicons/react/24/outline'
+import BackButton from '@/components/common/BackButton'
 import useAuthStore from '@/store/useAuthStore'
 import useAuthHydrated from '@/store/useAuthHydrated'
 import Link from 'next/link'
@@ -101,15 +100,14 @@ export default function SettingsClient() {
               transition={{ duration: 0.4 }}
               className="flex items-center gap-3 mb-6 sm:mb-8"
             >
-              <Link
-                href={isLoggedIn ? '/profile' : '/'}
-                className="p-2 rounded-lg bg-gray-800/60 hover:bg-gray-700/60 border border-gray-700/50 transition-colors"
-              >
-                <ArrowLeftIcon className="w-5 h-5 text-gray-300" />
-              </Link>
-              <div className="flex items-center gap-2">
-                <Cog6ToothIcon className="w-6 h-6 sm:w-7 sm:h-7 text-red-500" />
-                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">{t('settings')}</h1>
+              <BackButton fallbackHref={isLoggedIn ? '/profile' : '/'} />
+              <div>
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-400 via-sky-400 to-cyan-400 text-transparent bg-clip-text">
+                  {t('settings')}
+                </h1>
+                <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
+                  {t('accountInformation')}
+                </p>
               </div>
             </motion.div>
 

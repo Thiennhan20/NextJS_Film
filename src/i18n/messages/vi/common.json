@@ -116,6 +116,7 @@
     "chatWithAi": "Trò chuyện cùng AI",
     "scrollToBottom": "Cuộn xuống cuối",
     "suggestMovieSummary": "🎬 Tóm tắt nội dung phim {movie}",
+    "suggestMoviesSummary": "🎬 Tóm tắt nội dung phim {movie}",
     "suggestMovieCast": "🍿 Dàn diễn viên trong {movie} gồm những ai?",
     "suggestSimilarMovies": "🎞️ Gợi ý phim tương tự như {movie}",
     "suggestMovieEnding": "⭐ Giải thích ý nghĩa và cái kết của {movie}",

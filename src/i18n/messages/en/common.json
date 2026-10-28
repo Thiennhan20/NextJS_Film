@@ -116,6 +116,7 @@
     "chatWithAi": "Chat with AI",
     "scrollToBottom": "Scroll to bottom",
     "suggestMovieSummary": "🎬 Summarize the plot of {movie}",
+    "suggestMoviesSummary": "🎬 Summarize the plot of {movie}",
     "suggestMovieCast": "🍿 Who stars in {movie}?",
     "suggestSimilarMovies": "🎞️ Movies similar to {movie}",
     "suggestMovieEnding": "⭐ Explain the ending of {movie}",

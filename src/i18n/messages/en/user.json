@@ -1,5 +1,7 @@
 {
   "WatchlistPage": {
+    "title": "My Watchlist",
+    "itemCount": "{count, plural, =1 {1 item} other {# items}}",
     "loginRequired": "Please log in to view your watchlist",
     "login": "Log in",
     "emptyWatchlist": "Your watchlist is empty",

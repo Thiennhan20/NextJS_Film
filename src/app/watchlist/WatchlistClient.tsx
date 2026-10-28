@@ -10,6 +10,7 @@ import { FaBookmark } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
 import { memo, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
+import BackButton from '@/components/common/BackButton';
 
 // Lazy load components để giảm initial bundle size
 const CardWithHover = dynamic(() => import('@/components/common/CardWithHover'), {
@@ -116,24 +117,39 @@ export default function WatchlistPage() {
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 md:p-8 bg-black">
-      {watchlist.length === 0 ? (
-        <div className="text-center text-gray-400 p-6 rounded-xl shadow-xl bg-gradient-to-br from-red-900/60 to-black/60 border border-yellow-700 mx-auto max-w-md">
-          <FaBookmark className="w-12 h-12 mx-auto mb-3 text-yellow-500" />
-          <p className="text-lg text-yellow-200">{t('emptyWatchlist')}</p>
-          <p className="text-sm text-gray-300 mt-2">{t('emptyHint')}</p>
+    <div className="min-h-screen bg-black text-white pt-6 sm:pt-10 pb-10 sm:pb-16 px-3 sm:px-4 md:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6 sm:mb-8">
+          <BackButton />
+          <div>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-red-500 via-rose-500 to-pink-500 text-transparent bg-clip-text">
+              {t('title')}
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
+              {t('itemCount', { count: watchlist.length })}
+            </p>
+          </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2 sm:gap-3 md:gap-4">
-          {watchlist.map((movie) => (
-            <WatchlistItem
-              key={movie.id}
-              movie={movie}
-              onWatchClick={() => handleWatchClick(movie.id, movie.type || 'movie')}
-            />
-          ))}
-        </div>
-      )}
+
+        {watchlist.length === 0 ? (
+          <div className="text-center text-gray-400 p-6 rounded-xl shadow-xl bg-gradient-to-br from-red-900/60 to-black/60 border border-yellow-700 mx-auto max-w-md mt-8">
+            <FaBookmark className="w-12 h-12 mx-auto mb-3 text-yellow-500" />
+            <p className="text-lg text-yellow-200">{t('emptyWatchlist')}</p>
+            <p className="text-sm text-gray-300 mt-2">{t('emptyHint')}</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2 sm:gap-3 md:gap-4">
+            {watchlist.map((movie) => (
+              <WatchlistItem
+                key={movie.id}
+                movie={movie}
+                onWatchClick={() => handleWatchClick(movie.id, movie.type || 'movie')}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 } 

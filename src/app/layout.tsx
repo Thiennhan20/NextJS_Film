@@ -92,7 +92,8 @@ export default async function RootLayout({
           Footer: messages.Footer,
           Watchlist: messages.Watchlist,
           Filter: messages.Filter,
-          NotFound: messages.NotFound
+          NotFound: messages.NotFound,
+          ChatAI: messages.ChatAI
         }}>
           <HeaderProvider>
             {/* Splash Screen */}

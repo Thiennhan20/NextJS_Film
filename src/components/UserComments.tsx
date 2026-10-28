@@ -43,7 +43,12 @@ const getLinkText = (comment: Comment, filter: string, t: (key: string, values?:
   return t(comment.parentId ? 'viewReply' : 'viewComment', { type: typeText })
 }
 
-export default function UserComments() {
+interface UserCommentsProps {
+  hideTitle?: boolean
+  className?: string
+}
+
+export default function UserComments({ hideTitle = false, className = '' }: UserCommentsProps = {}) {
   const t = useTranslations('UserComments')
   const [comments, setComments] = useState<Comment[]>([])
   const [loading, setLoading] = useState(true)
@@ -111,8 +116,8 @@ export default function UserComments() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, delay: 0.9 }}
-      className="bg-gradient-to-br from-gray-900/90 to-gray-800/90 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-8 border border-gray-700/50 shadow-2xl mt-6 sm:mt-8 lg:mt-12"
+      transition={{ duration: 0.6, delay: hideTitle ? 0.2 : 0.9 }}
+      className={`bg-gradient-to-br from-gray-900/90 to-gray-800/90 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-8 border border-gray-700/50 shadow-2xl ${hideTitle ? 'mt-0' : 'mt-6 sm:mt-8 lg:mt-12'} ${className}`}
     >
       <ConfirmDialog
         open={!!confirmDeleteId}
@@ -124,14 +129,16 @@ export default function UserComments() {
         onCancel={() => setConfirmDeleteId(null)}
       />
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3 sm:gap-0">
-        <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3">
-          <ChatBubbleLeftRightIcon className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 text-blue-500" />
-          <span>{t('title')}</span>
-        </h3>
+      <div className={`flex flex-col sm:flex-row ${hideTitle ? 'justify-start' : 'sm:items-center sm:justify-between'} mb-4 sm:mb-6 gap-3 sm:gap-0`}>
+        {!hideTitle && (
+          <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white flex items-center gap-2 sm:gap-3">
+            <ChatBubbleLeftRightIcon className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500" />
+            <span>{t('title')}</span>
+          </h3>
+        )}
         
         {/* Filter Tabs */}
-        <div className="flex bg-gray-900/80 p-1 rounded-lg border border-gray-700/50 self-start sm:self-auto w-full sm:w-auto">
+        <div className="flex bg-gray-900/80 p-1 rounded-lg border border-gray-700/50 self-start w-full sm:w-auto">
           {[ 
             { id: 'comments', label: t('filterComments') },
             { id: 'replies', label: t('filterReplies') },
