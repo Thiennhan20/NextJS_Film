@@ -271,7 +271,7 @@ export default function Home({ initialHeroItems = null }: HomePageClientProps) {
               className="bg-black/40 backdrop-blur-xl rounded-3xl p-8 sm:p-12 border border-white/10 hover:scale-[1.02] transition-transform duration-300"
             >
               <h2
-                className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-purple-400 via-pink-400 to-red-400 text-transparent bg-clip-text leading-tight"
+                className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 text-white tracking-tight leading-tight"
                 style={{ backgroundSize: "300% 300%", animation: 'ctaGradientShift 4s ease-in-out infinite' }}
               >
                 {t('comingSoon')}

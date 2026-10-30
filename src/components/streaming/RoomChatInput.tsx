@@ -106,16 +106,16 @@ function RoomChatInputComponent({ onSendMessage, onSendEmoji, placeholder = 'Typ
           )}
         </AnimatePresence>
 
-        <div className="flex items-center gap-1 sm:gap-1.5">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => setShowEmojis(prev => !prev)}
-            className={`p-1 sm:p-1.5 rounded-lg transition-colors shrink-0 ${
-              showEmojis ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+            className={`w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-colors shrink-0 ${
+              showEmojis ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-400 hover:text-white hover:bg-gray-800'
             }`}
             aria-label="Toggle emoji picker"
           >
-            <Smile className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <Smile className="h-5 w-5" />
           </button>
           <input
             type="text"
@@ -128,17 +128,17 @@ function RoomChatInputComponent({ onSendMessage, onSendEmoji, placeholder = 'Typ
               }
             }}
             placeholder={placeholder}
-            className="flex-grow bg-gray-800/50 border border-gray-700/40 rounded-full px-3 py-1 sm:py-1.5 text-base text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-yellow-500/30 focus:border-yellow-500/30 transition-all"
+            className="flex-grow bg-gray-800/60 border border-gray-700/50 rounded-full px-3.5 py-1.5 sm:py-2 text-sm sm:text-base text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-yellow-500/40 focus:border-yellow-500/40 transition-all"
             maxLength={500}
           />
           <button
             type="button"
             onClick={handleSend}
             disabled={!chatInput.trim()}
-            className="p-1 sm:p-1.5 bg-yellow-500 text-black rounded-full hover:bg-yellow-400 disabled:bg-gray-700 disabled:text-gray-500 transition-colors shrink-0"
+            className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-yellow-500 text-black font-semibold rounded-full hover:bg-yellow-400 active:scale-95 disabled:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 transition-all shrink-0 shadow-sm"
             aria-label="Send message"
           >
-            <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <Send className="h-4 w-4" />
           </button>
         </div>
       </div>

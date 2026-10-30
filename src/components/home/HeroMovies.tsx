@@ -777,7 +777,7 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
 
         {/* Mobile Scroll Down Indicator */}
         <div
-          className="lg:hidden flex flex-col items-center gap-0.5 cursor-pointer mt-3"
+          className="lg:hidden flex flex-col items-center gap-0.5 cursor-pointer mt-3 group"
           onClick={() => {
             window.scrollTo({ 
               top: window.innerHeight, 
@@ -785,12 +785,12 @@ export default function HeroMovies({ initialItems = null }: { initialItems?: Her
             });
           }}
         >
-          <p className="text-gray-400 text-[10px] font-light">
+          <p className="text-gray-400 text-[10px] font-light group-hover:text-gray-200 transition-colors">
             {t('scrollExplore')}
           </p>
-          <div className="flex flex-col items-center -space-y-1.5 animate-bounce">
-            <ChevronDownIcon className="w-3.5 h-3.5 text-red-500" />
-            <ChevronDownIcon className="w-3.5 h-3.5 text-red-500" />
+          <div className="flex flex-col items-center -space-y-1.5 transition-transform duration-300 group-hover:translate-y-1">
+            <ChevronDownIcon className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+            <ChevronDownIcon className="w-3.5 h-3.5 text-red-500/70" />
           </div>
         </div>
       </div>

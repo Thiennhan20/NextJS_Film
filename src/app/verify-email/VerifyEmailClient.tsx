@@ -104,7 +104,7 @@ function VerifyEmailPageInner() {
         className="w-full max-w-sm sm:max-w-md lg:max-w-lg mx-auto p-4 sm:p-8 mt-10 sm:mt-20 bg-gradient-to-br from-green-900/95 to-black/95 backdrop-blur-lg rounded-2xl shadow-2xl border-4 border-green-500 text-center relative overflow-hidden"
       >
         <div className="flex justify-center mb-4 sm:mb-6">
-          <CheckCircleIcon className="h-10 w-10 sm:h-14 sm:w-14 text-green-400 animate-bounce" />
+          <CheckCircleIcon className="h-10 w-10 sm:h-14 sm:w-14 text-green-400 animate-pulse" />
         </div>
         <h2 className="text-xl sm:text-3xl font-extrabold mb-3 sm:mb-4 text-green-400 drop-shadow-lg tracking-wide">
           {t('title')}

@@ -142,8 +142,8 @@ export default function AppDownloadModal() {
                 >
                   {/* Visual Left Block */}
                   <div className="md:col-span-5 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-blue-600/10 to-transparent border border-blue-500/10 rounded-2xl">
-                    <div className="w-16 h-16 rounded-2xl bg-blue-500/20 flex items-center justify-center text-blue-400 mb-4">
-                      <FaApple className="h-10 w-10 animate-bounce-slow" />
+                    <div className="w-16 h-16 rounded-2xl bg-blue-500/20 flex items-center justify-center text-blue-400 mb-4 shadow-inner">
+                      <FaApple className="h-10 w-10 animate-pulse" />
                     </div>
                     <h4 className="text-base font-bold text-white mb-2">{isEn ? 'Download iOS App' : 'Tải ứng dụng iOS'}</h4>
                     <p className="text-xs text-gray-500 text-center font-light leading-relaxed">
@@ -203,8 +203,8 @@ export default function AppDownloadModal() {
                 >
                   {/* Visual Left Block */}
                   <div className="md:col-span-5 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-emerald-600/10 to-transparent border border-[#3DDC84]/10 rounded-2xl">
-                    <div className="w-16 h-16 rounded-2xl bg-[#3DDC84]/20 flex items-center justify-center text-[#3DDC84] mb-4">
-                      <FaAndroid className="h-10 w-10 animate-bounce-slow" />
+                    <div className="w-16 h-16 rounded-2xl bg-[#3DDC84]/20 flex items-center justify-center text-[#3DDC84] mb-4 shadow-inner">
+                      <FaAndroid className="h-10 w-10 animate-pulse" />
                     </div>
                     <h4 className="text-base font-bold text-white mb-2">{isEn ? 'Download Android App' : 'Tải ứng dụng Android'}</h4>
                     <p className="text-xs text-gray-500 text-center font-light leading-relaxed">

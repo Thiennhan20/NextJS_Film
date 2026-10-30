@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -24,10 +24,46 @@ export default function ConfirmDialog({
   onCancel
 }: ConfirmDialogProps) {
   const [mounted, setMounted] = useState(false);
+  const cancelBtnRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Keyboard navigation: Escape key closes the dialog
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, onCancel]);
+
+  // Prevent background scrolling while open
+  useEffect(() => {
+    if (!open) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [open]);
+
+  // Focus cancel button on open for accessible keyboard navigation
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+        cancelBtnRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   if (!mounted || typeof document === 'undefined') return null;
 
@@ -39,6 +75,10 @@ export default function ConfirmDialog({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[9999] flex items-center justify-center px-3 sm:px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-dialog-title"
+          aria-describedby="confirm-dialog-description"
         >
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={onCancel} />
@@ -58,22 +98,23 @@ export default function ConfirmDialog({
                 </svg>
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="text-base sm:text-lg font-bold text-white mb-1.5 truncate">{title}</h3>
-                <p className="text-xs sm:text-sm text-gray-300 leading-relaxed">{description}</p>
+                <h3 id="confirm-dialog-title" className="text-base sm:text-lg font-bold text-white mb-1.5 truncate">{title}</h3>
+                <p id="confirm-dialog-description" className="text-xs sm:text-sm text-gray-300 leading-relaxed">{description}</p>
               </div>
             </div>
             <div className="mt-5 flex items-center justify-end gap-2.5">
               <button
+                ref={cancelBtnRef}
                 type="button"
                 onClick={onCancel}
-                className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white font-medium transition-all text-xs sm:text-sm active:scale-95"
+                className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white font-medium transition-all text-xs sm:text-sm active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/20"
               >
                 {cancelText}
               </button>
               <button
                 type="button"
                 onClick={onConfirm}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold transition-all text-xs sm:text-sm shadow-lg shadow-red-900/40 active:scale-95"
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold transition-all text-xs sm:text-sm shadow-lg shadow-red-900/40 active:scale-95 focus:outline-none focus:ring-2 focus:ring-red-500/40"
               >
                 {confirmText}
               </button>

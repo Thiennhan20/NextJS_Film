@@ -1665,7 +1665,7 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
               </svg>
               <span className="hidden sm:inline">Chat</span>
               {chatUnreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center px-1 text-[10px] font-bold bg-red-500 text-white rounded-full shadow-md animate-bounce">
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center px-1 text-[10px] font-bold bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-full shadow-md shadow-red-900/40 animate-pulse">
                   {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
                 </span>
               )}

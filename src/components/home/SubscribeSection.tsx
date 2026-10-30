@@ -18,7 +18,7 @@ export default function SubscribeSection() {
   return (
     <section className="py-16 px-2 sm:px-4 bg-gradient-to-b from-black to-gray-900">
       <div className="max-w-2xl mx-auto text-center">
-        <h2 className="text-2xl sm:text-4xl font-bold mb-4 bg-gradient-to-r from-green-400 to-blue-500 text-transparent bg-clip-text">{t('subscribeTitle')}
+        <h2 className="text-2xl sm:text-4xl font-bold mb-4 text-white tracking-tight">{t('subscribeTitle')}
         </h2>
         <p className="text-gray-400 mb-8">{t('subscribeDesc')}</p>
         <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4 items-center justify-center">

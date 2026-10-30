@@ -211,15 +211,36 @@ export default function InviteFriendsModal({
     });
   };
 
-  // Deterministic avatar gradient
+  // Keyboard navigation & scroll lock
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  // Deterministic avatar gradient with cinema palette
   const getAvatarGradient = (id: string) => {
     const gradients = [
-      'from-pink-500 to-rose-500',
-      'from-purple-500 to-indigo-500',
-      'from-cyan-500 to-blue-500',
-      'from-emerald-500 to-teal-500',
-      'from-amber-500 to-orange-500',
-      'from-violet-500 to-purple-600',
+      'from-rose-600 to-red-500',
+      'from-amber-600 to-yellow-500',
+      'from-emerald-600 to-teal-500',
+      'from-blue-600 to-cyan-500',
+      'from-slate-700 to-gray-600',
+      'from-indigo-600 to-sky-500',
     ];
     let hash = 0;
     for (let i = 0; i < id.length; i++) {
@@ -237,7 +258,12 @@ export default function InviteFriendsModal({
 
   return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 overflow-hidden">
+      <div 
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="invite-friends-modal-title"
+      >
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -263,7 +289,7 @@ export default function InviteFriendsModal({
                 <UserPlusIcon className="w-5 h-5 stroke-[2.2]" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-base sm:text-lg font-bold text-white truncate">
+                <h3 id="invite-friends-modal-title" className="text-base sm:text-lg font-bold text-white truncate">
                   {t('inviteFriendsTitle')}
                 </h3>
                 <p className="text-xs text-gray-400 truncate flex items-center gap-1.5 mt-0.5">
@@ -460,31 +486,23 @@ export default function InviteFriendsModal({
           </div>
 
           {/* Modal Footer / Direct Link Sharing */}
-          <div className="p-3 sm:p-4 border-t border-white/[0.08] bg-white/[0.02] flex items-center justify-between gap-3 shrink-0">
+          <div className="p-3 sm:p-4 border-t border-white/[0.08] bg-white/[0.02] shrink-0">
             <button
               type="button"
               onClick={handleCopyLink}
-              className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/10 hover:border-white/20 text-gray-200 hover:text-white text-xs font-medium transition-all active:scale-98"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/10 hover:border-white/20 text-gray-200 hover:text-white text-xs sm:text-sm font-medium transition-all active:scale-[0.99]"
             >
               {copiedLink ? (
                 <>
-                  <CheckIcon className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-400">{t('linkCopied')}</span>
+                  <CheckIcon className="w-4 h-4 text-emerald-400" />
+                  <span className="text-emerald-400 font-semibold">{t('linkCopied')}</span>
                 </>
               ) : (
                 <>
-                  <ShareIcon className="w-3.5 h-3.5 text-gray-400" />
+                  <ShareIcon className="w-4 h-4 text-gray-400" />
                   <span>{t('copyRoomLink')}</span>
                 </>
               )}
-            </button>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="py-2 px-4 rounded-xl bg-white/[0.05] hover:bg-white/10 text-gray-400 hover:text-white text-xs font-medium transition-colors"
-            >
-              {t('close')}
             </button>
           </div>
         </motion.div>

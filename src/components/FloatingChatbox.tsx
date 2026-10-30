@@ -1075,7 +1075,7 @@ export default function FloatingChatbox() {
                     <FilmIcon className="w-5 h-5 text-white" aria-hidden="true" />
                   </div>
                   <div>
-                    <h2 id="chatbox-heading" className="text-base sm:text-lg font-bold bg-gradient-to-r from-red-400 via-rose-300 to-orange-300 text-transparent bg-clip-text">
+                    <h2 id="chatbox-heading" className="text-base sm:text-lg font-bold text-white tracking-tight">
                       {t('title')}
                     </h2>
                     <p className="text-xs text-gray-300/90 leading-tight">{t('subtitle')}</p>
@@ -1174,10 +1174,10 @@ export default function FloatingChatbox() {
                   {isLoadingChat && !streamingContent && (
                     <div className="flex justify-start items-center gap-2">
                       <div className="bg-gray-800/90 border border-gray-700/60 p-3 rounded-2xl flex items-center gap-3 shadow-md">
-                        <div className="flex space-x-1.5">
-                          <div className="w-2 h-2 bg-red-400 rounded-full animate-bounce" />
-                          <div className="w-2 h-2 bg-rose-400 rounded-full animate-bounce delay-150" />
-                          <div className="w-2 h-2 bg-orange-400 rounded-full animate-bounce delay-300" />
+                        <div className="flex space-x-1.5 items-center py-0.5">
+                          <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse" />
+                          <div className="w-2 h-2 bg-rose-400 rounded-full animate-pulse [animation-delay:180ms]" />
+                          <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse [animation-delay:360ms]" />
                         </div>
                         <span className="text-xs text-gray-300 font-medium">{t('searchingMovie')}</span>
                       </div>
@@ -1201,7 +1201,7 @@ export default function FloatingChatbox() {
                     className="absolute bottom-20 right-6 z-20 bg-gray-800/95 hover:bg-gray-700 text-white border border-gray-600/70 rounded-full px-3.5 py-1.5 shadow-2xl flex items-center gap-1.5 text-xs backdrop-blur-md transition-all active:scale-95"
                     aria-label={t('scrollDownAria')}
                   >
-                    <ArrowDownIcon className="w-3.5 h-3.5 text-rose-400 animate-bounce" aria-hidden="true" />
+                    <ArrowDownIcon className="w-3.5 h-3.5 text-rose-400" aria-hidden="true" />
                     <span className="font-medium text-gray-200">{t('scrollDown')}</span>
                   </motion.button>
                 )}

@@ -371,7 +371,14 @@ export default function FriendsClient() {
         <div className="flex items-center gap-3 mb-6 sm:mb-8">
           <BackButton />
           <div>
-            <h1 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400 text-transparent bg-clip-text">
+            <h1
+              className="w-fit text-lg sm:text-xl md:text-2xl font-bold tracking-tight"
+              style={{
+                background: 'linear-gradient(to right, #34d399, #2dd4bf)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
               {t('title')}
             </h1>
             <p className="text-xs sm:text-sm text-gray-400 mt-0.5">

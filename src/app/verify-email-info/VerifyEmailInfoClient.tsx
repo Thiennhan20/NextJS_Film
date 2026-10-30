@@ -89,7 +89,7 @@ function VerifyEmailInfoPageInner() {
       <p className="text-yellow-300 text-sm sm:text-base mb-2">
         {t('afterVerify')}<br/>
         {shouldRedirect ? (
-          <span className="flex items-center justify-center gap-2 text-green-400 font-bold animate-bounce mt-2"><CheckCircleIcon className="h-5 w-5 sm:h-6 sm:w-6" />{t('success')}</span>
+          <span className="flex items-center justify-center gap-2 text-green-400 font-bold animate-pulse mt-2"><CheckCircleIcon className="h-5 w-5 sm:h-6 sm:w-6" />{t('success')}</span>
         ) : (
           <span className="text-yellow-400">{t('redirectInfo')}</span>
         )}

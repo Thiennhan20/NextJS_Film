@@ -456,7 +456,7 @@ export default function RecentlyWatched({ className = '' }: RecentlyWatchedProps
           className="mb-8"
         >
           <div className="flex items-center gap-2 mb-4">
-            <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-red-500 to-pink-500 text-transparent bg-clip-text">
+            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
               {t('title')}
             </h2>
             {userId ? (

@@ -196,7 +196,7 @@ export default function Navigation() {
     };
   }, [isOpen]);
 
-  const isMoreActive = Boolean(
+  const isBaseMoreActive = Boolean(
     pathname?.startsWith('/streaming') ||
     pathname?.startsWith('/game') ||
     pathname?.startsWith('/actors') ||
@@ -204,10 +204,16 @@ export default function Navigation() {
     pathname?.startsWith('/top-rated') ||
     pathname?.startsWith('/genres') ||
     pathname?.startsWith('/country') ||
-    moreNavItems.some(item => item.href !== '/' && pathname?.startsWith(item.href)) ||
-    (windowWidth < 1200 && pathname?.startsWith('/tvshows')) ||
-    (windowWidth < 900 && pathname?.startsWith('/movies'))
+    moreNavItems.some(item => item.href !== '/' && pathname?.startsWith(item.href))
   );
+
+  const isDesktopMoreActive = Boolean(
+    isBaseMoreActive ||
+    (windowWidth >= 700 && windowWidth < 1200 && pathname?.startsWith('/tvshows')) ||
+    (windowWidth >= 700 && windowWidth < 900 && pathname?.startsWith('/movies'))
+  );
+
+  const isMobileMoreActive = isBaseMoreActive;
 
   const isUserActive = Boolean(
     pathname?.startsWith('/profile') ||
@@ -221,6 +227,13 @@ export default function Navigation() {
   useEffect(() => {
     setNavDropdownOpen(isOpen || isMoreDropdownActive || isProfileDropdownActive);
   }, [isOpen, isMoreDropdownActive, isProfileDropdownActive, setNavDropdownOpen]);
+
+  // Auto close mobile drawer and dropdowns on route changes
+  useEffect(() => {
+    setIsOpen(false);
+    setIsMobileMoreDropdownOpen(false);
+    setIsMobileUserDropdownOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     const onHeaderDropdownOpen = (event: Event) => {
@@ -311,17 +324,17 @@ export default function Navigation() {
                 <Menu.Button
                   onClick={() => notifyHeaderDropdownOpen('more')}
                   className={`flex h-10 shrink-0 items-center space-x-1.5 whitespace-nowrap px-4 rounded-full transition-colors duration-200 font-bold text-sm ${
-                    isMoreActive
+                    isDesktopMoreActive
                       ? 'bg-white text-gray-900 border border-white/70 shadow-md shadow-black/40 ring-1 ring-white/60'
                       : 'text-white bg-white/10 hover:bg-white/20 border border-white/25 hover:border-white/40 ring-1 ring-white/10 shadow-sm'
                   }`}
                 >
                   <QueueListIcon className="h-4.5 w-4.5 stroke-[2.5]" />
                   <span className="font-bold">{t('more')}</span>
-                  <span className={`ml-1 hidden h-4.5 min-w-4.5 items-center justify-center rounded-full px-1.5 text-xs min-[900px]:inline-flex min-[1200px]:hidden ${isMoreActive ? 'bg-gray-900/80 text-white' : 'bg-red-500/80 text-white'}`}>
+                  <span className={`ml-1 hidden h-4.5 min-w-4.5 items-center justify-center rounded-full px-1.5 text-xs min-[900px]:inline-flex min-[1200px]:hidden ${isDesktopMoreActive ? 'bg-gray-900/80 text-white' : 'bg-red-500/80 text-white'}`}>
                     1
                   </span>
-                  <span className={`ml-1 hidden h-4.5 min-w-4.5 items-center justify-center rounded-full px-1.5 text-xs max-[899px]:inline-flex ${isMoreActive ? 'bg-gray-900/80 text-white' : 'bg-red-500/80 text-white'}`}>
+                  <span className={`ml-1 hidden h-4.5 min-w-4.5 items-center justify-center rounded-full px-1.5 text-xs max-[899px]:inline-flex ${isDesktopMoreActive ? 'bg-gray-900/80 text-white' : 'bg-red-500/80 text-white'}`}>
                     2
                   </span>
                 </Menu.Button>
@@ -716,7 +729,10 @@ export default function Navigation() {
                 <Link
                   key={item.key}
                   href={item.href}
-                  onClick={() => setIsOpen(false)}
+                  onClick={() => {
+                    setIsOpen(false);
+                    setIsMobileMoreDropdownOpen(false);
+                  }}
                   className={`block px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 active:scale-[0.98] ${
                     isActive
                       ? 'bg-white text-gray-900 shadow-sm'
@@ -733,7 +749,7 @@ export default function Navigation() {
             {/* More dropdown for mobile */}
             <button
               className={`flex items-center w-full px-3.5 py-2.5 rounded-xl text-base font-bold transition-all duration-200 active:scale-[0.98] ${
-                isMoreActive
+                isMobileMoreActive
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-white/90 hover:bg-white/10 hover:text-white'
               }`}
