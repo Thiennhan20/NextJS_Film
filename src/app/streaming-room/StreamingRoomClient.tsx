@@ -7,8 +7,10 @@ import Image from 'next/image';
 import {
   ClipboardDocumentIcon as Copy, CheckIcon as Check, ArrowLeftIcon as ArrowLeft, UsersIcon as Users, HashtagIcon as Hash,
   StarIcon as Crown, LockClosedIcon as Lock, LockOpenIcon as Unlock, ArrowRightOnRectangleIcon as LogOut, SignalIcon as Radio, ClockIcon as Clock, ExclamationTriangleIcon as AlertTriangle, ShareIcon as Share2, ChevronDownIcon as ChevronDown,
-  EyeIcon, EyeSlashIcon, UserMinusIcon as UserMinus
+  EyeIcon, EyeSlashIcon, UserMinusIcon as UserMinus, PlusIcon as Plus
 } from '@heroicons/react/24/outline';
+import InviteFriendsModal from '@/components/streaming/InviteFriendsModal';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import useAuthStore from '@/store/useAuthStore';
 import EnhancedMoviePlayer from '@/components/common/video-player/EnhancedMoviePlayer';
 import { prepareHlsPlayerSource } from '@/lib/hlsProxy';
@@ -109,6 +111,8 @@ function StreamingRoomContent() {
   const [hasNewMessage, setHasNewMessage] = useState(false);
   const [roomMembers, setRoomMembers] = useState<{ user_id: string; username: string; avatar?: string; is_host: boolean }[]>([]);
   const [showMembers, setShowMembers] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [kickTargetUser, setKickTargetUser] = useState<{ user_id: string; username: string } | null>(null);
   const [roomAudio, setRoomAudio] = useState<'vietsub' | 'dubbed' | ''>('');
   const [roomContentType, setRoomContentType] = useState<RoomStatus['content_type']>(typeFromParams || '');
   const [roomSeason, setRoomSeason] = useState<number | null>(null);
@@ -1275,10 +1279,8 @@ function StreamingRoomContent() {
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (window.confirm(t('confirmKickUser', { user: member.username }))) {
-                                          emitKick(member.user_id);
-                                          showNotification(t('userKickedNotification', { user: member.username }));
-                                        }
+                                        setShowMembers(false);
+                                        setKickTargetUser(member);
                                       }}
                                       className="p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors shrink-0"
                                       title={t('kickUser', { user: member.username })}
@@ -1291,6 +1293,34 @@ function StreamingRoomContent() {
                               </div>
                             ))
                           )}
+                        </div>
+
+                        {/* Invite Friends Button with Plus icon */}
+                        <div className="pt-1.5 mt-1 border-t border-white/[0.08]">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowMembers(false);
+                              const maxU = Number(roomStatus?.max_users) || 2;
+                              const currentCount = Math.max(
+                                roomMembers.length,
+                                Number(memberCount) || 0,
+                                Number(roomStatus?.member_count) || 0
+                              );
+                              if (currentCount >= maxU) {
+                                showNotification(t('roomFullCannotInvite', { current: currentCount, max: maxU }));
+                                return;
+                              }
+                              setShowInviteModal(true);
+                            }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 hover:text-yellow-300 border border-yellow-500/25 hover:border-yellow-500/40 text-xs font-medium transition-all group active:scale-95 shadow-xs"
+                            title={t('inviteFriends')}
+                          >
+                            <div className="w-5 h-5 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 group-hover:scale-110 transition-transform shrink-0">
+                              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                            </div>
+                            <span className="truncate">{t('inviteFriends')}</span>
+                          </button>
                         </div>
                       </motion.div>
                     </>
@@ -1393,7 +1423,7 @@ function StreamingRoomContent() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-16 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 bg-gray-800/95 backdrop-blur-sm border border-yellow-500/30 rounded-xl shadow-2xl text-sm text-yellow-300 whitespace-nowrap"
+            className="fixed top-16 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2.5 bg-gray-900/95 backdrop-blur-md border border-yellow-500/40 rounded-xl shadow-2xl text-xs sm:text-sm font-semibold text-yellow-300 whitespace-nowrap pointer-events-none"
           >
             {notification}
           </motion.div>
@@ -1836,6 +1866,35 @@ function StreamingRoomContent() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Invite Friends Modal */}
+      <InviteFriendsModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        roomId={roomId}
+        roomTitle={roomTitle}
+        roomMembers={roomMembers}
+        memberCount={Math.max(roomMembers.length, Number(memberCount) || 0, Number(roomStatus?.member_count) || 0)}
+        maxUsers={Number(roomStatus?.max_users) || 2}
+        onShowToast={showNotification}
+      />
+
+      {/* Kick User Confirmation Dialog */}
+      <ConfirmDialog
+        open={Boolean(kickTargetUser)}
+        title={t('kickUserTitle')}
+        description={kickTargetUser ? t('confirmKickUser', { user: kickTargetUser.username }) : ''}
+        confirmText={t('confirmKick')}
+        cancelText={t('cancel')}
+        onConfirm={() => {
+          if (kickTargetUser) {
+            emitKick(kickTargetUser.user_id);
+            showNotification(t('userKickedNotification', { user: kickTargetUser.username }));
+            setKickTargetUser(null);
+          }
+        }}
+        onCancel={() => setKickTargetUser(null)}
+      />
     </div>
   );
 }

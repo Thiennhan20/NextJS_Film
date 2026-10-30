@@ -13,7 +13,8 @@ import {
   HeartIcon,
   InformationCircleIcon,
   UserPlusIcon,
-  CheckBadgeIcon
+  CheckBadgeIcon,
+  TvIcon
 } from '@heroicons/react/24/outline'
 import api from '@/lib/axios'
 import useAuthStore from '@/store/useAuthStore'
@@ -22,7 +23,7 @@ const CURRENT_HASH = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'dev'
 const HEADER_DROPDOWN_OPEN_EVENT = 'header-dropdown-open'
 const NOTIFICATION_COUNT_POLL_MS = 300000 // 5 phút - giảm tải CPU Vercel (trước đây 60s)
 
-export type NotificationType = 'comment_liked' | 'comment_replied' | 'version_updated' | 'friend_request' | 'friend_accept'
+export type NotificationType = 'comment_liked' | 'comment_replied' | 'version_updated' | 'friend_request' | 'friend_accept' | 'room_invite'
 
 interface NotificationActor {
   _id: string
@@ -36,11 +37,16 @@ interface NotificationActor {
 interface NotificationMetadata {
   movieId?: number
   contentType?: 'movie' | 'tvshow'
+  roomId?: string
+  roomTitle?: string
+  roomPin?: string
+  poster?: string
   commentId?: string
   parentCommentId?: string
   commentPreview?: string
   versionHash?: string
   versionMessage?: string
+  expiresAt?: string
 }
 
 interface ApiNotification {
@@ -50,6 +56,7 @@ interface ApiNotification {
   readAt?: string | null
   actor?: NotificationActor | null
   metadata?: NotificationMetadata
+  expiresAt?: string
   createdAt: string
 }
 
@@ -328,7 +335,19 @@ export default function NotificationBell({ compact = false }: NotificationBellPr
       ? [versionNotification, ...notifications]
       : [...notifications]
 
-    return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    const now = Date.now()
+    return items
+      .filter((n) => {
+        if (n.type === 'room_invite') {
+          const expiresAt = n.expiresAt || n.metadata?.expiresAt
+          if (expiresAt) {
+            const expTime = new Date(expiresAt).getTime()
+            if (!isNaN(expTime) && expTime <= now) return false
+          }
+        }
+        return true
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }, [notifications, versionNotification])
 
   const markVersionRead = () => {
@@ -364,6 +383,15 @@ export default function NotificationBell({ compact = false }: NotificationBellPr
 
     if (notification.type === 'friend_accept') {
       return `/profile/${notification.actor?.username || notification.actor?.hashId || notification.actor?._id}`
+    }
+
+    if (notification.type === 'room_invite') {
+      const roomId = metadata.roomId
+      const roomPin = metadata.roomPin
+      if (roomId) {
+        return `/streaming-room?room=${encodeURIComponent(roomId)}${roomPin ? `&pwd=${encodeURIComponent(roomPin)}` : ''}`
+      }
+      return '/streaming-room'
     }
 
     if (notification.type !== 'comment_liked' && notification.type !== 'comment_replied') {
@@ -491,6 +519,9 @@ export default function NotificationBell({ compact = false }: NotificationBellPr
     if (notification.type === 'friend_accept') {
       return t('friendAccept', { user: actorName })
     }
+    if (notification.type === 'room_invite') {
+      return t('roomInvite', { user: actorName })
+    }
 
     return t('commentReplied', { user: actorName })
   }
@@ -505,6 +536,11 @@ export default function NotificationBell({ compact = false }: NotificationBellPr
     }
     if (notification.type === 'friend_accept') {
       return t('friendAcceptPreview')
+    }
+    if (notification.type === 'room_invite') {
+      return metadata.roomTitle
+        ? t('roomInvitePreviewWithTitle', { title: metadata.roomTitle })
+        : t('roomInvitePreview')
     }
 
     return metadata.commentPreview || t('commentPreviewFallback')
@@ -522,6 +558,9 @@ export default function NotificationBell({ compact = false }: NotificationBellPr
     }
     if (type === 'friend_accept') {
       return <CheckBadgeIcon className="h-4 w-4 text-green-400" />
+    }
+    if (type === 'room_invite') {
+      return <TvIcon className="h-4 w-4 text-amber-400" />
     }
 
     return <InformationCircleIcon className="h-4 w-4 text-purple-400" />

@@ -1033,13 +1033,9 @@ export default function FloatingChatbox() {
                       className="relative bg-gradient-to-b from-gray-800 via-gray-850 to-gray-900 border border-gray-700/80 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center overflow-hidden"
                       onClick={e => e.stopPropagation()}
                     >
-                      {/* Vệt sáng neon đỏ phía trên */}
-                      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-[2px] bg-gradient-to-r from-transparent via-red-500 to-transparent blur-[1px]" />
-                      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-6 bg-red-500/20 blur-xl pointer-events-none" />
-
-                      {/* Icon thùng rác phát sáng */}
+                      {/* Icon thùng rác */}
                       <div className="flex justify-center mb-4">
-                        <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 shadow-[0_0_24px_rgba(239,68,68,0.25)] flex-shrink-0">
+                        <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 shadow-sm flex-shrink-0">
                           <TrashIcon className="h-7 w-7" aria-hidden="true" />
                         </div>
                       </div>
