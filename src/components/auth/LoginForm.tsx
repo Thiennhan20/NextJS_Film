@@ -40,27 +40,52 @@ const GoogleLoginButton = () => {
 
   const handleGoogleSuccess = useCallback(async (credentialResponse: CredentialResponse) => {
     setLoading(true);
-    try {
-      // Send the credential (ID token) directly to server
-      const response = await api.post(
-        '/auth/google-login',
-        { credential: credentialResponse.credential }
-      );
 
-      const { token, user } = response.data;
-      const { setInMemoryToken } = await import('@/lib/axios');
-      setInMemoryToken(token);
-      useAuthStore.setState({ user, token, isAuthenticated: true });
+    const MAX_ATTEMPTS = 4;
+    let lastError: unknown = null;
 
-      if (token) await fetchWatchlistFromServer(token);
-      toast.success(t('googleSuccess'));
-      setLoading(false);
-      router.push('/');
-    } catch (err: unknown) {
-      const errorMessage = (err as { response?: { data?: { message?: string } }; message?: string }).response?.data?.message || (err as { response?: { data?: { message?: string } }; message?: string }).message || 'Unknown error';
-      toast.error(t('googleFailed', { message: errorMessage }));
-      setLoading(false);
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        // Send the credential (ID token) directly to server (with 20s timeout per attempt)
+        const response = await api.post(
+          '/auth/google-login',
+          { credential: credentialResponse.credential },
+          { timeout: 20000 }
+        );
+
+        const { token, user } = response.data;
+        const { setInMemoryToken } = await import('@/lib/axios');
+        setInMemoryToken(token);
+        useAuthStore.setState({ user, token, isAuthenticated: true });
+
+        if (token) await fetchWatchlistFromServer(token);
+        toast.success(t('googleSuccess'));
+        setLoading(false);
+        router.push('/');
+        return;
+      } catch (err: unknown) {
+        lastError = err;
+
+        // If server explicitly responded with client error (4xx: invalid token, account suspended, etc.),
+        // don't retry as it is a deterministic rejection.
+        const axiosErr = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
+        const status = axiosErr.response?.status;
+        if (status && status >= 400 && status < 500) {
+          break;
+        }
+
+        // On attempts 1, 2, 3: keep loading spinner spinning and wait before retrying
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise((resolve) => setTimeout(resolve, 1500 + attempt * 500));
+        }
+      }
     }
+
+    // Only notify error after the 4th attempt fails
+    const errorObj = lastError as { response?: { data?: { message?: string } }; message?: string } | null;
+    const errorMessage = errorObj?.response?.data?.message || errorObj?.message || 'Unknown error';
+    toast.error(t('googleFailed', { message: errorMessage }));
+    setLoading(false);
   }, [router, fetchWatchlistFromServer, t]);
 
   const handleGoogleError = useCallback(() => {

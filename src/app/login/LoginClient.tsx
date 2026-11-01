@@ -8,6 +8,7 @@ import dynamic from 'next/dynamic';
 import { motion, AnimatePresence, type Easing } from 'framer-motion';
 import useAuthStore from '@/store/useAuthStore';
 import { useTranslations } from 'next-intl';
+import api from '@/lib/axios';
 
 // Optimize ThreeBackground with better loading and performance
 const ThreeBackground = dynamic(() => import('@/components/common/ThreeBackground'), {
@@ -102,9 +103,11 @@ export default function LoginPage() {
     [clearError]
   );
 
-  // Mount effect
+  // Mount effect & Pre-warm backend
   useEffect(() => {
     setMounted(true);
+    // Pre-warm backend (Lớp 2): gửi request ngầm đánh thức server ngay khi user vào trang đăng nhập
+    api.get('/health').catch(() => {});
     return () => setMounted(false);
   }, []);
 
