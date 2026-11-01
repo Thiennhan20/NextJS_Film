@@ -23,6 +23,7 @@ import WatchNowMoviesServer3 from './WatchNowMoviesServer3'
 import { SignalIcon as Radio, ArrowPathIcon as Loader2, ServerIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 import { useTranslations } from 'next-intl'
 import api from '@/lib/axios'
+import { usePictureInPicture } from '@/hooks/usePictureInPicture'
 
 // Định nghĩa kiểu Movie
 interface Movie {
@@ -59,6 +60,8 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
 
   const [selectedServer, setSelectedServer] = useState<'server1' | 'server2' | 'server3'>('server1');
   const hasInitialized = useRef(false);
+  const playerWrapperRef = useRef<HTMLDivElement>(null);
+  const { isPiPActive, isSupported: isPiPSupported, togglePiP } = usePictureInPicture(playerWrapperRef);
 
   // Read audio parameter from URL
   const audioFromUrl = searchParams.get('audio');
@@ -517,73 +520,94 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
               )}
             </div>
 
-            {/* Stream Button — chỉ hiện khi Server 1 đã load xong m3u8 */}
-            {selectedServer === 'server1' && effectiveStreamUrl && (
-              <div className="relative" ref={streamBtnRef}>
-                  <button
-                  onClick={handleStreamClick}
-                  disabled={isCheckingStream}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs sm:text-sm font-bold hover:from-yellow-400 hover:to-amber-400 disabled:opacity-70 transition-all duration-300 shadow-lg shadow-yellow-500/20 whitespace-nowrap"
-                  title={t('startWatchParty')}
+            <div className="flex items-center gap-2">
+              {/* Picture-in-Picture Button */}
+              {isPiPSupported && (
+                <button
+                  type="button"
+                  onClick={togglePiP}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all duration-300 shadow-md whitespace-nowrap ${
+                    isPiPActive
+                      ? 'bg-blue-600 border-blue-400 text-white shadow-blue-500/20'
+                      : 'bg-white/10 hover:bg-white/20 border-white/10 text-gray-200 hover:text-white'
+                  }`}
+                  title={isPiPActive ? 'Đóng cửa sổ nổi (Picture-in-Picture)' : 'Xem dạng cửa sổ nổi (Picture-in-Picture)'}
                 >
-                  {isCheckingStream ? <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" /> : <Radio className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
-                  <span className="hidden sm:inline">{t('stream')}</span>
+                  <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .88-2 1.98V19c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z" />
+                  </svg>
+                  <span className="hidden sm:inline">{isPiPActive ? 'Đang mở PiP' : 'Cửa sổ nổi'}</span>
                 </button>
+              )}
 
-                {/* Auth/Duplicate notification dropdown */}
-                {streamPopup && (
-                  <div className="absolute top-full right-0 mt-2 p-3 bg-gray-900/95 backdrop-blur-sm border border-yellow-500/30 rounded-xl shadow-2xl z-50 w-64 md:w-72">
-                    {streamPopup.type === 'auth' ? (
-                      <>
-                        <p className="text-sm text-white mb-2.5">{t('signInRequired')}</p>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => router.push('/login')}
-                            className="flex-1 px-3 py-1.5 bg-yellow-500 text-black text-xs font-semibold rounded-lg hover:bg-yellow-400 transition-colors"
-                          >
-                            {t('signIn')}
-                          </button>
-                          <button
-                            onClick={() => setStreamPopup(null)}
-                            className="px-3 py-1.5 bg-gray-700 text-white text-xs font-semibold rounded-lg hover:bg-gray-600 transition-colors"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-sm text-red-400 mb-2.5 font-medium leading-tight">{tStreaming('duplicateRoomError')}</p>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              if (!isAuthenticated) {
-                                setStreamPopup({ type: 'auth' });
-                                return;
-                              }
-                              router.push(`/streaming-room?room=${streamPopup.roomId}&type=movie&movieId=${movie.id}&title=${encodeURIComponent(movie.title)}`);
-                            }}
-                            className="flex-1 px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-semibold rounded-lg hover:from-yellow-400 hover:to-amber-400 transition-colors flex items-center justify-center gap-1.5"
-                          >
-                            <Radio className="w-3 h-3" />
-                            {tStreaming('goToExistingRoom')}
-                          </button>
-                          <button
-                            onClick={() => setStreamPopup(null)}
-                            className="px-3 py-1.5 bg-gray-700 text-white text-xs font-semibold rounded-lg hover:bg-gray-600 transition-colors"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+              {/* Stream Button — chỉ hiện khi Server 1 đã load xong m3u8 */}
+              {selectedServer === 'server1' && effectiveStreamUrl && (
+                <div className="relative" ref={streamBtnRef}>
+                  <button
+                    onClick={handleStreamClick}
+                    disabled={isCheckingStream}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs sm:text-sm font-bold hover:from-yellow-400 hover:to-amber-400 disabled:opacity-70 transition-all duration-300 shadow-lg shadow-yellow-500/20 whitespace-nowrap"
+                    title={t('startWatchParty')}
+                  >
+                    {isCheckingStream ? <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" /> : <Radio className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+                    <span className="hidden sm:inline">{t('stream')}</span>
+                  </button>
+
+                  {/* Auth/Duplicate notification dropdown */}
+                  {streamPopup && (
+                    <div className="absolute top-full right-0 mt-2 p-3 bg-gray-900/95 backdrop-blur-sm border border-yellow-500/30 rounded-xl shadow-2xl z-50 w-64 md:w-72">
+                      {streamPopup.type === 'auth' ? (
+                        <>
+                          <p className="text-sm text-white mb-2.5">{t('signInRequired')}</p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => router.push('/login')}
+                              className="flex-1 px-3 py-1.5 bg-yellow-500 text-black text-xs font-semibold rounded-lg hover:bg-yellow-400 transition-colors"
+                            >
+                              {t('signIn')}
+                            </button>
+                            <button
+                              onClick={() => setStreamPopup(null)}
+                              className="px-3 py-1.5 bg-gray-700 text-white text-xs font-semibold rounded-lg hover:bg-gray-600 transition-colors"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm text-red-400 mb-2.5 font-medium leading-tight">{tStreaming('duplicateRoomError')}</p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                if (!isAuthenticated) {
+                                  setStreamPopup({ type: 'auth' });
+                                  return;
+                                }
+                                router.push(`/streaming-room?room=${streamPopup.roomId}&type=movie&movieId=${movie.id}&title=${encodeURIComponent(movie.title)}`);
+                              }}
+                              className="flex-1 px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-black text-xs font-semibold rounded-lg hover:from-yellow-400 hover:to-amber-400 transition-colors flex items-center justify-center gap-1.5"
+                            >
+                              <Radio className="w-3 h-3" />
+                              {tStreaming('goToExistingRoom')}
+                            </button>
+                            <button
+                              onClick={() => setStreamPopup(null)}
+                              className="px-3 py-1.5 bg-gray-700 text-white text-xs font-semibold rounded-lg hover:bg-gray-600 transition-colors"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="relative w-full rounded-2xl overflow-hidden bg-black/50 aspect-video shadow-2xl border border-white/10">
+          <div ref={playerWrapperRef} className="relative w-full rounded-2xl overflow-hidden bg-black/50 aspect-video shadow-2xl border border-white/10">
             {selectedServer === 'server1' && (
               (() => {
                 const currentAudio = selectedAudio || (audioFromUrl === 'dubbed' || audioFromUrl === 'vietsub' ? audioFromUrl : null);
