@@ -1,10 +1,2 @@
-"use client";
-import { useEffect, useState } from 'react';
-
-export default function useAuthHydrated() {
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
-  return hydrated;
-} 
+// Re-export for backward compatibility. Canonical location: '@/hooks/useAuthHydrated'
+export { default } from '@/hooks/useAuthHydrated';

@@ -18,6 +18,7 @@ import {
 } from '@heroicons/react/24/outline'
 import api from '@/lib/axios'
 import useAuthStore from '@/store/useAuthStore'
+import { fetchVersionInfo, type VersionInfo } from '@/lib/versionService'
 
 const CURRENT_HASH = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'dev'
 const HEADER_DROPDOWN_OPEN_EVENT = 'header-dropdown-open'
@@ -76,12 +77,6 @@ interface NotificationsResponse {
   totalPages: number
 }
 
-interface VersionInfo {
-  hash: string
-  changelog: string[]
-  description: string
-  updatedAt?: string
-}
 
 interface NotificationTarget {
   movieId: number
@@ -200,13 +195,11 @@ export default function NotificationBell({ compact = false }: NotificationBellPr
   }, [isAuthenticated, t])
 
   const checkVersionNotification = useCallback(async () => {
-    const now = Date.now()
-    const lastCheck = localStorage.getItem('last_version_check_timestamp')
     let data: VersionInfo | null = null
 
     // Attempt to read from localStorage cache first
     const cachedUpdate = localStorage.getItem('cached_version_update')
-    if (lastCheck && now - parseInt(lastCheck, 10) < 10 * 60 * 1000 && cachedUpdate) {
+    if (cachedUpdate) {
       try {
         data = JSON.parse(cachedUpdate)
       } catch {
@@ -214,15 +207,11 @@ export default function NotificationBell({ compact = false }: NotificationBellPr
       }
     }
 
-    // If cache missed or is too old, fetch from server
+    // If cache missed, fetch with deduplication and in-memory throttling
     if (!data) {
       try {
-        const response = await fetch('/api/version', { cache: 'no-store' })
-        if (!response.ok) return
-
-        data = await response.json()
+        data = await fetchVersionInfo()
         if (data) {
-          localStorage.setItem('last_version_check_timestamp', String(now))
           if (data.hash !== CURRENT_HASH) {
             localStorage.setItem('cached_version_update', JSON.stringify(data))
           } else {

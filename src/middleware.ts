@@ -11,17 +11,29 @@ function parseLocale(raw: string | undefined | null): string | null {
   return SUPPORTED_LOCALES.includes(base) ? base : null;
 }
 
+function applySecurityHeaders(response: NextResponse): NextResponse {
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+  return response;
+}
+
 export function middleware(request: NextRequest) {
   const { searchParams, pathname } = request.nextUrl;
 
-  // Skip static files, API routes, and Next.js internals
+  // Skip static files and Next.js internals
   if (
     pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
     pathname.startsWith('/favicon') ||
     pathname.includes('.')
   ) {
     return NextResponse.next();
+  }
+
+  // Apply security headers to API routes
+  if (pathname.startsWith('/api')) {
+    const response = NextResponse.next();
+    return applySecurityHeaders(response);
   }
 
   const langParam = searchParams.get('lang') || searchParams.get('locale');
@@ -40,18 +52,19 @@ export function middleware(request: NextRequest) {
     targetLocale = 'en';
   }
 
+  const response = NextResponse.next();
+  applySecurityHeaders(response);
+
   // Update cookie if it differs from target
   if (cookieLocale !== targetLocale) {
-    const response = NextResponse.next();
     response.cookies.set('locale', targetLocale, {
       path: '/',
       maxAge: 365 * 24 * 60 * 60, // 1 year
       sameSite: 'lax',
     });
-    return response;
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {
