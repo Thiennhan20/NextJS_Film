@@ -62,6 +62,11 @@
       "disableAudioEnhancement": "Turn off audio enhancement",
       "decreaseSpeed": "Decrease speed",
       "increaseSpeed": "Increase speed",
+      "pip": "Picture in Picture (PiP)",
+      "pipOn": "On",
+      "pipOff": "Off",
+      "openPiP": "Open Picture in Picture",
+      "closePiP": "Close Picture in Picture",
       "audioPresets": {
         "default": "Default (Enhanced)",
         "tv": "TV Speakers",

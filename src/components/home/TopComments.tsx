@@ -17,6 +17,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useTopComments, useRecentComments } from '@/hooks/useCommentsOptimized'
 import { useTranslations } from 'next-intl'
+import { encodeCommentId } from '@/lib/hashids'
 
 interface RankingItem {
   id: number
@@ -118,7 +119,8 @@ export default function TopComments() {
   // Helper function to build movie/TV URL with comment anchor
   const getCommentUrl = (movieId: number, type: 'movie' | 'tvshow', commentId: string | number) => {
     const basePath = type === 'movie' ? '/movies' : '/tvshows'
-    return `${basePath}/${movieId}#comment-${commentId}`
+    const encodedCommentId = encodeCommentId(String(commentId))
+    return `${basePath}/${movieId}#comment-${encodedCommentId}`
   }
 
   useEffect(() => {

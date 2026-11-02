@@ -19,6 +19,7 @@ import {
 import api from '@/lib/axios'
 import useAuthStore from '@/store/useAuthStore'
 import { fetchVersionInfo, type VersionInfo } from '@/lib/versionService'
+import { encodeCommentId } from '@/lib/hashids'
 
 const CURRENT_HASH = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || 'dev'
 const HEADER_DROPDOWN_OPEN_EVENT = 'header-dropdown-open'
@@ -116,8 +117,11 @@ function buildCommentTargetPath(target: NotificationMetadata | NotificationTarge
   if (!target.movieId || !target.contentType) return null
 
   const basePath = target.contentType === 'tvshow' ? 'tvshows' : 'movies'
-  const targetCommentId = target.commentId ? String(target.commentId) : ''
-  const parentCommentId = target.parentCommentId ? String(target.parentCommentId) : ''
+  const rawTargetCommentId = target.commentId ? String(target.commentId) : ''
+  const rawParentCommentId = target.parentCommentId ? String(target.parentCommentId) : ''
+
+  const targetCommentId = encodeCommentId(rawTargetCommentId)
+  const parentCommentId = encodeCommentId(rawParentCommentId)
   const searchParams = new URLSearchParams()
 
   if (targetCommentId) {

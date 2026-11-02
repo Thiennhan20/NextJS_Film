@@ -18,6 +18,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
+import { decodeCommentId } from '@/lib/hashids'
 
 interface Comment {
   _id: string
@@ -171,8 +172,9 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
       return hash.startsWith('#comment-') ? hash.replace('#comment-', '') : null
     }
 
-    const targetCommentId = deepLinkCommentId || getHashCommentId()
-    const parentCommentId = deepLinkParentCommentId
+    const rawTargetCommentId = deepLinkCommentId || getHashCommentId()
+    const targetCommentId = decodeCommentId(rawTargetCommentId)
+    const parentCommentId = decodeCommentId(deepLinkParentCommentId)
     const focusComment = deepLinkFocusComment
 
     if (!targetCommentId || isLoading) return
@@ -259,6 +261,31 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
           top: Math.max(targetTop, 0),
           behavior: 'smooth'
         })
+        // Clean up URL hash and comment query parameters quickly (after 200ms when scroll starts)
+        window.setTimeout(() => {
+          if (typeof window !== 'undefined') {
+            try {
+              const url = new URL(window.location.href)
+              if (
+                url.hash.startsWith('#comment-') ||
+                url.searchParams.has('comment') ||
+                url.searchParams.has('parentComment') ||
+                url.searchParams.has('focusComment')
+              ) {
+                url.hash = ''
+                url.searchParams.delete('comment')
+                url.searchParams.delete('parentComment')
+                url.searchParams.delete('focusComment')
+                const cleanUrl = url.pathname + (url.search ? url.search : '')
+                window.history.replaceState(null, '', cleanUrl)
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }, 200)
+
+        // Turn off the red highlight after 2.6 seconds
         window.setTimeout(() => {
           setHighlightedCommentId((current) => (current === activeId ? null : current))
         }, 2600)

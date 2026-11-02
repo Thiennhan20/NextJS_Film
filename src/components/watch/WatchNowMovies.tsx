@@ -23,7 +23,6 @@ import WatchNowMoviesServer3 from './WatchNowMoviesServer3'
 import { SignalIcon as Radio, ArrowPathIcon as Loader2, ServerIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 import { useTranslations } from 'next-intl'
 import api from '@/lib/axios'
-import { usePictureInPicture } from '@/hooks/usePictureInPicture'
 
 // Định nghĩa kiểu Movie
 interface Movie {
@@ -61,7 +60,6 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
   const [selectedServer, setSelectedServer] = useState<'server1' | 'server2' | 'server3'>('server1');
   const hasInitialized = useRef(false);
   const playerWrapperRef = useRef<HTMLDivElement>(null);
-  const { isPiPActive, isSupported: isPiPSupported, togglePiP } = usePictureInPicture(playerWrapperRef);
 
   // Read audio parameter from URL
   const audioFromUrl = searchParams.get('audio');
@@ -521,25 +519,6 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Picture-in-Picture Button */}
-              {isPiPSupported && (
-                <button
-                  type="button"
-                  onClick={togglePiP}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all duration-300 shadow-md whitespace-nowrap ${
-                    isPiPActive
-                      ? 'bg-blue-600 border-blue-400 text-white shadow-blue-500/20'
-                      : 'bg-white/10 hover:bg-white/20 border-white/10 text-gray-200 hover:text-white'
-                  }`}
-                  title={isPiPActive ? 'Đóng cửa sổ nổi (Picture-in-Picture)' : 'Xem dạng cửa sổ nổi (Picture-in-Picture)'}
-                >
-                  <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .88-2 1.98V19c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z" />
-                  </svg>
-                  <span className="hidden sm:inline">{isPiPActive ? 'Đang mở PiP' : 'Cửa sổ nổi'}</span>
-                </button>
-              )}
-
               {/* Stream Button — chỉ hiện khi Server 1 đã load xong m3u8 */}
               {selectedServer === 'server1' && effectiveStreamUrl && (
                 <div className="relative" ref={streamBtnRef}>

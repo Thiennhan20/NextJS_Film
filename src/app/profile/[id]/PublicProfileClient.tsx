@@ -76,10 +76,18 @@ export default function PublicProfileClient({ userId }: { userId: string }) {
     try {
       setLoading(true)
       const response = await api.get(`/auth/profile/${userId}`)
-      setProfileUser(response.data.user)
+      const fetchedUser = response.data.user
+      setProfileUser(fetchedUser)
       setRecentlyWatched(response.data.recentlyWatched || [])
       if (response.data.friendStatus) {
         setFriendStatus(response.data.friendStatus)
+      }
+      if (
+        typeof window !== 'undefined' &&
+        fetchedUser?.username &&
+        userId.toLowerCase() !== fetchedUser.username.toLowerCase()
+      ) {
+        window.history.replaceState(null, '', `/profile/${fetchedUser.username}`)
       }
     } catch (error) {
       console.error('Error fetching public profile:', error)

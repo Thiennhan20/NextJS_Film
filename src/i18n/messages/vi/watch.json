@@ -62,6 +62,11 @@
       "disableAudioEnhancement": "Tắt cải thiện âm thanh",
       "decreaseSpeed": "Giảm tốc độ",
       "increaseSpeed": "Tăng tốc độ",
+      "pip": "Cửa sổ nổi (PiP)",
+      "pipOn": "Đang bật",
+      "pipOff": "Đang tắt",
+      "openPiP": "Mở cửa sổ nổi",
+      "closePiP": "Đóng cửa sổ nổi",
       "audioPresets": {
         "default": "Mặc định (Tăng cường)",
         "tv": "Loa TV",

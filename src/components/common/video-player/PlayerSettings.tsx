@@ -27,6 +27,11 @@ interface PlayerSettingsProps {
   // Audio enhancement
   audioSettings?: AudioSettings;
   onAudioSettingsChange?: Dispatch<SetStateAction<AudioSettings>>;
+
+  // PiP (Picture in Picture)
+  isPiPSupported?: boolean;
+  isPiPActive?: boolean;
+  onTogglePiP?: () => void;
 }
 
 type MenuView = "main" | "speed" | "quality" | "audio";
@@ -70,6 +75,9 @@ const PlayerSettings: React.FC<PlayerSettingsProps> = ({
   containerWidth = 0,
   audioSettings,
   onAudioSettingsChange,
+  isPiPSupported = false,
+  isPiPActive = false,
+  onTogglePiP,
 }) => {
   const [menuView, setMenuView] = useState<MenuView>("main");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -158,25 +166,28 @@ const PlayerSettings: React.FC<PlayerSettingsProps> = ({
       {show && (
         <div
           className={`absolute bottom-full right-0 mb-3 bg-black/95 border border-white/10 rounded-xl shadow-2xl backdrop-blur-md transition-all duration-300 animate-fade-in z-50 overflow-hidden ${
-            isCompact ? "p-2 w-[230px]" : "p-3 w-[270px] sm:w-[310px]"
+            isCompact ? "p-1.5 w-[220px]" : "p-3 w-[270px] sm:w-[310px]"
           }`}
           data-no-toggle
         >
           {/* 1. MAIN SETTINGS VIEW */}
           {menuView === "main" && (
             <div
-              className={`space-y-1 sm:space-y-1.5 ${
-                isCompact ? "max-h-[130px] overflow-y-auto pr-1.5 player-scrollbar scroll-smooth" : ""
+              className={`space-y-0.5 sm:space-y-1.5 ${
+                isCompact ? "max-h-[135px] overflow-y-auto pr-1 player-scrollbar scroll-smooth overscroll-contain" : ""
               }`}
+              style={isCompact ? { touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' } : undefined}
             >
               {/* Option 1: Tốc độ phát (Speed) */}
               <button
                 onClick={() => setMenuView("speed")}
-                className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-white/0 hover:bg-white/5 text-left transition-all cursor-pointer group"
+                className={`w-full flex items-center justify-between rounded-lg bg-white/0 hover:bg-white/5 text-left transition-all cursor-pointer group ${
+                  isCompact ? "px-2 py-1.5" : "px-2.5 py-2"
+                }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 sm:gap-3">
                   <svg
-                    className="w-5 h-5 text-gray-300 shrink-0 group-hover:text-white transition-colors"
+                    className={`${isCompact ? "w-4 h-4" : "w-5 h-5"} text-gray-300 shrink-0 group-hover:text-white transition-colors`}
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
@@ -202,11 +213,13 @@ const PlayerSettings: React.FC<PlayerSettingsProps> = ({
               {/* Option 2: Chất lượng (Quality) */}
               <button
                 onClick={() => setMenuView("quality")}
-                className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-white/0 hover:bg-white/5 text-left transition-all cursor-pointer group"
+                className={`w-full flex items-center justify-between rounded-lg bg-white/0 hover:bg-white/5 text-left transition-all cursor-pointer group ${
+                  isCompact ? "px-2 py-1.5" : "px-2.5 py-2"
+                }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 sm:gap-3">
                   <svg
-                    className="w-5 h-5 text-gray-300 shrink-0 group-hover:text-white transition-colors"
+                    className={`${isCompact ? "w-4 h-4" : "w-5 h-5"} text-gray-300 shrink-0 group-hover:text-white transition-colors`}
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
@@ -238,12 +251,14 @@ const PlayerSettings: React.FC<PlayerSettingsProps> = ({
               {audioSettings && onAudioSettingsChange && (
                 <button
                   onClick={() => setMenuView("audio")}
-                  className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-white/0 hover:bg-white/5 text-left transition-all cursor-pointer group"
+                  className={`w-full flex items-center justify-between rounded-lg bg-white/0 hover:bg-white/5 text-left transition-all cursor-pointer group ${
+                    isCompact ? "px-2 py-1.5" : "px-2.5 py-2"
+                  }`}
                 >
-                  <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 pr-2">
                     {/* Speaker / Audio SVG Icon */}
                     <svg
-                      className="w-5 h-5 text-gray-300 shrink-0 group-hover:text-white transition-colors"
+                      className={`${isCompact ? "w-4 h-4" : "w-5 h-5"} text-gray-300 shrink-0 group-hover:text-white transition-colors`}
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="2"
@@ -262,6 +277,40 @@ const PlayerSettings: React.FC<PlayerSettingsProps> = ({
                   <div className="flex items-center gap-1.5 text-gray-400 text-[10px] sm:text-xs">
                     <span className={`group-hover:text-gray-300 transition-colors truncate max-w-[80px] ${audioSettings.enabled ? 'text-amber-500' : ''}`}>
                       {getActiveAudioLabel()}
+                    </span>
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </button>
+              )}
+
+              {/* Option 4: Cửa sổ nổi (Picture-in-Picture) */}
+              {isPiPSupported && onTogglePiP && (
+                <button
+                  onClick={() => {
+                    onTogglePiP();
+                    onToggle();
+                  }}
+                  className={`w-full flex items-center justify-between rounded-lg bg-white/0 hover:bg-white/5 text-left transition-all cursor-pointer group ${
+                    isCompact ? "px-2 py-1.5" : "px-2.5 py-2"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 pr-2">
+                    <svg
+                      className={`${isCompact ? "w-4 h-4" : "w-5 h-5"} text-gray-300 shrink-0 group-hover:text-white transition-colors`}
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <path d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .88-2 1.98V19c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z" />
+                    </svg>
+                    <span className="text-xs sm:text-sm font-semibold text-gray-200 group-hover:text-white transition-colors truncate">
+                      {t("playerSettings.pip")}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-gray-400 text-[10px] sm:text-xs">
+                    <span className={`transition-colors font-medium ${isPiPActive ? 'text-blue-400 font-semibold' : 'group-hover:text-gray-300'}`}>
+                      {isPiPActive ? t("playerSettings.pipOn") : t("playerSettings.pipOff")}
                     </span>
                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

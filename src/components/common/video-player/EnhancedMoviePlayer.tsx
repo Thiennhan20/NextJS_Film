@@ -275,12 +275,20 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
     const resumeCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const hasCheckedResumeRef = useRef(false);
     const [isAndroid, setIsAndroid] = useState(false);
+    const [isPiPActive, setIsPiPActive] = useState(false);
+    const [isPiPSupported, setIsPiPSupported] = useState(false);
 
     useEffect(() => {
       if (typeof window !== 'undefined') {
         setIsAndroid(/Android/i.test(navigator.userAgent));
+        const hasStandardPiP = typeof document !== 'undefined' && 'pictureInPictureEnabled' in document && Boolean(document.pictureInPictureEnabled);
+        const v = getVideo(ref, innerRef) as (HTMLVideoElement & {
+          webkitSupportsPresentationMode?: (mode: string) => boolean;
+        }) | null;
+        const hasWebKitPiP = !!(v && typeof v.webkitSupportsPresentationMode === 'function' && v.webkitSupportsPresentationMode('picture-in-picture'));
+        setIsPiPSupported(Boolean(hasStandardPiP || hasWebKitPiP));
       }
-    }, []);
+    }, [ref]);
 
     // Update source popup states & ref
     const [showUpdatePopup, setShowUpdatePopup] = useState(false);
@@ -834,6 +842,17 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       const onPlay = () => { setIsPlaying(true); setIsEnded(false); };
       const onPause = () => { setIsPlaying(false); setIsBuffering(false); setIsSeeking(false); };
       const onEnded = () => { setIsPlaying(false); setIsEnded(true); onVideoEnded?.(); };
+      const onEnterPiP = () => setIsPiPActive(true);
+      const onLeavePiP = () => setIsPiPActive(false);
+      const onWebKitPresentationMode = () => {
+        const mode = (video as unknown as { webkitPresentationMode?: string }).webkitPresentationMode;
+        setIsPiPActive(mode === "picture-in-picture");
+      };
+
+      const hasStandardPiP = typeof document !== 'undefined' && 'pictureInPictureEnabled' in document && Boolean(document.pictureInPictureEnabled);
+      const hasWebKit = typeof (video as unknown as { webkitSupportsPresentationMode?: (m: string) => boolean }).webkitSupportsPresentationMode === 'function' &&
+        (video as unknown as { webkitSupportsPresentationMode: (m: string) => boolean }).webkitSupportsPresentationMode('picture-in-picture');
+      setIsPiPSupported(Boolean(hasStandardPiP || hasWebKit));
 
       video.addEventListener("loadedmetadata", onLoadedMetadata);
       video.addEventListener("timeupdate", onTimeUpdate);
@@ -844,6 +863,9 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       video.addEventListener("canplay", onCanPlay);
       video.addEventListener("seeking", onSeeking);
       video.addEventListener("seeked", onSeeked);
+      video.addEventListener("enterpictureinpicture", onEnterPiP);
+      video.addEventListener("leavepictureinpicture", onLeavePiP);
+      video.addEventListener("webkitpresentationmodechanged", onWebKitPresentationMode);
 
       return () => {
         cancelled = true;
@@ -856,6 +878,9 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
         video.removeEventListener("canplay", onCanPlay);
         video.removeEventListener("seeking", onSeeking);
         video.removeEventListener("seeked", onSeeked);
+        video.removeEventListener("enterpictureinpicture", onEnterPiP);
+        video.removeEventListener("leavepictureinpicture", onLeavePiP);
+        video.removeEventListener("webkitpresentationmodechanged", onWebKitPresentationMode);
         if (onLoadedMetadataForResume) {
           video.removeEventListener('loadedmetadata', onLoadedMetadataForResume);
         }
@@ -1354,12 +1379,28 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
       hls.currentLevel = level; setCurrentQuality(level); setShowSettings(false);
     }, []);
 
-    const requestPiP = useCallback(() => {
+    const requestPiP = useCallback(async () => {
       const v = getVideo(ref, innerRef);
       if (!v) return;
-      const ve = v as HTMLVideoElement & { disablePictureInPicture?: boolean; requestPictureInPicture?: () => Promise<void>; webkitSetPresentationMode?: (mode: string) => void; };
-      if (document.pictureInPictureEnabled && !ve.disablePictureInPicture) { ve.requestPictureInPicture?.(); }
-      else { ve.webkitSetPresentationMode?.("picture-in-picture"); }
+      const ve = v as HTMLVideoElement & {
+        disablePictureInPicture?: boolean;
+        requestPictureInPicture?: () => Promise<PictureInPictureWindow>;
+        webkitSetPresentationMode?: (mode: string) => void;
+        webkitPresentationMode?: string;
+      };
+
+      try {
+        if (typeof document !== 'undefined' && document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+        } else if (typeof document !== 'undefined' && document.pictureInPictureEnabled && !ve.disablePictureInPicture && ve.requestPictureInPicture) {
+          await ve.requestPictureInPicture();
+        } else if (ve.webkitSetPresentationMode) {
+          const mode = ve.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture';
+          ve.webkitSetPresentationMode(mode);
+        }
+      } catch (err) {
+        console.warn('PiP toggle failed:', err);
+      }
     }, [ref]);
 
     const toggleFullscreen = useCallback(() => {
@@ -2028,12 +2069,26 @@ const EnhancedMoviePlayer = forwardRef<HTMLVideoElement, EnhancedMoviePlayerProp
                 containerWidth={playerWidth}
                 audioSettings={audioSettings}
                 onAudioSettingsChange={onAudioSettingsChange}
+                isPiPSupported={isPiPSupported}
+                isPiPActive={isPiPActive}
+                onTogglePiP={requestPiP}
               />
 
-              {/* PiP */}
-              <button onClick={requestPiP} className="p-1.5 sm:p-2 rounded bg-white/10 hover:bg-white/20 text-white hidden sm:inline-flex" aria-label="Picture in Picture" title="Picture in Picture">
-                <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6h-8a2 2 0 0 0-2 2v6H5a2 2 0 0 1-2-2V5z" opacity=".35" /><rect x="12" y="11" width="9" height="7" rx="1.5" /></svg>
-              </button>
+              {/* PiP on desktop control bar — only shown when supported */}
+              {isPiPSupported && (
+                <button
+                  onClick={requestPiP}
+                  className={`p-1.5 sm:p-2 rounded transition-all duration-200 hidden sm:inline-flex ${
+                    isPiPActive
+                      ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-500/30'
+                      : 'bg-white/10 hover:bg-white/20 text-white'
+                  }`}
+                  aria-label="Picture in Picture"
+                  title={isPiPActive ? t('playerSettings.closePiP') : t('playerSettings.openPiP')}
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6h-8a2 2 0 0 0-2 2v6H5a2 2 0 0 1-2-2V5z" opacity=".35" /><rect x="12" y="11" width="9" height="7" rx="1.5" /></svg>
+                </button>
+              )}
 
               {/* Fullscreen */}
               <button onClick={toggleFullscreen} className="p-1.5 sm:p-2 rounded bg-white/10 hover:bg-white/20 text-white" aria-label="Fullscreen" title="Fullscreen">
