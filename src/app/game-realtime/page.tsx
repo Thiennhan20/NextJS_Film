@@ -14,7 +14,17 @@ export default function GameRealtimePage() {
   const [mounted, setMounted] = useState(false);
   const [savedToken, setSavedToken] = useState<string | null>(null);
   const [isGameReady, setIsGameReady] = useState(false);
+  const [showOverlay, setShowOverlay] = useState(true);
   const lockedIframeRef = useRef<{ key: string; src: string } | null>(null);
+
+  useEffect(() => {
+    if (isGameReady) {
+      const timer = setTimeout(() => {
+        setShowOverlay(false);
+      }, 750);
+      return () => clearTimeout(timer);
+    }
+  }, [isGameReady]);
 
   useEffect(() => {
     setMounted(true);
@@ -88,12 +98,6 @@ export default function GameRealtimePage() {
 
   return (
     <div className="fixed inset-0 w-full h-[100dvh] bg-black overflow-hidden z-[999]">
-      {/* Background gradients behind the iframe */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl" />
-      </div>
-
       {/* The Game Iframe - loads smoothly in background and fades in when ready */}
       {mounted && (
         <iframe
@@ -111,36 +115,38 @@ export default function GameRealtimePage() {
         />
       )}
 
-      {/* Unified Single Loading Overlay - seamlessly covers any SSR/Iframe loading */}
-      <div
-        className={`fixed inset-0 flex items-center justify-center bg-black z-30 overflow-hidden transition-all duration-700 ease-out ${
-          isGameReady ? 'opacity-0 pointer-events-none scale-105' : 'opacity-100 scale-100'
-        }`}
-      >
-        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-          <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-red-600/10 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-600/10 rounded-full blur-3xl animate-pulse delay-1000" />
+      {/* Unified Single Loading Overlay - cleanly unmounts after fade-out to free up CPU/GPU */}
+      {showOverlay && (
+        <div
+          className={`fixed inset-0 flex items-center justify-center bg-black z-30 overflow-hidden transition-all duration-700 ease-out ${
+            isGameReady ? 'opacity-0 pointer-events-none scale-105' : 'opacity-100 scale-100'
+          }`}
+        >
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+            <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-red-600/10 rounded-full blur-3xl animate-pulse" />
+            <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-600/10 rounded-full blur-3xl animate-pulse delay-1000" />
+          </div>
+          <div className="relative z-10 flex flex-col items-center gap-5 px-4 text-center">
+            {/* Animated Glowing Ring */}
+            <div className="relative flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full border-2 border-red-500/20 animate-ping absolute" />
+              <div className="animate-spin rounded-full h-14 w-14 border-t-2 border-b-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]"></div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-white text-base sm:text-lg font-medium tracking-wider uppercase animate-pulse">
+                {isVi ? 'Đang tải Đấu Trường Game...' : 'Loading Game Arena...'}
+              </p>
+              <p className="text-gray-400 text-xs sm:text-sm font-light">
+                {isVi ? 'Chuẩn bị phòng chơi và đồng bộ tài khoản' : 'Preparing arena & syncing profile'}
+              </p>
+            </div>
+            {/* Subtle animated bar */}
+            <div className="w-48 h-1 bg-gray-800 rounded-full overflow-hidden mt-1">
+              <div className="h-full bg-gradient-to-r from-red-600 via-pink-500 to-red-500 rounded-full animate-pulse" />
+            </div>
+          </div>
         </div>
-        <div className="relative z-10 flex flex-col items-center gap-5 px-4 text-center">
-          {/* Animated Glowing Ring */}
-          <div className="relative flex items-center justify-center">
-            <div className="w-16 h-16 rounded-full border-2 border-red-500/20 animate-ping absolute" />
-            <div className="animate-spin rounded-full h-14 w-14 border-t-2 border-b-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]"></div>
-          </div>
-          <div className="space-y-2">
-            <p className="text-white text-base sm:text-lg font-medium tracking-wider uppercase animate-pulse">
-              {isVi ? 'Đang tải Đấu Trường Game...' : 'Loading Game Arena...'}
-            </p>
-            <p className="text-gray-400 text-xs sm:text-sm font-light">
-              {isVi ? 'Chuẩn bị phòng chơi và đồng bộ tài khoản' : 'Preparing arena & syncing profile'}
-            </p>
-          </div>
-          {/* Subtle animated bar */}
-          <div className="w-48 h-1 bg-gray-800 rounded-full overflow-hidden mt-1">
-            <div className="h-full bg-gradient-to-r from-red-600 via-pink-500 to-red-500 rounded-full animate-pulse" />
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
