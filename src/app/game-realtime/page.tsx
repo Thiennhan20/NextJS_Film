@@ -54,15 +54,21 @@ export default function GameRealtimePage() {
     };
     window.addEventListener('message', handleMessage);
 
-    // Fallback: maximum 4.5s wait so the screen never gets stuck if postMessage is blocked
+    // Fallback: maximum 6s wait so the screen never gets stuck if postMessage is blocked
     const fallbackTimer = setTimeout(() => {
       setIsGameReady(true);
-    }, 4500);
+    }, 6000);
 
     return () => {
       window.removeEventListener('message', handleMessage);
       clearTimeout(fallbackTimer);
     };
+  }, []);
+
+  const [authWaitTimeout, setAuthWaitTimeout] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setAuthWaitTimeout(true), 1200);
+    return () => clearTimeout(timer);
   }, []);
 
   if (!activeToken && isAuthChecked && !isAuthenticated) {
@@ -72,10 +78,13 @@ export default function GameRealtimePage() {
   const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
   const gameBaseUrl = isDevelopment ? 'http://localhost:3002' : 'https://p01--game-app--znbny2j8c2gp.code.run';
 
-  const iframeKey = `${activeToken || ''}::${locale || ''}`;
-  if (mounted && activeToken && lockedIframeRef.current?.key !== iframeKey) {
+  const isReadyToLoadGame = mounted && Boolean(activeToken) && (isAuthChecked || Boolean(user) || authWaitTimeout);
+
+  const iframeKey = `${activeToken || ''}::${locale || ''}::${user?.name || user?.username || ''}`;
+  if (isReadyToLoadGame && activeToken && lockedIframeRef.current?.key !== iframeKey) {
     const queryParams = new URLSearchParams();
     queryParams.set('token', activeToken);
+    queryParams.set('embedded', '1');
     if (locale) queryParams.set('locale', locale);
     if (user?.name || user?.username) {
       queryParams.set('userName', user.name || user.username || '');
@@ -92,14 +101,14 @@ export default function GameRealtimePage() {
     };
   }
 
-  const iframeSrc = lockedIframeRef.current?.src || `${gameBaseUrl}?locale=${locale || 'vi'}`;
+  const iframeSrc = lockedIframeRef.current?.src;
 
   const isVi = locale === 'vi';
 
   return (
     <div className="fixed inset-0 w-full h-[100dvh] bg-black overflow-hidden z-[999]">
       {/* The Game Iframe - loads smoothly in background and fades in when ready */}
-      {mounted && (
+      {iframeSrc && (
         <iframe
           src={iframeSrc}
           className={`relative z-10 w-full h-full border-0 select-none overflow-hidden transition-opacity duration-700 ease-out ${
@@ -108,10 +117,6 @@ export default function GameRealtimePage() {
           allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
           title="Realtime Guessing Arena"
           style={{ overflow: 'hidden' }}
-          onLoad={() => {
-            // Backup trigger: if game takes more than 1.5s after iframe load event, reveal it
-            setTimeout(() => setIsGameReady(true), 1500);
-          }}
         />
       )}
 
