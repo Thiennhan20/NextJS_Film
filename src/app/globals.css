@@ -20,12 +20,13 @@ body::-webkit-scrollbar {
   display: none;
 }
 
-/* Fullscreen Game Optimization - Isolate rendering & save CPU/RAM */
+/* Fullscreen Game - freeze background page scroll while the game iframe is open.
+   Note: do NOT add `contain: strict/layout/paint` here; it turns <body> into the containing
+   block for position:fixed descendants and breaks iframe scrolling on iOS Safari. */
 body.game-fullscreen-active {
   background-color: #000000 !important;
   overflow: hidden !important;
   overscroll-behavior: none !important;
-  contain: strict;
 }
 
 /* Splash Screen Styles */
