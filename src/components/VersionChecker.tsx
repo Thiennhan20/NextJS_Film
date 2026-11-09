@@ -1,13 +1,16 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { usePathname } from 'next/navigation'
 import { fetchVersionInfo, CURRENT_HASH, type VersionInfo } from '@/lib/versionService'
 
 export default function VersionChecker() {
+  const pathname = usePathname()
   const [serverVersion, setServerVersion] = useState<VersionInfo | null>(null)
   const [showModal, setShowModal] = useState(false)
 
   const checkVersion = useCallback(async () => {
+    if (pathname === '/game-realtime') return
     try {
       const data = await fetchVersionInfo()
       if (!data) return
@@ -30,7 +33,7 @@ export default function VersionChecker() {
     } catch {
       // Fail silently
     }
-  }, [])
+  }, [pathname])
 
   useEffect(() => {
     // Initial check after 5s

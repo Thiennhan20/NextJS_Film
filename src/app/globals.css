@@ -20,6 +20,14 @@ body::-webkit-scrollbar {
   display: none;
 }
 
+/* Fullscreen Game Optimization - Isolate rendering & save CPU/RAM */
+body.game-fullscreen-active {
+  background-color: #000000 !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  contain: strict;
+}
+
 /* Splash Screen Styles */
 .splash-screen-active {
   overflow: hidden !important;

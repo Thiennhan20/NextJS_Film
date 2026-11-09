@@ -45,11 +45,25 @@ export function setInMemoryToken(token: string | null) {
   if (token) {
     // Có token mới → lên lịch refresh trước khi hết hạn
     scheduleProactiveRefresh();
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('token', token);
+      } catch {
+        // Silently ignore localStorage quota errors
+      }
+    }
   } else {
     // Token bị clear → hủy timer
     if (refreshTimer) {
       clearTimeout(refreshTimer);
       refreshTimer = null;
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('token');
+      } catch {
+        // Silently ignore
+      }
     }
   }
 }

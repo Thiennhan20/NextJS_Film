@@ -30,15 +30,28 @@ export default function GameRealtimePage() {
     setMounted(true);
     const localToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     setSavedToken(storeToken || localToken);
-    // Hide body scrollbar when entering the page
-    document.body.style.overflow = 'hidden';
+
+    // If session is not verified yet, ensure checkAuth is invoked immediately on mount / F5
+    if (!isAuthChecked && !storeToken) {
+      useAuthStore.getState().checkAuth().catch(() => {});
+    }
+
+    // Isolate rendering and freeze background scroll
+    document.body.classList.add('game-fullscreen-active');
     return () => {
-      // Restore scrollbar when leaving the page
-      document.body.style.overflow = 'unset';
+      document.body.classList.remove('game-fullscreen-active');
     };
-  }, [storeToken]);
+  }, [storeToken, isAuthChecked]);
 
   const activeToken = storeToken || savedToken;
+
+  useEffect(() => {
+    if (activeToken && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('token', activeToken);
+      } catch {}
+    }
+  }, [activeToken]);
 
   useEffect(() => {
     if (mounted && hydrated && isAuthChecked && !isAuthenticated && !activeToken) {
@@ -47,21 +60,26 @@ export default function GameRealtimePage() {
   }, [mounted, hydrated, isAuthChecked, isAuthenticated, activeToken, router]);
 
   useEffect(() => {
+    let fallbackTimer: NodeJS.Timeout | null = null;
+
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'GAME_READY') {
         setIsGameReady(true);
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        window.removeEventListener('message', handleMessage);
       }
     };
     window.addEventListener('message', handleMessage);
 
     // Fallback: maximum 6s wait so the screen never gets stuck if postMessage is blocked
-    const fallbackTimer = setTimeout(() => {
+    fallbackTimer = setTimeout(() => {
       setIsGameReady(true);
+      window.removeEventListener('message', handleMessage);
     }, 6000);
 
     return () => {
       window.removeEventListener('message', handleMessage);
-      clearTimeout(fallbackTimer);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
     };
   }, []);
 

@@ -10,9 +10,10 @@ interface ContentWrapperProps {
 export default function ContentWrapper({ children }: ContentWrapperProps) {
   const pathname = usePathname()
 
-  // Full-bleed hero banner pages only: Home, Movies [id], TV Shows [id]
+  // Full-bleed hero banner pages only: Home, Movies [id], TV Shows [id], Game Realtime
   const isHeroPage = 
     pathname === '/' || 
+    pathname === '/game-realtime' ||
     (pathname?.startsWith('/movies/') && pathname !== '/movies') ||
     (pathname?.startsWith('/movie/') && pathname !== '/movie') ||
     (pathname?.startsWith('/tvshows/') && pathname !== '/tvshows') ||
