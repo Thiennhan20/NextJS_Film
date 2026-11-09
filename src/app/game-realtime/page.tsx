@@ -127,21 +127,12 @@ export default function GameRealtimePage() {
 
   const isReadyToLoadGame = mounted && (isAuthChecked || Boolean(user) || authWaitTimeout);
 
-  const iframeKey = `${locale || ''}::${user?.id || user?._id || 'guest'}`;
+  // Stable iframeKey: Prevent iframe from reloading when user hydrates or switches
+  const iframeKey = locale || 'vi';
   if (isReadyToLoadGame && lockedIframeRef.current?.key !== iframeKey) {
     const queryParams = new URLSearchParams();
-    // Level 2: Token is transmitted securely via postMessage, not exposed in iframe URL query parameters
     queryParams.set('embedded', '1');
     if (locale) queryParams.set('locale', locale);
-    if (user?.name || user?.username) {
-      queryParams.set('userName', user.name || user.username || '');
-    }
-    if (user?.avatar) {
-      queryParams.set('userAvatar', user.avatar);
-    }
-    if (user?.id || user?._id) {
-      queryParams.set('userId', user.id || user._id || '');
-    }
     lockedIframeRef.current = {
       key: iframeKey,
       src: `${gameBaseUrl}?${queryParams.toString()}`,
