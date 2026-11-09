@@ -11,9 +11,14 @@ function parseLocale(raw: string | undefined | null): string | null {
   return SUPPORTED_LOCALES.includes(base) ? base : null;
 }
 
-function applySecurityHeaders(response: NextResponse): NextResponse {
+function applySecurityHeaders(response: NextResponse, isEmbedProxy = false): NextResponse {
   response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('X-Frame-Options', 'DENY');
+  if (!isEmbedProxy) {
+    response.headers.set('X-Frame-Options', 'DENY');
+  } else {
+    // Cho phép nhúng iframe cho các endpoint proxy video (Server 2 vidsrc, Server 3 nguonc,...)
+    response.headers.delete('X-Frame-Options');
+  }
   response.headers.set('X-XSS-Protection', '1; mode=block');
   return response;
 }
@@ -30,10 +35,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  const isEmbedProxy = pathname.includes('/embed-proxy');
+
   // Apply security headers to API routes
   if (pathname.startsWith('/api')) {
     const response = NextResponse.next();
-    return applySecurityHeaders(response);
+    return applySecurityHeaders(response, isEmbedProxy);
   }
 
   const langParam = searchParams.get('lang') || searchParams.get('locale');
