@@ -130,12 +130,6 @@ export default function Navigation() {
 
   const handleGameClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!isAuthenticated) {
-      toast.error(t('loginRequiredGame'));
-      router.push('/login');
-      setIsOpen(false);
-      return;
-    }
     router.push('/game-realtime');
     setIsOpen(false);
   };

@@ -1,16 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useLocale } from 'next-intl';
 import useAuthStore from '@/store/useAuthStore';
-import useAuthHydrated from '@/hooks/useAuthHydrated';
 
 export default function GameRealtimePage() {
-  const router = useRouter();
   const locale = useLocale();
-  const hydrated = useAuthHydrated();
-  const { token: storeToken, user, isAuthenticated, isAuthChecked } = useAuthStore();
+  const { token: storeToken, user, isAuthChecked } = useAuthStore();
   const [mounted, setMounted] = useState(false);
   const [savedToken, setSavedToken] = useState<string | null>(null);
   const [isGameReady, setIsGameReady] = useState(false);
@@ -66,19 +62,15 @@ export default function GameRealtimePage() {
     }
   }, [activeToken]);
 
-  useEffect(() => {
-    if (mounted && hydrated && isAuthChecked && !isAuthenticated && !activeToken) {
-      router.push('/login');
-    }
-  }, [mounted, hydrated, isAuthChecked, isAuthenticated, activeToken, router]);
 
   const sendAuthToIframe = useCallback(() => {
-    if (iframeRef.current?.contentWindow && activeToken) {
+    if (iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage(
           {
             type: 'AUTH_TOKEN',
-            token: activeToken,
+            token: activeToken || null,
+            isAuthenticated: Boolean(activeToken),
             user: user
               ? {
                   id: user.id || user._id,
@@ -96,10 +88,8 @@ export default function GameRealtimePage() {
   }, [activeToken, user]);
 
   useEffect(() => {
-    if (activeToken) {
-      sendAuthToIframe();
-    }
-  }, [activeToken, sendAuthToIframe]);
+    sendAuthToIframe();
+  }, [sendAuthToIframe]);
 
   useEffect(() => {
     let fallbackTimer: NodeJS.Timeout | null = null;
@@ -132,17 +122,13 @@ export default function GameRealtimePage() {
     return () => clearTimeout(timer);
   }, []);
 
-  if (!activeToken && isAuthChecked && !isAuthenticated) {
-    return null; // Will redirect via useEffect
-  }
-
   const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
   const gameBaseUrl = isDevelopment ? 'http://localhost:3002' : 'https://p01--game-app--znbny2j8c2gp.code.run';
 
-  const isReadyToLoadGame = mounted && Boolean(activeToken) && (isAuthChecked || Boolean(user) || authWaitTimeout);
+  const isReadyToLoadGame = mounted && (isAuthChecked || Boolean(user) || authWaitTimeout);
 
-  const iframeKey = `${locale || ''}::${user?.name || user?.username || ''}::${user?.id || user?._id || ''}`;
-  if (isReadyToLoadGame && activeToken && lockedIframeRef.current?.key !== iframeKey) {
+  const iframeKey = `${locale || ''}::${user?.id || user?._id || 'guest'}`;
+  if (isReadyToLoadGame && lockedIframeRef.current?.key !== iframeKey) {
     const queryParams = new URLSearchParams();
     // Level 2: Token is transmitted securely via postMessage, not exposed in iframe URL query parameters
     queryParams.set('embedded', '1');

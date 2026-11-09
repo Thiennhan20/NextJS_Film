@@ -12,7 +12,6 @@ import {
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import useAuthStore from '@/store/useAuthStore'
 
 // New morphing effect for 2-column layout
 const TwoColumnMorphingItem = ({ children, isLeft, scrollProgress }: { children: ReactNode, isLeft: boolean, scrollProgress: MotionValue<number> }) => {
@@ -46,11 +45,6 @@ export default function EntertainmentFrames() {
 
   const handleGameClick = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const isAuthenticated = useAuthStore.getState().isAuthenticated;
-    if (!isAuthenticated) {
-      router.push('/login');
-      return;
-    }
     router.push('/game-realtime');
   };
 
