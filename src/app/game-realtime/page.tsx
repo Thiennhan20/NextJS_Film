@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale } from 'next-intl';
 import useAuthStore from '@/store/useAuthStore';
@@ -16,6 +16,19 @@ export default function GameRealtimePage() {
   const [isGameReady, setIsGameReady] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
   const lockedIframeRef = useRef<{ key: string; src: string } | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  // Level 1: Sanitize browser address bar immediately if any legacy ?token= parameter exists
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('token=')) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('token');
+        const cleanPath = url.pathname + (url.search ? url.search : '') + (url.hash ? url.hash : '');
+        window.history.replaceState({}, document.title, cleanPath);
+      } catch {}
+    }
+  }, []);
 
   useEffect(() => {
     if (isGameReady) {
@@ -59,14 +72,45 @@ export default function GameRealtimePage() {
     }
   }, [mounted, hydrated, isAuthChecked, isAuthenticated, activeToken, router]);
 
+  const sendAuthToIframe = useCallback(() => {
+    if (iframeRef.current?.contentWindow && activeToken) {
+      try {
+        iframeRef.current.contentWindow.postMessage(
+          {
+            type: 'AUTH_TOKEN',
+            token: activeToken,
+            user: user
+              ? {
+                  id: user.id || user._id,
+                  name: user.name || user.username || '',
+                  avatar: user.avatar || '',
+                }
+              : null,
+          },
+          '*'
+        );
+      } catch (err) {
+        console.warn('Failed to post AUTH_TOKEN to iframe:', err);
+      }
+    }
+  }, [activeToken, user]);
+
+  useEffect(() => {
+    if (activeToken) {
+      sendAuthToIframe();
+    }
+  }, [activeToken, sendAuthToIframe]);
+
   useEffect(() => {
     let fallbackTimer: NodeJS.Timeout | null = null;
 
     const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'REQUEST_AUTH_TOKEN') {
+        sendAuthToIframe();
+      }
       if (event.data?.type === 'GAME_READY') {
         setIsGameReady(true);
         if (fallbackTimer) clearTimeout(fallbackTimer);
-        window.removeEventListener('message', handleMessage);
       }
     };
     window.addEventListener('message', handleMessage);
@@ -74,14 +118,13 @@ export default function GameRealtimePage() {
     // Fallback: maximum 6s wait so the screen never gets stuck if postMessage is blocked
     fallbackTimer = setTimeout(() => {
       setIsGameReady(true);
-      window.removeEventListener('message', handleMessage);
     }, 6000);
 
     return () => {
       window.removeEventListener('message', handleMessage);
       if (fallbackTimer) clearTimeout(fallbackTimer);
     };
-  }, []);
+  }, [sendAuthToIframe]);
 
   const [authWaitTimeout, setAuthWaitTimeout] = useState(false);
   useEffect(() => {
@@ -98,10 +141,10 @@ export default function GameRealtimePage() {
 
   const isReadyToLoadGame = mounted && Boolean(activeToken) && (isAuthChecked || Boolean(user) || authWaitTimeout);
 
-  const iframeKey = `${activeToken || ''}::${locale || ''}::${user?.name || user?.username || ''}`;
+  const iframeKey = `${locale || ''}::${user?.name || user?.username || ''}::${user?.id || user?._id || ''}`;
   if (isReadyToLoadGame && activeToken && lockedIframeRef.current?.key !== iframeKey) {
     const queryParams = new URLSearchParams();
-    queryParams.set('token', activeToken);
+    // Level 2: Token is transmitted securely via postMessage, not exposed in iframe URL query parameters
     queryParams.set('embedded', '1');
     if (locale) queryParams.set('locale', locale);
     if (user?.name || user?.username) {
@@ -128,6 +171,8 @@ export default function GameRealtimePage() {
       {/* The Game Iframe - loads smoothly in background and fades in when ready */}
       {iframeSrc && (
         <iframe
+          ref={iframeRef}
+          onLoad={sendAuthToIframe}
           src={iframeSrc}
           className={`relative z-10 w-full h-full border-0 select-none overflow-hidden transition-opacity duration-700 ease-out ${
             isGameReady ? 'opacity-100' : 'opacity-0'

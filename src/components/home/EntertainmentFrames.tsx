@@ -51,12 +51,7 @@ export default function EntertainmentFrames() {
       router.push('/login');
       return;
     }
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    let targetUrl = '/game-realtime';
-    if (token) {
-      targetUrl += `?token=${encodeURIComponent(token)}`;
-    }
-    router.push(targetUrl);
+    router.push('/game-realtime');
   };
 
   const { scrollYProgress: featuresScrollProgress } = useScroll({ 
