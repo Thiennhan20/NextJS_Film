@@ -13,6 +13,62 @@ export default function GameRealtimePage() {
   const [showOverlay, setShowOverlay] = useState(true);
   const lockedIframeRef = useRef<{ key: string; src: string } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const originalTitleRef = useRef<string>('');
+  const flashTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const stopTabFlash = useCallback(() => {
+    if (flashTimerRef.current) {
+      clearInterval(flashTimerRef.current);
+      flashTimerRef.current = null;
+    }
+    if (typeof document !== 'undefined' && originalTitleRef.current) {
+      document.title = originalTitleRef.current;
+    }
+  }, []);
+
+  const startTabFlash = useCallback((alertTitle: string) => {
+    if (typeof document === 'undefined') return;
+
+    if (!originalTitleRef.current) {
+      originalTitleRef.current =
+        document.title || 'Đấu Trường Đoán Số 1v1 (Bulls & Cows) — Realtime Arena | ENTN';
+    }
+
+    if (flashTimerRef.current) {
+      clearInterval(flashTimerRef.current);
+      flashTimerRef.current = null;
+    }
+
+    let showFlash = true;
+    document.title = alertTitle;
+
+    flashTimerRef.current = setInterval(() => {
+      showFlash = !showFlash;
+      document.title = showFlash
+        ? alertTitle
+        : (originalTitleRef.current || 'Đấu Trường Đoán Số 1v1 (Bulls & Cows) — Realtime Arena | ENTN');
+    }, 1000);
+  }, []);
+
+  useEffect(() => {
+    const handleReturn = () => {
+      if (document.visibilityState === 'visible') {
+        stopTabFlash();
+      }
+    };
+    const handleFocus = () => {
+      stopTabFlash();
+    };
+
+    document.addEventListener('visibilitychange', handleReturn);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleReturn);
+      window.removeEventListener('focus', handleFocus);
+      stopTabFlash();
+    };
+  }, [stopTabFlash]);
 
   // Level 1: Sanitize browser address bar immediately if any legacy ?token= parameter exists
   useEffect(() => {
@@ -102,6 +158,14 @@ export default function GameRealtimePage() {
         setIsGameReady(true);
         if (fallbackTimer) clearTimeout(fallbackTimer);
       }
+      if (event.data?.type === 'GAME_TAB_FLASH') {
+        const { isAlert, alertTitle } = event.data;
+        if (isAlert && alertTitle) {
+          startTabFlash(alertTitle);
+        } else {
+          stopTabFlash();
+        }
+      }
     };
     window.addEventListener('message', handleMessage);
 
@@ -113,8 +177,9 @@ export default function GameRealtimePage() {
     return () => {
       window.removeEventListener('message', handleMessage);
       if (fallbackTimer) clearTimeout(fallbackTimer);
+      stopTabFlash();
     };
-  }, [sendAuthToIframe]);
+  }, [sendAuthToIframe, startTabFlash, stopTabFlash]);
 
   const [authWaitTimeout, setAuthWaitTimeout] = useState(false);
   useEffect(() => {
