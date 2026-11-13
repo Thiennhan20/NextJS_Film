@@ -64,15 +64,10 @@ export default function WatchNowTVShowsServer2({
         if (res.data?.ok && res.data?.active_domain) {
           const cleanDomain = res.data.active_domain.replace(/\/$/, '');
           const rawServer2Url = `${cleanDomain}/embed/tv?tmdb=${rawId}&season=${selectedSeason}&episode=${selectedEpisode}&ds_lang=vi&autoplay=1&autonext=1`;
-          const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-          const apiUrl = isLocalhost
-            ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api')
-            : (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost') ? process.env.NEXT_PUBLIC_API_URL : '/api');
-          const proxiedUrl = `${apiUrl}/vidsrc/embed-proxy?url=${encodeURIComponent(rawServer2Url)}`;
 
-          if (lastLinkRef.current !== proxiedUrl) {
-            lastLinkRef.current = proxiedUrl;
-            onLinkChangeRef.current?.(proxiedUrl);
+          if (lastLinkRef.current !== rawServer2Url) {
+            lastLinkRef.current = rawServer2Url;
+            onLinkChangeRef.current?.(rawServer2Url);
           }
           onErrorChangeRef.current?.(false);
         } else {

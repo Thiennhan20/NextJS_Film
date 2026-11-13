@@ -55,13 +55,8 @@ export default function WatchNowMoviesServer2({
         if (res.data?.ok && res.data?.active_domain) {
           const cleanDomain = res.data.active_domain.replace(/\/$/, '');
           const rawServer2Url = `${cleanDomain}/embed/movie?tmdb=${rawId}&ds_lang=vi&autoplay=1`;
-          const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-          const apiUrl = isLocalhost
-            ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api')
-            : (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost') ? process.env.NEXT_PUBLIC_API_URL : '/api');
-          const proxiedUrl = `${apiUrl}/vidsrc/embed-proxy?url=${encodeURIComponent(rawServer2Url)}`;
           
-          onLinkChangeRef.current?.(proxiedUrl);
+          onLinkChangeRef.current?.(rawServer2Url);
           onErrorChangeRef.current?.(false);
         } else {
           // All domains were tested and failed

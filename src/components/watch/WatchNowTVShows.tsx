@@ -1020,10 +1020,20 @@ export default function WatchNowTVShows({
               );
             }
 
+            // Unwrap embed-proxy if present (ensures direct player playback even with cached proxy links)
+            let finalServer2Link = server2Link;
+            if (server2Link && server2Link.includes('/api/vidsrc/embed-proxy')) {
+              try {
+                const u = new URL(server2Link, typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+                const original = u.searchParams.get('url');
+                if (original) finalServer2Link = original;
+              } catch {}
+            }
+
             return (
               <iframe
-                key={`${server2Link}-${selectedSeason}-${selectedEpisode}`}
-                src={server2Link}
+                key={`${finalServer2Link}-${selectedSeason}-${selectedEpisode}`}
+                src={finalServer2Link}
                 className="w-full h-full"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-popups"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
