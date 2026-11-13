@@ -1035,7 +1035,6 @@ export default function WatchNowTVShows({
                 key={`${finalServer2Link}-${selectedSeason}-${selectedEpisode}`}
                 src={finalServer2Link}
                 className="w-full h-full"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-popups"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
                 allowFullScreen
                 title={`${tvShow.name} - Season ${selectedSeason} Episode ${selectedEpisode} - Server 2`}

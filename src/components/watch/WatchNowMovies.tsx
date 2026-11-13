@@ -773,7 +773,6 @@ export default function WatchNowMovies({ movie }: WatchNowMoviesProps) {
                     key={finalServer2Link || movie.id}
                     src={finalServer2Link}
                     className="w-full h-full"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-popups"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
                     allowFullScreen
                     title={movie.title + ' - Server 2'}
