@@ -135,7 +135,7 @@ function RoomChatInputComponent({ onSendMessage, onSendEmoji, placeholder = 'Typ
             type="button"
             onClick={handleSend}
             disabled={!chatInput.trim()}
-            className="w-9 h-9 flex items-center justify-center bg-yellow-500 text-black font-semibold rounded-full hover:bg-yellow-400 active:scale-95 disabled:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 transition-all shrink-0 shadow-sm"
+            className="w-9 h-9 flex items-center justify-center bg-yellow-500 text-black font-semibold rounded-full hover:bg-yellow-400 active:scale-95 disabled:bg-gray-800/80 disabled:text-gray-400 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none transition-all shrink-0 shadow-sm"
             aria-label="Send message"
           >
             <Send className="h-4 w-4" />
