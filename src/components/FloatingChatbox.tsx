@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo, memo, forwardRef, useImperativeHandle } from 'react'
-import { motion, AnimatePresence, useDragControls, PanInfo } from 'framer-motion'
+import { motion, AnimatePresence, useMotionValue } from 'framer-motion'
 import {
   ChatBubbleLeftIcon,
   XMarkIcon,
@@ -319,24 +319,209 @@ const ChatInputForm = memo(forwardRef<ChatInputHandle, ChatInputFormProps>(funct
   )
 }))
 
+const FLOATING_SAFE_EDGE = 12
+
+function clampValue(value: number, min: number, max: number) {
+  if (max < min) return min
+  return Math.min(Math.max(value, min), max)
+}
+
+function measureFloatingBounds(buttonSize: number, defaultBottomOffset: number, defaultRightOffset = 24) {
+  if (typeof window === 'undefined') {
+    return { minX: 12, maxX: 900, minY: 76, maxY: 680, homeX: 900, homeY: 680 }
+  }
+  const width = document.documentElement.clientWidth || window.innerWidth
+  const height = document.documentElement.clientHeight || window.innerHeight
+  const topBarEl = document.querySelector('nav, header')
+  const measuredTopBarBottom = topBarEl ? Math.ceil(topBarEl.getBoundingClientRect().bottom) : 0
+  const topBarBottom = measuredTopBarBottom > 0 ? measuredTopBarBottom : width >= 640 ? 64 : 56
+
+  const minX = FLOATING_SAFE_EDGE
+  const maxX = Math.max(FLOATING_SAFE_EDGE, width - buttonSize - FLOATING_SAFE_EDGE)
+  const minY = Math.max(FLOATING_SAFE_EDGE, topBarBottom + FLOATING_SAFE_EDGE)
+  const maxY = Math.max(minY, height - buttonSize - FLOATING_SAFE_EDGE)
+
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    homeX: clampValue(width - buttonSize - defaultRightOffset, minX, maxX),
+    homeY: clampValue(height - buttonSize - defaultBottomOffset, minY, maxY),
+  }
+}
+
+/**
+ * Shared GPU-accelerated drag controller using MotionValues so dragging triggers 0 React re-renders.
+ */
+function useConstrainedFloatingDrag(buttonSize: number, defaultBottomOffset: number) {
+  const isDraggingRef = useRef(false)
+  const hasMovedRef = useRef(false)
+  const [bounds, setBounds] = useState(() => measureFloatingBounds(buttonSize, defaultBottomOffset))
+
+  const x = useMotionValue(bounds.homeX)
+  const y = useMotionValue(bounds.homeY)
+
+  useEffect(() => {
+    const syncBounds = () => {
+      setBounds(measureFloatingBounds(buttonSize, defaultBottomOffset))
+    }
+    syncBounds()
+    window.addEventListener('resize', syncBounds)
+    window.addEventListener('orientationchange', syncBounds)
+    return () => {
+      window.removeEventListener('resize', syncBounds)
+      window.removeEventListener('orientationchange', syncBounds)
+    }
+  }, [buttonSize, defaultBottomOffset])
+
+  useEffect(() => {
+    if (isDraggingRef.current) return
+    if (!hasMovedRef.current) {
+      x.set(bounds.homeX)
+      y.set(bounds.homeY)
+    } else {
+      x.set(clampValue(x.get(), bounds.minX, bounds.maxX))
+      y.set(clampValue(y.get(), bounds.minY, bounds.maxY))
+    }
+  }, [bounds, x, y])
+
+  const dragConstraints = useMemo(
+    () => ({ left: bounds.minX, right: bounds.maxX, top: bounds.minY, bottom: bounds.maxY }),
+    [bounds.minX, bounds.maxX, bounds.minY, bounds.maxY]
+  )
+
+  const onDragStart = useCallback(() => {
+    isDraggingRef.current = true
+  }, [])
+
+  const onDrag = useCallback(() => {
+    const nextX = clampValue(x.get(), bounds.minX, bounds.maxX)
+    const nextY = clampValue(y.get(), bounds.minY, bounds.maxY)
+    if (x.get() !== nextX) x.set(nextX)
+    if (y.get() !== nextY) y.set(nextY)
+  }, [bounds.minX, bounds.maxX, bounds.minY, bounds.maxY, x, y])
+
+  const onDragEnd = useCallback(() => {
+    hasMovedRef.current = true
+    x.set(clampValue(x.get(), bounds.minX, bounds.maxX))
+    y.set(clampValue(y.get(), bounds.minY, bounds.maxY))
+    setTimeout(() => {
+      isDraggingRef.current = false
+    }, 150)
+  }, [bounds.minX, bounds.maxX, bounds.minY, bounds.maxY, x, y])
+
+  return { x, y, dragConstraints, isDraggingRef, onDragStart, onDrag, onDragEnd }
+}
+
+const FloatingScrollTopButton = memo(function FloatingScrollTopButton({ hidden }: { hidden: boolean }) {
+  const [showScrollTop, setShowScrollTop] = useState(false)
+  const { x, y, dragConstraints, isDraggingRef, onDragStart, onDrag, onDragEnd } =
+    useConstrainedFloatingDrag(52, 96)
+
+  useEffect(() => {
+    let ticking = false
+    const handleScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          setShowScrollTop(window.scrollY > 20)
+          ticking = false
+        })
+        ticking = true
+      }
+    }
+    handleScroll()
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  return (
+    <AnimatePresence>
+      {!hidden && showScrollTop && (
+        <motion.button
+          type="button"
+          style={{
+            x,
+            y,
+            width: 52,
+            height: 52,
+            background: 'linear-gradient(135deg, #f59e42 0%, #f43f5e 100%)',
+            boxShadow: '0 0 16px 4px #f43f5e55, 0 2px 16px rgba(0,0,0,0.18)',
+          }}
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0 }}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          drag
+          dragMomentum={false}
+          dragElastic={0}
+          dragConstraints={dragConstraints}
+          onDragStart={onDragStart}
+          onDrag={onDrag}
+          onDragEnd={onDragEnd}
+          onClick={() => {
+            if (isDraggingRef.current) return
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+          className="fixed top-0 left-0 z-[1001] cursor-grab active:cursor-grabbing select-none touch-none will-change-transform flex items-center justify-center rounded-full shadow-lg hover:shadow-xl transition-shadow duration-200 border-0 outline-none"
+          aria-label="Lên đầu trang"
+        >
+          <ChevronUpIcon className="w-7 h-7 text-white drop-shadow-lg pointer-events-none" />
+        </motion.button>
+      )}
+    </AnimatePresence>
+  )
+})
+
+const FloatingChatButton = memo(function FloatingChatButton({
+  visible,
+  ariaLabel,
+  onOpen,
+}: {
+  visible: boolean
+  ariaLabel: string
+  onOpen: () => void
+}) {
+  const { x, y, dragConstraints, isDraggingRef, onDragStart, onDrag, onDragEnd } =
+    useConstrainedFloatingDrag(56, 24)
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.button
+          type="button"
+          style={{ x, y }}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          whileHover={{ scale: 1.06 }}
+          whileTap={{ scale: 0.94 }}
+          drag
+          dragMomentum={false}
+          dragElastic={0}
+          dragConstraints={dragConstraints}
+          onDragStart={onDragStart}
+          onDrag={onDrag}
+          onDragEnd={onDragEnd}
+          onClick={() => {
+            if (isDraggingRef.current) return
+            onOpen()
+          }}
+          className="fixed top-0 left-0 z-[1000] bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white p-4 rounded-full shadow-[0_4px_25px_rgba(225,29,72,0.4)] hover:shadow-[0_6px_30px_rgba(225,29,72,0.55)] transition-shadow duration-200 cursor-grab active:cursor-grabbing select-none touch-none will-change-transform border border-red-400/20"
+          aria-label={ariaLabel}
+        >
+          <ChatBubbleLeftIcon className="h-6 w-6 text-white pointer-events-none" />
+        </motion.button>
+      )}
+    </AnimatePresence>
+  )
+})
+
 export default function FloatingChatbox() {
   const t = useTranslations('ChatAI')
   const [isOpen, setIsOpen] = useState(false)
-  const [snapPositions, setSnapPositions] = useState({
-    bottomRight: { x: 0, y: 0 },
-    middleRight: { x: 0, y: 0 },
-    topRight: { x: 0, y: 0 },
-    bottomLeft: { x: 0, y: 0 },
-    middleLeft: { x: 0, y: 0 },
-    topLeft: { x: 0, y: 0 },
-  })
-  const [position, setPosition] = useState({ x: 0, y: 0 })
-  const [currentPosition, setCurrentPosition] = useState<'bottomRight' | 'middleRight' | 'topRight' | 'bottomLeft' | 'middleLeft' | 'topLeft'>('bottomRight')
-  const [viewportHeight, setViewportHeight] = useState(0)
-  const scrollPositionRef = useRef(0)
-  const [documentHeight, setDocumentHeight] = useState(0)
   const [markedModule, setMarkedModule] = useState<{ parse: (s: string) => string } | null>(null)
-  const buttonRef = useRef<HTMLButtonElement>(null)
   const chatMessagesContainerRef = useRef<HTMLDivElement>(null)
   const chatContentRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -352,11 +537,8 @@ export default function FloatingChatbox() {
   const [showScrollToBottomBtn, setShowScrollToBottomBtn] = useState(false)
   const isAtBottomRef = useRef(true)
 
-  const dragControls = useDragControls()
-  const [showScrollTop, setShowScrollTop] = useState(false)
-  const isChatDraggingRef = useRef(false)
-  const isScrollTopDraggingRef = useRef(false)
   const { isAppModalOpen } = useUIStore()
+  const handleOpenChat = useCallback(() => setIsOpen(true), [])
 
   // Kiểm tra biến toàn cục khi xem phim full
   const isWatchingFullMovie = typeof window !== 'undefined' && (window as { isWatchingFullMovie?: boolean }).isWatchingFullMovie
@@ -439,67 +621,6 @@ export default function FloatingChatbox() {
     }
   }, [isOpen])
 
-  // Tính toán vị trí snap và cập nhật kích thước viewport
-  useEffect(() => {
-    const updateDimensions = () => {
-      const windowWidth = window.innerWidth
-      const windowHeight = window.innerHeight
-      const docHeight = Math.max(
-        document.body.scrollHeight,
-        document.documentElement.scrollHeight,
-        document.body.offsetHeight,
-        document.documentElement.offsetHeight,
-        document.body.clientHeight,
-        document.documentElement.clientHeight
-      )
-      
-      setViewportHeight(windowHeight)
-      setDocumentHeight(docHeight)
-      
-      setSnapPositions({
-        bottomRight: { x: 0, y: 0 },
-        middleRight: { x: 0, y: -windowHeight / 2 },
-        topRight: { x: 0, y: -windowHeight + 100 },
-        bottomLeft: { x: -windowWidth + 100, y: 0 },
-        middleLeft: { x: -windowWidth + 100, y: -windowHeight / 2 },
-        topLeft: { x: -windowWidth + 100, y: -windowHeight + 100 },
-      })
-    }
-
-    updateDimensions()
-    window.addEventListener('resize', updateDimensions)
-    return () => window.removeEventListener('resize', updateDimensions)
-  }, [])
-
-  // Theo dõi vị trí cuộn trang để ẩn/hiện nút Scroll To Top
-  useEffect(() => {
-    let ticking = false
-    const handleScroll = () => {
-      if (!ticking) {
-        requestAnimationFrame(() => {
-          scrollPositionRef.current = window.scrollY
-          setShowScrollTop(window.scrollY > 20)
-          ticking = false
-        })
-        ticking = true
-      }
-    }
-
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
-
-  // Tự động snap xuống cuối khi cuộn hết trang
-  useEffect(() => {
-    if (currentPosition === 'bottomRight' || currentPosition === 'bottomLeft') return
-    const maxScroll = documentHeight - viewportHeight
-    if (maxScroll <= 0) return
-    const scrollProgress = Math.min(scrollPositionRef.current / maxScroll, 1)
-    if (scrollProgress >= 0.95) {
-      setCurrentPosition(currentPosition.includes('Right') ? 'bottomRight' : 'bottomLeft')
-    }
-  }, [showScrollTop, currentPosition, documentHeight, viewportHeight])
-
   // Nạp module marked động khi mở chat để tối ưu kích thước bundle
   useEffect(() => {
     if (isOpen && !markedModule) {
@@ -547,34 +668,6 @@ export default function FloatingChatbox() {
       scrollToBottom('auto')
     }
   }, [scrollToBottom])
-
-  // Xử lý kéo thả nút Floating Chat
-  const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    const { point } = info
-    const windowWidth = window.innerWidth
-    const windowHeight = window.innerHeight
-    const buttonSize = 80
-
-    const constrainedPoint = {
-      x: Math.max(buttonSize, Math.min(point.x, windowWidth - buttonSize)),
-      y: Math.max(buttonSize, Math.min(point.y, windowHeight - buttonSize))
-    }
-
-    const distances = Object.entries(snapPositions).map(([key, pos]) => ({
-      key,
-      distance: Math.sqrt(
-        Math.pow(constrainedPoint.x - (pos.x + windowWidth - 100), 2) +
-        Math.pow(constrainedPoint.y - (pos.y + windowHeight - 100), 2)
-      )
-    }))
-
-    const closest = distances.reduce((prev, curr) => 
-      prev.distance < curr.distance ? prev : curr
-    )
-
-    setCurrentPosition(closest.key as keyof typeof snapPositions)
-    setPosition(snapPositions[closest.key as keyof typeof snapPositions])
-  }
 
   // Sao chép nội dung tin nhắn AI
   const handleCopyMessage = useCallback((content: string, index: number) => {
@@ -893,102 +986,15 @@ export default function FloatingChatbox() {
 
   return (
     <>
-      {/* Nút Cuộn Lên Đầu Trang (Scroll to Top) */}
-      {showScrollTop && !isWatchingFullMovie && !isOpen && !isAppModalOpen && (
-        <motion.button
-          drag
-          dragMomentum={false}
-          dragElastic={0.1}
-          dragConstraints={typeof window !== 'undefined' ? {
-            top: -(window.innerHeight - 120),
-            left: -(window.innerWidth - 100),
-            right: 0,
-            bottom: 0
-          } : undefined}
-          initial={{ opacity: 0, scale: 0 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0 }}
-          whileHover={{ scale: 1.15 }}
-          whileTap={{ scale: 0.9 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          onDragStart={() => {
-            isScrollTopDraggingRef.current = true
-          }}
-          onDragEnd={() => {
-            setTimeout(() => {
-              isScrollTopDraggingRef.current = false
-            }, 150)
-          }}
-          onClick={() => {
-            if (isScrollTopDraggingRef.current) return
-            window.scrollTo({ top: 0, behavior: 'smooth' })
-          }}
-          className="fixed bottom-24 right-6 z-[1001] cursor-move select-none flex items-center justify-center rounded-full shadow-lg hover:shadow-xl transition-shadow"
-          style={{
-            background: 'linear-gradient(135deg, #f59e42 0%, #f43f5e 100%)',
-            width: 52,
-            height: 52,
-            boxShadow: '0 0 16px 4px #f43f5e55, 0 2px 16px rgba(0,0,0,0.18)',
-            border: 'none',
-            outline: 'none',
-          }}
-          aria-label="Lên đầu trang"
-        >
-          <motion.span
-            animate={{ y: [0, -4, 0] }}
-            transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
-            className="flex items-center justify-center pointer-events-none"
-          >
-            <ChevronUpIcon className="w-7 h-7 text-white drop-shadow-lg" />
-          </motion.span>
-        </motion.button>
-      )}
+      {/* Nút Cuộn Lên Đầu Trang (Scroll to Top) - cô lập MotionValue kéo 60fps */}
+      <FloatingScrollTopButton hidden={Boolean(isWatchingFullMovie) || isOpen || isAppModalOpen} />
 
-      {/* Floating Chat Button */}
-      <AnimatePresence>
-        {!isOpen && !isWatchingFullMovie && !isAppModalOpen && (
-          <motion.button
-            ref={buttonRef}
-            initial={{ scale: 0, opacity: 0, ...position }}
-            animate={{ 
-              scale: 1, 
-              opacity: 1,
-              ...position
-            }}
-            exit={{ scale: 0, opacity: 0 }}
-            whileHover={{ scale: 1.08 }}
-            whileTap={{ scale: 0.92 }}
-            onDragStart={() => {
-              isChatDraggingRef.current = true
-            }}
-            onDragEnd={(event, info) => {
-              handleDragEnd(event, info)
-              setTimeout(() => {
-                isChatDraggingRef.current = false
-              }, 150)
-            }}
-            onClick={() => {
-              if (isChatDraggingRef.current) return
-              setIsOpen(true)
-            }}
-            drag
-            dragControls={dragControls}
-            dragMomentum={false}
-            dragElastic={0.1}
-            dragConstraints={typeof window !== 'undefined' ? {
-              top: -(window.innerHeight - 100),
-              left: -(window.innerWidth - 100),
-              right: 0,
-              bottom: 0
-            } : undefined}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="fixed bottom-6 right-6 z-[1000] bg-gradient-to-r from-red-600 via-rose-600 to-red-500 text-white p-4 rounded-full shadow-[0_4px_25px_rgba(225,29,72,0.4)] hover:shadow-[0_6px_30px_rgba(225,29,72,0.55)] transition-all duration-300 cursor-move border border-red-400/20"
-            aria-label={t('chatWithAi')}
-          >
-            <ChatBubbleLeftIcon className="h-6 w-6 text-white" />
-          </motion.button>
-        )}
-      </AnimatePresence>
+      {/* Floating Chat Button - cô lập MotionValue kéo 60fps, không transition-all */}
+      <FloatingChatButton
+        visible={!isOpen && !isWatchingFullMovie && !isAppModalOpen}
+        ariaLabel={t('chatWithAi')}
+        onOpen={handleOpenChat}
+      />
 
       {/* Chatbox Overlay Modal */}
       <AnimatePresence>
