@@ -7,7 +7,8 @@ import {
   HeartIcon, 
   EllipsisHorizontalIcon,
   UserIcon,
-  ClockIcon
+  ClockIcon,
+  FlagIcon
 } from '@heroicons/react/24/outline'
 import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid'
 import useAuthStore from '@/store/useAuthStore'
@@ -15,6 +16,7 @@ import toast from 'react-hot-toast'
 import api from '@/lib/axios'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
+import ReportCommentModal, { ReportReason } from '@/components/common/ReportCommentModal'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
@@ -72,6 +74,9 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [reportTarget, setReportTarget] = useState<Comment | null>(null)
+  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
+  const [isReporting, setIsReporting] = useState(false)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
   const [totalComments, setTotalComments] = useState(0)
@@ -137,6 +142,27 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
 
     fetchComments()
   }, [movieId, type, sortBy, t])
+
+  // Sync comment IDs already reported by the signed-in user for this title
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setReportedIds(new Set())
+      return
+    }
+    let cancelled = false
+    api.get(`/comments/reported/me?movieId=${movieId}&type=${type}`)
+      .then((response) => {
+        if (!cancelled && response.data?.success && Array.isArray(response.data.data)) {
+          setReportedIds(new Set(response.data.data.map((id: string) => String(id))))
+        }
+      })
+      .catch(() => {
+        // Non-critical prefetch
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthenticated, movieId, type])
 
   // Load more comments
   const loadMoreComments = useCallback(async () => {
@@ -742,9 +768,59 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
     </motion.div>
   )
 
-  // Actions: report (placeholder)
-  const handleReport = () => {
-    toast.success(t('reportThanks'))
+  // Actions: report
+  const handleOpenReport = (target: Comment) => {
+    if (!isAuthenticated) {
+      toast.error(t('loginToReport'))
+      return
+    }
+    if (isOwnComment(target)) {
+      toast.error(t('cannotReportOwn'))
+      return
+    }
+    if (reportedIds.has(target._id)) {
+      toast(t('alreadyReported'))
+      return
+    }
+    setActionOpenId(null)
+    setReportTarget(target)
+  }
+
+  const handleSubmitReport = async (reasonCategory: ReportReason, details: string) => {
+    if (!reportTarget) return
+    try {
+      setIsReporting(true)
+      const response = await api.post(`/comments/${reportTarget._id}/report`, {
+        reasonCategory,
+        details
+      })
+      if (response.data?.success) {
+        setReportedIds(prev => {
+          const next = new Set(prev)
+          next.add(reportTarget._id)
+          return next
+        })
+        setReportTarget(null)
+        toast.success(response.data?.message || t('reportThanks'))
+      }
+    } catch (error: unknown) {
+      const err = error as { response?: { status?: number; data?: { code?: string; message?: string } } }
+      if (err.response?.status === 409 || err.response?.data?.code === 'ALREADY_REPORTED') {
+        setReportedIds(prev => {
+          const next = new Set(prev)
+          next.add(reportTarget._id)
+          return next
+        })
+        setReportTarget(null)
+        toast.error(err.response?.data?.message || t('alreadyReported'))
+      } else if (err.response?.status === 401) {
+        toast.error(t('loginToReport'))
+      } else {
+        toast.error(err.response?.data?.message || t('failedReport'))
+      }
+    } finally {
+      setIsReporting(false)
+    }
   }
 
   return (
@@ -757,6 +833,21 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
         cancelText={t('cancel')}
         onConfirm={() => confirmDeleteId && handleDelete(confirmDeleteId)}
         onCancel={() => setConfirmDeleteId(null)}
+      />
+      <ReportCommentModal
+        open={!!reportTarget}
+        target={
+          reportTarget
+            ? {
+                _id: reportTarget._id,
+                content: reportTarget.content,
+                authorName: reportTarget.userId?.name || t('unknownUser')
+              }
+            : null
+        }
+        isSubmitting={isReporting}
+        onSubmit={handleSubmitReport}
+        onClose={() => setReportTarget(null)}
       />
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
@@ -981,10 +1072,17 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                         </div>
                       ) : (
                         <button
-                          className="px-2 py-1 text-xs sm:text-sm text-gray-300 hover:text-white hover:bg-gray-700/60 rounded-md transition-colors"
-                          onClick={() => handleReport()}
+                          type="button"
+                          onClick={() => handleOpenReport(comment)}
+                          className={`inline-flex items-center gap-1 px-2 py-1 text-xs sm:text-sm rounded-md transition-colors ${
+                            reportedIds.has(comment._id)
+                              ? 'text-amber-400/80 bg-amber-500/10 cursor-default'
+                              : 'text-gray-300 hover:text-white hover:bg-gray-700/60'
+                          }`}
+                          aria-label={reportedIds.has(comment._id) ? t('reported') : t('report')}
                         >
-                          {t('report')}
+                          <FlagIcon className="h-3.5 w-3.5" />
+                          <span>{reportedIds.has(comment._id) ? t('reported') : t('report')}</span>
                         </button>
                       )}
                     </div>
@@ -1125,7 +1223,7 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                                   </span>
                                 </div>
 
-                                {isOwnComment(reply) && (
+                                {isOwnComment(reply) ? (
                                   <div className="relative shrink-0" data-comment-action>
                                     <button
                                       className="p-1 rounded-md hover:bg-gray-700/60 transition-colors"
@@ -1151,6 +1249,20 @@ export default function Comments({ movieId, type, title }: CommentsProps) {
                                       </div>
                                     )}
                                   </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenReport(reply)}
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] sm:text-xs rounded-md transition-colors shrink-0 ${
+                                      reportedIds.has(reply._id)
+                                        ? 'text-amber-400/80 bg-amber-500/10 cursor-default'
+                                        : 'text-gray-400 hover:text-white hover:bg-gray-700/60'
+                                    }`}
+                                    aria-label={reportedIds.has(reply._id) ? t('reported') : t('report')}
+                                  >
+                                    <FlagIcon className="h-3 w-3" />
+                                    <span>{reportedIds.has(reply._id) ? t('reported') : t('report')}</span>
+                                  </button>
                                 )}
                               </div>
 
